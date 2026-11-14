@@ -45,6 +45,8 @@ def run(report, output):
                     *arguments(), '--volume', home + ':/home/workspace', *environment(store.settings(), browser=True)])
                 containers.append(obj['Id'])
                 validate_container(obj)
+                from enge_spx.browser_profile_locks import prepare as prepare_profile
+                prepare_profile(engine, obj, home)
                 token = secrets.token_hex(32)
                 engine.deliver_secret(obj['Id'], 'browser', {'token': token, 'proxy': 'http://127.0.0.1:9', 'legacy': False})
                 for attempt in range(60):
