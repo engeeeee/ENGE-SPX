@@ -53,6 +53,9 @@ def run(report, output):
                         validate_status(evidence)
                         break
                     except Exception:
+                        current = engine.docker.inspect('container', obj['Id'])
+                        if current and not current['State'].get('Running'):
+                            raise AssertionError('Browser stopped during locale startup: ' + engine.docker.run('logs', obj['Id'])[-2000:])
                         if attempt == 59:
                             raise
                         time.sleep(.25)
@@ -67,7 +70,11 @@ def run(report, output):
                 checks.append({'country': country, 'locale': actual, 'navigator_language': observed['language'],
                                'request_languages': observed['request_languages'], 'sandbox': 'verified',
                                'project_layer_preserved': True, 'chinese_utf8': True, 'host_ports': 0})
-                engine.docker.run('rm', '-f', obj['Id'])
+                # Match the product's image switch: SIGTERM lets Chromium
+                # remove the persistent Profile's SingletonLock before reuse.
+                # A forced delete simulates a crash on another hostname.
+                engine.docker.run('stop', obj['Id'], timeout=20)
+                engine.docker.run('rm', obj['Id'])
                 containers.remove(obj['Id'])
                 print('PASS real locale, Chinese UTF-8 and sandboxed Chromium language:', country, flush=True)
             store.write('settings.json', {**store.settings(), 'language_mode': 'unchanged'})
