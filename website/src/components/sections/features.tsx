@@ -16,20 +16,20 @@ export function FeaturesSection() {
                 <div className="section-heading" data-reveal>
                     <div>
                         <SectionLabel number="01">
-                            为工作流留出边界
+                            核心功能
                         </SectionLabel>
                         <h2>
-                            工具各就各位。
+                            工具运行在容器，
                             <br />
                             <span className="muted-heading">
-                                你只管把项目做好。
+                                项目保存在本机。
                             </span>
                         </h2>
                     </div>
                     <p className="heading-description">
                         把工具依赖、登录资料和代理路径集中管理。
                         <br />
-                        从日常 Windows 环境，划出一块专注的工作区。
+                        选择项目目录与权限，再启动编程工具。
                     </p>
                 </div>
                 <div className="feature-grid">
@@ -38,7 +38,7 @@ export function FeaturesSection() {
                         data-reveal
                     >
                         <span className="card-index mono">
-                            01 / A SPACE OF ITS OWN
+                            01 / LINUX CONTAINERS
                         </span>
                         <div className="feature-copy">
                             <span className="feature-icon">
@@ -51,7 +51,7 @@ export function FeaturesSection() {
                             </h3>
                             <p>
                                 Claude Code、Codex 与 Linux
-                                命令运行在容器内。只挂载选中的项目，让依赖与日常环境各自安放。
+                                命令运行在容器内。只挂载选中的项目目录，不需要把工具依赖安装到 Windows 日常环境。
                             </p>
                         </div>
                         <div
@@ -97,7 +97,7 @@ export function FeaturesSection() {
                         data-reveal
                     >
                         <span className="card-index mono">
-                            02 / IDENTITY MATTERS
+                            02 / WORKSPACE PROFILES
                         </span>
                         <div className="identity-art" aria-hidden="true">
                             <div className="identity-ring ring-one" />

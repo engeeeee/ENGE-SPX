@@ -1,19 +1,19 @@
 export const product = {
     name: "ENGE SPX",
-    version: "0.13.6",
-    published: "2026-11-13",
+    version: "0.15.1",
+    published: "2026-11-14",
     site: "https://enge1337.cn",
     repository: "https://github.com/engeeeee/ENGE-SPX",
     release:
-        "https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.13.6-windows",
+        "https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.1-windows",
     installer:
-        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.13.6-windows/ENGE-SPX-Windows-x64-0.13.6-Setup.exe",
+        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.1-windows/ENGE-SPX-Windows-x64-0.15.1-Setup.exe",
     portable:
-        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.13.6-windows/ENGE-SPX-Windows-x64-0.13.6-Portable.zip",
+        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.1-windows/ENGE-SPX-Windows-x64-0.15.1-Portable.zip",
     installerSha256:
-        "4a60f21b1ebb78eb9e1646005aff13e792b4e6f94700221331600f9f92a2b862",
+        "043af7f05940f75a9e3e98c2eec4715653f534a3568640e1fa872225eafc889d",
     portableSha256:
-        "e86a558dabd838ee17c0b5b032f9483f5742539e26c0b45331770f72e13edfa7",
+        "7b7844e3bb425835f239c4998c14d76486c12d80e8822048a2d67a6a34606976",
     screenshotVersion: "0.13.2",
 } as const;
 
@@ -27,6 +27,9 @@ export const docs = {
     recording: `${product.repository}/blob/main/docs/field-recording.zh-CN.md`,
     diagnostics: `${product.repository}/blob/main/docs/network-diagnostics.zh-CN.md`,
     exit: `${product.repository}/blob/main/docs/exit.zh-CN.md`,
+    clipboard: `${product.repository}/blob/main/docs/smart-clipboard.zh-CN.md`,
+    terminal: `${product.repository}/blob/main/docs/terminal-appearance-performance.zh-CN.md`,
+    updates: `${product.repository}/blob/main/docs/updates-and-timezone.zh-CN.md`,
     screenshots: `${product.repository}/blob/main/docs/screenshots/README.md`,
     license: `${product.repository}/blob/main/LICENSE`,
     issues: `${product.repository}/issues`,
@@ -34,9 +37,10 @@ export const docs = {
 } as const;
 
 export const navigation = [
-    { id: "features", label: "产品能力" },
+    { id: "features", label: "功能" },
     { id: "architecture", label: "网络路径" },
     { id: "workspace", label: "项目工作区" },
+    { id: "terminal", label: "智能终端" },
     { id: "resources", label: "资源管理" },
 ] as const;
 
@@ -49,6 +53,9 @@ export const screenshots = [
         width: 960,
         height: 840,
         pixelRatio: 3,
+        platform: "Windows 原生界面",
+        version: "0.13.2",
+        context: "未配置账号与节点",
     },
     {
         id: "workspace",
@@ -58,6 +65,9 @@ export const screenshots = [
         width: 1120,
         height: 1050,
         pixelRatio: 3,
+        platform: "Windows 原生界面",
+        version: "0.13.2",
+        context: "未配置账号与节点",
     },
     {
         id: "connection",
@@ -67,6 +77,9 @@ export const screenshots = [
         width: 840,
         height: 1050,
         pixelRatio: 3,
+        platform: "Windows 原生界面",
+        version: "0.13.2",
+        context: "未配置账号与节点",
     },
     {
         id: "resources",
@@ -76,6 +89,21 @@ export const screenshots = [
         width: 840,
         height: 1000,
         pixelRatio: 3,
+        platform: "Windows 原生界面",
+        version: "0.13.2",
+        context: "未配置账号与节点",
+    },
+    {
+        id: "terminal",
+        title: "Codex 智能终端",
+        alt: "ENGE SPX 0.15.1 实际运行的 Codex 0.169.0：中文草稿中包含两张原生图片标记与文件路径，尚未发送",
+        source: "/screenshots/terminal-codex-0.15.1@2x.png",
+        width: 1100,
+        height: 680,
+        pixelRatio: 2,
+        platform: "Linux 实际运行画面",
+        version: "0.15.1",
+        context: "Codex 0.169.0 · 未发送的测试草稿",
     },
 ] as const;
 
@@ -84,6 +112,18 @@ export const asset = (path: string) =>
     `${process.env.NEXT_PUBLIC_BASE_PATH || ""}${path}`;
 
 export const faqs = [
+    {
+        question: "可以直接把截图粘贴到 Codex 或 Claude Code 吗？",
+        answer: "可以。在偏好设置选择“自动（AI 智能粘贴）”或“智能粘贴终端”，打开工具后，在原来的 CLI 输入区按 Ctrl+V。截图与 PNG/JPEG/WebP 会导入并等待原生图片标记，文字和已有草稿保留，最后由你按 Enter。普通文件以可访问路径引用，具体格式能否解析取决于 CLI 和已有工具。Windows Terminal、PowerShell 和自定义外部终端不接管附件粘贴。",
+    },
+    {
+        question: "时区会按哪个出口调整？Windows 的时区会变吗？",
+        answer: "自动模式跟随核验后的最终落地出口，显示 IANA 时区并由你随出口确认。容器内工具与浏览器使用一致的时区，不修改 Windows 系统时区。也可以手动指定固定时区；已有会话需要停止后重新检查与确认。",
+    },
+    {
+        question: "以后怎么更新软件？",
+        answer: "0.15 起可在“偏好设置 → 软件更新”检查正式版，下载并校验后由你确认重启。安装版和便携版保留原有配置与数据，更新前正常停止工作区。0.14 及更早版本需先手动安装一次 0.15 或更新版本。",
+    },
     {
         question: "这是 Windows 虚拟机吗？",
         answer: "Windows 运行 ENGE SPX 控制界面和你选择的终端窗口。Claude Code、Codex 和 Chromium 实际运行在 Docker Linux 容器中，通常由 Docker Desktop / WSL2 承载，并不是一套独立安装的 Windows 虚拟机。",

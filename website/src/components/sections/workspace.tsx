@@ -8,18 +8,18 @@ export function WorkspaceSection() {
         <section id="workspace" className="section workspace-section">
             <div className="container">
                 <div className="workspace-heading" data-reveal>
-                    <SectionLabel number="03">从一个项目开始</SectionLabel>
+                    <SectionLabel number="03">项目工作区</SectionLabel>
                     <h2>
-                        选择你的项目。
+                        选择目录、身份，
                         <br />
                         <span className="muted-heading">
-                            定义它的工作方式。
+                            设置访问权限。
                         </span>
                     </h2>
                     <p>
                         本地目录、账号身份、访问权限与工具入口，
                         <br />
-                        在同一个工作区里安排妥当。
+                        在同一个页面管理。
                     </p>
                 </div>
                 <div className="workspace-stage" data-reveal>

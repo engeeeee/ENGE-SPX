@@ -4,6 +4,7 @@ import { HeroSection } from "@/components/sections/hero";
 import { FeaturesSection } from "@/components/sections/features";
 import { NetworkSection } from "@/components/sections/network";
 import { WorkspaceSection } from "@/components/sections/workspace";
+import { TerminalSection } from "@/components/sections/terminal";
 import { ResourcesSection } from "@/components/sections/resources";
 import { SecuritySection } from "@/components/sections/security";
 import { GetStartedSection } from "@/components/sections/get-started";
@@ -41,6 +42,7 @@ export default function Home() {
                 <FeaturesSection />
                 <NetworkSection />
                 <WorkspaceSection />
+                <TerminalSection />
                 <ResourcesSection />
                 <SecuritySection />
                 <GetStartedSection />

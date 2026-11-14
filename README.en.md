@@ -50,6 +50,14 @@ This diagram shows managed chaining. The browser does not mount the project or t
 
 These are actual **0.13.2 native Windows UI captures** using temporary data without accounts, proxy nodes or a running Docker workspace. Click an image for full size. [Capture provenance and reproduction](docs/screenshots/README.md) includes the source commit, Windows run and image hashes. The UI is currently Chinese.
 
+**Smart terminal: edit the current Codex draft and paste images or files in place.**
+
+[![ENGE SPX 0.15.1 running Codex 0.169.0 with a Chinese draft, two native image markers and a file reference, not submitted](docs/images/0.15.1/terminal-codex@2x.png)](docs/images/0.15.1/terminal-codex@2x.png)
+
+Ctrl+V pastes text, screenshots and file references without an upload dialog or automatic submission. Drag to copy, right-click to paste, scroll conversation history, and save font, tint and background preferences. Native click-to-position depends on CLI support; Windows Acrylic depends on OS support. Smart attachments require the owned terminal; external terminals retain their original behavior.
+
+This is an actual **Linux capture of the 0.15.1 product terminal and Codex 0.169.0**, rendered at 2× DPI. It shows an unsent test draft, with no model response; it is not evidence of Windows Acrylic or Docker transport. See [capture provenance](docs/screenshots/README.md#智能终端0151), [clipboard compatibility](docs/smart-clipboard.zh-CN.md) and [terminal settings](docs/terminal-appearance-performance.zh-CN.md).
+
 ## Typical uses
 
 - Run Claude Code or Codex on Windows with container-managed Linux dependencies, a workspace browser and your existing project directory.

@@ -46,6 +46,16 @@
 
 截图为 **0.13.2 真实程序在 Windows 原生环境中的运行画面**，使用未配置账号与节点的临时数据，展示配置入口。点击图片可查看原图；[截图来源与复现](docs/screenshots/README.md)记录了源码版本、Windows CI 和文件校验信息。
 
+**智能终端：在 Codex 原来的输入区编辑文字、粘贴图片和文件。**
+
+[![ENGE SPX 0.15.1 实际运行的 Codex 智能终端，中文草稿包含两张原生图片标记和文件引用，尚未发送](docs/images/0.15.1/terminal-codex@2x.png)](docs/images/0.15.1/terminal-codex@2x.png)
+
+- **Ctrl+V 粘贴**：文字直接进入当前草稿；截图和 PNG/JPEG/WebP 等图片等待原生附件标记；普通文件保留原件并插入容器内路径。不打开上传对话框，也不自动发送。
+- **复制与编辑**：拖选后自动复制，右键粘贴；支持中文输入法、ANSI 颜色和滚动历史。支持原生鼠标的 CLI 可单击定位；Codex 草稿可 Ctrl+A 后 Delete 删除。
+- **保存外观设置**：字体、字号、配色、背景不透明度和操作偏好可长期保存。Windows 可选 Acrylic 毛玻璃，效果取决于系统支持。
+
+终端图为 **0.15.1 产品终端与 Codex 0.169.0 在 Linux 上的真实运行截图**，按 2× DPI 原生渲染；展示未发送的测试草稿，没有模型回复，不作为 Windows 毛玻璃或 Docker 传输验收。智能附件粘贴需要自带终端；外部终端保留原有行为。详见[使用与兼容范围](docs/smart-clipboard.zh-CN.md)、[终端设置](docs/terminal-appearance-performance.zh-CN.md)及[截图来源](docs/screenshots/README.md#智能终端0151)。
+
 ## 适合哪些场景
 
 - **在 Windows 使用 Claude Code / Codex**：把 Linux 工具依赖、账号资料和工作区浏览器集中管理，保留本机项目目录和熟悉的终端。

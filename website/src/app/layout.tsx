@@ -8,11 +8,11 @@ export const metadata: Metadata = {
     metadataBase: new URL(product.site),
     title: "ENGE SPX — Windows AI 编程隔离工作台",
     description:
-        "为 Claude Code、Codex 与 Chromium 建立独立容器工作区。选择项目与身份，固定线路和落地代理，核对出口，按需要分配资源。Windows x64 版现已提供下载。",
+        "在 Windows 管理 Claude Code、Codex 与 Chromium 容器工作区。支持截图和文件粘贴、独立身份、固定代理链路、出口核验、资源预算、自动时区与软件内更新。",
     applicationName: product.name,
     alternates: { canonical: "/" },
     openGraph: {
-        title: "ENGE SPX — 给 AI 编程，一个独立空间",
+        title: "ENGE SPX — Windows AI 编程隔离工作台",
         description:
             "Windows 上的 AI 编程隔离工作台。容器工作区、独立身份、固定代理链路与出口核验。",
         url: product.site,

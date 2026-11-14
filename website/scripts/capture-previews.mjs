@@ -34,7 +34,7 @@ const capture = async (file, label, target = page, options = {}) => {
         await page.screenshot({
             path: path.join(output, file),
             fullPage: true,
-            clip: { x: 0, y: rect.y, width: 1440, height: rect.height },
+            clip: { x: 0, y: rect.y, width: page.viewportSize().width, height: rect.height },
         });
     }
     captures.push({ file, label });
@@ -102,6 +102,10 @@ try {
             await page.locator(".screenshot-dialog").evaluate((d) => d.open),
             false,
         );
+        await page.getByRole("button", { name: "放大查看Codex 智能终端真实截图" }).click();
+        assert.match(await page.locator(".gallery-caption").innerText(), /Linux/);
+        assert.equal(await page.locator(".gallery-image").evaluate((img) => img.naturalWidth || img.decode().then(() => img.naturalWidth)), 2200);
+        await page.keyboard.press("Escape");
         await page.locator(".faq-list summary").first().click();
         assert.equal(
             await page
@@ -118,6 +122,7 @@ try {
         ["features", "features.png", "核心功能"],
         ["architecture", "architecture.png", "网络路径与代理架构"],
         ["workspace", "workspace.png", "项目工作区"],
+        ["terminal", "terminal.png", "智能粘贴终端"],
         ["resources", "resources.png", "资源与性能"],
         ["get-started", "get-started.png", "快速开始与下载"],
     ]) {
@@ -169,6 +174,8 @@ try {
         "Mobile overflows horizontally",
     );
     await capture("mobile-home.png", "手机首页 · 390px");
+    await capture("mobile-terminal.png", "手机智能终端 · 390px", page.locator("#terminal"));
+    await page.evaluate(() => window.scrollTo(0, 0));
     await capture("mobile-full.png", "完整移动端网页", page, {
         fullPage: true,
     });
@@ -217,7 +224,7 @@ try {
         .join("");
     await writeFile(
         path.join(output, "index.html"),
-        `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>ENGE SPX 官网交付预览</title><style>*{box-sizing:border-box}body{margin:0;background:#191815;color:#eee7db;font-family:system-ui,sans-serif;padding:50px 24px}main{max-width:1200px;margin:auto}h1{font-size:32px;font-weight:550}p{color:#aaa193;line-height:1.8}a{color:#dca280;text-decoration:none}.links{display:flex;gap:24px;flex-wrap:wrap;margin:24px 0 36px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}.card{display:block;border:1px solid #50412f;border-radius:9px;overflow:hidden;background:#24221c}.card img{display:block;width:100%;height:300px;object-fit:cover;object-position:top}.card span{display:flex;justify-content:space-between;padding:18px 20px;color:#eee5d5;font-size:14px}.card small{font-size:11px;color:#a38b6b}@media(max-width:650px){.grid{grid-template-columns:1fr}.card img{height:270px}h1{font-size:26px}}</style></head><body><main><p>ENGE SPX / WEBSITE DELIVERY</p><h1>官网的每一面，都来自真实页面。</h1><p>以下是实际运行网页的浏览器截图，软件界面使用仓库 0.13.2 的原始 Windows 截图。页面预览启用系统“减少动态效果”以固定画面；线上版本保留克制的动效。</p><div class="links"><a href="/">打开正式网站 ↗</a><a href="/deliverables/ENGE-SPX-website-previews.zip">下载全部预览图</a><a href="/deliverables/ENGE-SPX-website-source.zip">下载完整网站源码</a></div><div class="grid">${cards}</div><p>截图生成于 ${new Date().toISOString()} · 桌面、平板与移动端</p></main></body></html>`,
+        `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>ENGE SPX 官网交付预览</title><style>*{box-sizing:border-box}body{margin:0;background:#191815;color:#eee7db;font-family:system-ui,sans-serif;padding:50px 24px}main{max-width:1200px;margin:auto}h1{font-size:32px;font-weight:550}p{color:#aaa193;line-height:1.8}a{color:#dca280;text-decoration:none}.links{display:flex;gap:24px;flex-wrap:wrap;margin:24px 0 36px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}.card{display:block;border:1px solid #50412f;border-radius:9px;overflow:hidden;background:#24221c}.card img{display:block;width:100%;height:300px;object-fit:cover;object-position:top}.card span{display:flex;justify-content:space-between;padding:18px 20px;color:#eee5d5;font-size:14px}.card small{font-size:11px;color:#a38b6b}@media(max-width:650px){.grid{grid-template-columns:1fr}.card img{height:270px}h1{font-size:26px}}</style></head><body><main><p>ENGE SPX / WEBSITE DELIVERY</p><h1>ENGE SPX 官网运行预览</h1><p>以下为实际运行网页的截图。主程序使用 0.13.2 原生 Windows 截图；终端使用 0.15.1 产品窗口与 Codex 在 Linux 上的实际运行图，平台与版本分别标注。预览启用系统“减少动态效果”。</p><div class="links"><a href="/">打开正式网站 ↗</a><a href="/deliverables/ENGE-SPX-website-previews.zip">下载全部预览图</a><a href="/deliverables/ENGE-SPX-website-source.zip">下载完整网站源码</a></div><div class="grid">${cards}</div><p>截图生成于 ${new Date().toISOString()} · 桌面、平板与移动端</p></main></body></html>`,
     );
     console.log(
         JSON.stringify(

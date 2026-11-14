@@ -16,9 +16,9 @@ export function Footer() {
                         <span>ENGE SPX</span>
                     </a>
                     <p>
-                        一块自己的空间。
+                        Windows AI 编程隔离工作台。
                         <br />
-                        <span>更专注的 AI 编程工作流。</span>
+                        <span>容器工作区、智能终端与代理出口核验。</span>
                     </p>
                     <div className="footer-links">
                         <a
@@ -57,7 +57,7 @@ export function Footer() {
                         PolyForm Noncommercial 1.0.0
                     </a>
                     <span>
-                        为 Windows 而做，为你的项目而用。
+                        Windows x64 · Docker Desktop / WSL2
                         <span className="tiny-dot" />
                     </span>
                 </div>

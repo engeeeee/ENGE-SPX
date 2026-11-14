@@ -96,7 +96,7 @@ export function SiteInteractions({ children }: { children: ReactNode }) {
                     <div className="gallery-toolbar">
                         <div>
                             <span className="eyebrow">
-                                WINDOWS · {product.screenshotVersion}
+                                {picture.platform} · v{picture.version}
                             </span>
                             <h2 id="screenshot-dialog-title">
                                 {picture.title}
@@ -182,7 +182,7 @@ export function SiteInteractions({ children }: { children: ReactNode }) {
                         </div>
                     </div>
                     <p className="gallery-caption">
-                        Windows 原生 {picture.pixelRatio}× 截图 ·{" "}
+                        {picture.platform} · {picture.pixelRatio}× 截图 ·{" "}
                         {picture.width * picture.pixelRatio} ×{" "}
                         {picture.height * picture.pixelRatio} ·{" "}
                         <a
@@ -235,10 +235,10 @@ export function Screenshot({
             </button>
             {caption && (
                 <figcaption>
-                    <span className="tiny-dot" /> Windows 原生界面 · v
-                    {product.screenshotVersion}{" "}
+                    <span className="tiny-dot" /> {item.platform} · v
+                    {item.version}{" "}
                     <span className="caption-separator">/</span>{" "}
-                    未配置账号与节点
+                    {item.context}
                 </figcaption>
             )}
         </figure>

@@ -17,12 +17,12 @@ export function GetStartedSection() {
             <div className="container">
                 <div className="section-heading" data-reveal>
                     <div>
-                        <SectionLabel number="06">从准备到开始</SectionLabel>
+                        <SectionLabel number="07">下载安装</SectionLabel>
                         <h2>
-                            四步。
+                            安装环境，
                             <br />
                             <span className="muted-heading">
-                                开始你的下一个项目。
+                                配置后启动工具。
                             </span>
                         </h2>
                     </div>
@@ -87,12 +87,12 @@ export function GetStartedSection() {
                     </div>
                     <div className="download-copy">
                         <span className="download-eyebrow mono">
-                            A LITTLE SPACE. A BETTER WORKFLOW.
+                            DOWNLOAD / WINDOWS X64
                         </span>
                         <h2>
-                            把下一次专注，
+                            下载 ENGE SPX，
                             <br />
-                            留给你的项目。
+                            创建编程工作区。
                         </h2>
                         <p>下载 ENGE SPX，为 AI 编程准备一个自己的工作区。</p>
                         <div className="download-meta">

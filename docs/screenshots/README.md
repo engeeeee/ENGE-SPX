@@ -1,6 +1,6 @@
-# Windows 界面截图与复现
+# 软件界面截图与复现
 
-README 中的四张图片来自 **ENGE SPX 0.13.2 在原生 Windows 环境运行的真实 Qt 界面**。截取工作台、项目工作区、连接与代理、资源预算页面，PNG 原图保留，不经过图像生成、拼接或添加虚构状态。
+README 中的四张主程序图片来自 **ENGE SPX 0.13.2 在原生 Windows 环境运行的真实 Qt 界面**。截取工作台、项目工作区、连接与代理、资源预算页面，PNG 原图保留，不经过图像生成、拼接或添加虚构状态。新增终端图的平台、版本与复现方法见下方“智能终端”。
 
 | 项目 | 记录 |
 | --- | --- |
@@ -73,3 +73,20 @@ python docs/screenshots/capture.py --profile website --output .\build\website-sc
 ```
 
 官网首页展示区允许裁切窗口底部，点击可查看完整 PNG。普通 DPI 屏幕不对软件图片做透视变换，单个窗口仅配柔和阴影；高 DPI 屏幕保留轻微透视。1×、2× 和本批原图分别保留，README 仍引用完整导航的 2× 图。
+
+## 智能终端（0.15.1）
+
+[终端原图](../images/0.15.1/terminal-codex@2x.png)来自 **Linux 上实际运行的 ENGE SPX 0.15.1 `TerminalWindow` 与官方 Codex 0.169.0**。逻辑窗口 1100×680，Qt 2× 原生渲染为 2200×1360 PNG，没有生成或修改窗口内部内容；官网和中英文 README 使用同一原图。运行平台、源码提交、CLI 二进制与图片 SHA-256 见 [terminal-capture.json](../images/0.15.1/terminal-capture.json)。
+
+截图使用临时项目与隔离 HOME。两张图片引用真实仓库文件，经现有 CLI 输入适配层传递，图片标记由 Codex 本身产生；文件路径指向实际创建的 Markdown 原件。截图保留中文草稿且不发送，没有伪造模型回复、用户账号或连通性状态。
+
+此捕获复用现有 Linux PTY 与 CLI fixture，没有使用 Docker 或 Windows Clipboard；它展示真实产品界面，不代替 Windows + Docker 的粘贴验收，也不展示 Windows DWM/Acrylic 背景效果。相关功能验证仍见[智能粘贴验证记录](../validation-smart-clipboard.zh-CN.md)。
+
+在已安装项目依赖的 Linux ARM64 环境，提供现有官方 Codex 二进制后可复现（脚本不会下载或安装 CLI）：
+
+```bash
+PYTHONPATH=src QT_QPA_PLATFORM=offscreen python docs/screenshots/capture_terminal.py \
+  --codex /path/to/codex --output docs/images/0.15.1 --scale 2
+```
+
+脚本使用本地 loopback fixture，没有真实账号或模型回复，不读取用户剪贴板，结束后清理临时项目。更新 Codex 版本时应实际重新捕获，不编辑图中版本或附件标记。

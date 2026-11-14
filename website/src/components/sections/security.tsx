@@ -10,11 +10,11 @@ export function SecuritySection() {
                     <span className="security-mark">
                         <ShieldCheck size={31} />
                     </span>
-                    <SectionLabel number="05">让信任有据可查</SectionLabel>
+                    <SectionLabel number="06">隔离与安全</SectionLabel>
                     <h2 id="security-title">
-                        边界写清楚。
+                        浏览器沙箱，
                         <br />
-                        <span className="muted-heading">才值得放心使用。</span>
+                        <span className="muted-heading">凭据与目录权限。</span>
                     </h2>
                     <TextLink href={docs.security}>阅读隔离与安全模型</TextLink>
                 </div>

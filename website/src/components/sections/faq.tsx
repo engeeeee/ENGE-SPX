@@ -7,13 +7,13 @@ export function FaqSection() {
         <section className="section faq-section" id="faq">
             <div className="container faq-layout">
                 <div className="faq-intro" data-reveal>
-                    <SectionLabel number="07">
-                        开始之前，也许你想知道
+                    <SectionLabel number="08">
+                        常见问题
                     </SectionLabel>
                     <h2>
-                        把问题，
+                        安装与使用
                         <br />
-                        <span className="muted-heading">先说清楚。</span>
+                        <span className="muted-heading">常见问题。</span>
                     </h2>
                     <p>关于工作区、账号和你的现有环境。</p>
                     <TextLink href={docs.issues}>
@@ -33,8 +33,8 @@ export function FaqSection() {
                             <ArrowUpRight size={18} />
                         </div>
                         <p>
-                            兼容 Docker 默认 WSL2 配置。
-                            保留完整停止核验及已有工具更新功能。
+                            修复自动时区检查后的启动确认与下拉框保存。
+                            包含智能粘贴终端、落地出口自动时区和软件内更新。
                         </p>
                         <span className="release-note-link">
                             查看更新记录

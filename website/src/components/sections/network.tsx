@@ -10,27 +10,27 @@ export function NetworkSection() {
                 <div className="section-heading" data-reveal>
                     <div>
                         <SectionLabel number="02">
-                            路径清楚，工作才踏实
+                            网络与代理
                         </SectionLabel>
                         <h2>
-                            一条固定链路。
+                            固定加密线路，
                             <br />
                             <span className="muted-heading">
-                                每一跳，都说清楚。
+                                再连接所选落地。
                             </span>
                         </h2>
                     </div>
                     <p className="heading-description">
                         加密线路负责第一跳，落地代理决定最终出口。
                         <br />
-                        把网络路径从“应该如此”，变成可配置、可核对。
+                        分别核验两个出口，连接异常时停止工作环境。
                     </p>
                 </div>
                 <Architecture />
                 <div className="network-detail" data-reveal>
                     <Screenshot id="connection" className="connection-shot" />
                     <div className="network-copy">
-                        <span className="eyebrow">BUILT AROUND YOUR ROUTE</span>
+                        <span className="eyebrow">PROXY PROTOCOLS</span>
                         <h3>
                             你的线路。
                             <br />

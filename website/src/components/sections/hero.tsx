@@ -28,17 +28,17 @@ export function HeroSection() {
                         正式版现已发布
                         <ArrowUpRight size={12} />
                     </a>
-                    <p className="hero-eyebrow mono">YOUR SPACE TO BUILD.</p>
+                    <p className="hero-eyebrow mono">ENGE SPX / WINDOWS + DOCKER</p>
                     <h1 id="hero-title">
-                        为 AI 编程，
+                        Windows 上的
                         <br />
-                        <span>留一块独立空间。</span>
+                        <span>AI 编程隔离工作台。</span>
                     </h1>
                     <p className="hero-description">
-                        Windows 上的 AI 编程隔离工作台。
-                        <br />让 Claude Code、Codex 与浏览器在容器中工作，
+                        在 Linux 容器中运行 Claude Code、Codex 和浏览器。
+                        <br />选择本地项目，分别管理工具账号和浏览器资料，
                         <br className="desktop-break" />
-                        项目、身份和网络路径，由你掌控。
+                        配置代理链路，核对出口后开始使用。
                     </p>
                     <div className="hero-actions">
                         <a
