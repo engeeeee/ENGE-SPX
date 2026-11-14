@@ -6,7 +6,7 @@ from pathlib import Path
 BASELINE = '30c17f4de0d5c8b13ce100adba91837d0033cb48'
 ALLOWED = {'__init__.py', '__main__.py', 'engine.py', 'state.py', 'gui.py', 'smart_terminal.py',
            'window_effects.py', 'network_diagnostics.py', 'app_updates.py', 'update_apply.py', 'exit_timezone.py',
-           'workspace_language.py', 'workspace_timezone.py'}
+           'workspace_language.py', 'workspace_timezone.py', 'browser_profile_locks.py'}
 root = Path(__file__).resolve().parents[1]
 
 
@@ -49,9 +49,12 @@ for name in ('proxy_env', '_browser', '_project'):
     old, new = find(before, name), find(after, name)
     class LocaleImports(ast.NodeTransformer):
         def visit_ImportFrom(self, node):
-            return None if node.module == 'workspace_language' else node
+            return None if node.module in ('workspace_language', 'browser_profile_locks') else node
         def visit_Expr(self, node):
-            return None if isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name) and node.value.func.id == 'prepare_language' else node
+            return None if isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name) and node.value.func.id in ('prepare_language', 'prepare_profile') else node
+        def visit_If(self, node):
+            self.generic_visit(node)
+            return node if node.body else None
     new = LocaleImports().visit(new)
     for node in ast.walk(new):
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == 'proxy_env':

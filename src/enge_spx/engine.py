@@ -1023,6 +1023,9 @@ class Engine:
             from .workspace_timezone import probe as timezone_probe, ready as timezone_ready, zone_name
             if not timezone_ready(timezone_probe(self, obj['Id'], zone_name(self))):
                 raise SPXError('浏览器系统时区没有与所选时区一致，已拒绝启动浏览器。')
+            if not old or not old['State']['Running']:
+                from .browser_profile_locks import prepare as prepare_profile
+                prepare_profile(self, obj, data['browser-home'])
         except SPXError:
             self._stop("浏览器身份、挂载或沙箱核验失败，工作区已停止。")
             raise

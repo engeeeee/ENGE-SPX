@@ -117,7 +117,7 @@ def browser_image(engine, base):
         raise SPXError('浏览器基础镜像不符合离线时区准备条件。')
     def valid_configuration(candidate):
         actual = candidate.get('Config') or {}
-        return all(actual.get(key) == config.get(key) for key in ('User', 'Entrypoint', 'Cmd'))
+        return all(actual.get(key) == config.get(key) for key in ('User', 'Entrypoint')) and (actual.get('Cmd') or []) == (config.get('Cmd') or [])
     existing = engine.docker.inspect('image', tag)
     if existing:
         labels = (existing.get('Config') or {}).get('Labels') or {}
