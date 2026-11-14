@@ -929,12 +929,15 @@ class Controller(QObject):
         self.startup_active, self.startup_error = True, None
         log.info("docker-check-start auto-start=%s", auto_start)
         def done(result):
-            self.timezone.set(self.store.settings()['timezone'])
             self.prepared(result)
             log.info("docker-check-ready runtime=%s", self.runtime_ok)
         self.run(lambda engine: prepare_workspace(engine, progress=self.preparation_progress, cancel=self.cancel, auto_start=auto_start, install=False, check=False), done, True)
 
     def prepared(self, result):
+        if result.get('phase') in ('review', 'ready') and self.timezone_mode.get() == 'exit':
+            saved = self.store.settings()
+            if saved.get('timezone_mode', 'exit') == 'exit':
+                self.timezone.set(saved['timezone'])
         self.startup_active = False
         self.docker_ready = True
         self.last_docker_info = result["docker"]

@@ -58,7 +58,9 @@ module.exports = async ({github, context, core}) => {
       ? fs.readFileSync(path.join('docs', 'releases', `${version}.zh-CN.md`), 'utf8').trim()
       : `本版本改动见 [CHANGELOG](https://github.com/${owner}/${repo}/blob/${tag}/CHANGELOG.md)。`,
     '',
-    process.env.SPX_CLIENT_RELEASE === 'true'
+    process.env.SPX_UI_HOTFIX === 'true'
+      ? '本次为界面热修复：验证时区下拉框及检查→确认的实际界面流程，完成安装包基础检查。核心、依赖及Docker资源源码未变，运行环境归档逐字节复用0.15.0的已验证资产并核验SHA-256；不重复Docker、协议或性能矩阵。已有账号、代理与项目数据保留。'
+      : process.env.SPX_CLIENT_RELEASE === 'true'
       ? '本次客户端快速发布保留同一 CI 的 Linux 单元、Windows 重点回归、多档 Qt 布局、冻结更新／安装卸载、真实工作区／短时 guard／过期停机、中文 PTY、双跳故障和两种镜像存储导入验证。未改变的跨租期长时续期、完整协议矩阵和资源基准沿用0.14.6证据；生产监测不变。Windows 界面和更新结果见本次 CI Artifact。用户真实 Docker Desktop／WSL、v2ray、自定义终端和显示器仍需实机体验。Qt／PySide6／Shiboken6许可及来源随包提供。'
       : '本次发布要求同一 CI 的 Windows / Linux、真实文件共享锁、Qt 多档缩放、打包 GUI 手动启动、安装卸载、实际 Linux 长时续期、字体与中文 PTY、双跳故障阻断和两种镜像存储导入检查通过。Windows 界面结果保存在该次 CI 的 UI Artifact。假 Desktop 与 Linux Docker 测试不能代替用户真实 Docker Desktop / WSL、v2ray、自定义终端 和显示器组合验收。Qt / PySide6 / Shiboken6 的许可、上游声明与对应源码链接随包提供。',
     '',

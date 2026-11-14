@@ -1,5 +1,16 @@
 # Changes
 
+## 0.15.1 timezone selector and startup confirmation hotfix — 2026-11-14
+
+- Synchronize the derived final-exit timezone in the connection preparation
+  completion path before comparing settings and asking for exit confirmation.
+  Preserve pending manual edits during a Docker status-only check.
+- Correct the timezone combobox text/data order: show Chinese labels and pass
+  the existing exit/manual enum values. No configuration reset is required.
+- Cover the exact check-to-confirm flow and real widget selections. Limit
+  this release to UI/startup regression and package checks; reuse the exact,
+  digest-verified 0.15.0 runtime after checking that core code is unchanged.
+
 ## 0.15.0 automatic exit timezone and in-app client updates — 2026-11-14
 
 - Follow the final exit's IANA timezone after dual-source IP verification;
