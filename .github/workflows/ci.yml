@@ -90,7 +90,7 @@ jobs:
       - if: runner.os == 'Windows' && env.SPX_UI_HOTFIX != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: ENGE-SPX-UI-0.15.1
+          name: ENGE-SPX-UI-0.15.2
           path: ${{ runner.temp }}/spx-ui-checks
           if-no-files-found: error
       - if: runner.os == 'Windows' && env.SPX_UI_HOTFIX != 'true'
@@ -118,7 +118,7 @@ jobs:
       - name: Verify real portable and installed client update handoff
         if: env.SPX_UI_HOTFIX != 'true'
         shell: pwsh
-        run: ./.venv-build/Scripts/python.exe tests/integration_app_update.py --bundle dist/ENGE-SPX-Windows-x64-0.15.1-Portable.zip --setup dist/ENGE-SPX-Windows-x64-0.15.1-Setup.exe --output '${{ runner.temp }}/app-update-e2e.json'
+        run: ./.venv-build/Scripts/python.exe tests/integration_app_update.py --bundle dist/ENGE-SPX-Windows-x64-0.15.2-Portable.zip --setup dist/ENGE-SPX-Windows-x64-0.15.2-Setup.exe --output '${{ runner.temp }}/app-update-e2e.json'
       - name: Verify caption click restores terminal material
         if: env.SPX_UI_HOTFIX != 'true'
         shell: pwsh
@@ -184,7 +184,7 @@ jobs:
         shell: pwsh
         run: |
           $appDir = Join-Path $env:RUNNER_TEMP 'spx-installed'
-          $setup = Start-Process -FilePath ./dist/ENGE-SPX-Windows-x64-0.15.1-Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$appDir" -PassThru -Wait
+          $setup = Start-Process -FilePath ./dist/ENGE-SPX-Windows-x64-0.15.2-Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$appDir" -PassThru -Wait
           if ($setup.ExitCode -ne 0 -or -not (Test-Path "$appDir/ENGE-SPX.exe")) { throw 'Setup failed.' }
           & "$appDir/spx.exe" --version
           if ($LASTEXITCODE -ne 0) { throw 'Installed CLI failed.' }
@@ -198,10 +198,10 @@ jobs:
           if ((Get-Content (Join-Path $privateData 'uninstall-test.txt')) -ne 'preserved') { throw 'Uninstall removed private data.' }
       - uses: actions/upload-artifact@v4
         with:
-          name: ENGE-SPX-Windows-x64-0.15.1
+          name: ENGE-SPX-Windows-x64-0.15.2
           path: |
-            dist/ENGE-SPX-Windows-x64-0.15.1-Portable.zip
-            dist/ENGE-SPX-Windows-x64-0.15.1-Setup.exe
+            dist/ENGE-SPX-Windows-x64-0.15.2-Portable.zip
+            dist/ENGE-SPX-Windows-x64-0.15.2-Setup.exe
             dist/*.sha256
           if-no-files-found: error
   containers:
@@ -252,6 +252,8 @@ jobs:
         run: python -u tests/integration_runtime.py --context default --output "$RUNNER_TEMP/integration-results.json" ${{ env.SPX_CLIENT_RELEASE == 'true' && '--quick-client' || '' }}
       - name: Verify two automatic exit zones without losing project data
         run: python -u tests/integration_exit_timezone.py --runtime-report "$RUNNER_TEMP/integration-results.json" --output "$RUNNER_TEMP/exit-timezone.json"
+      - name: Verify actual regional locales and sandboxed Chromium language
+        run: python -u tests/integration_workspace_language.py --runtime-report "$RUNNER_TEMP/integration-results.json" --output "$RUNNER_TEMP/workspace-language.json"
       - name: Verify local line and landing chain
         env:
           PYTHONPATH: src
@@ -277,6 +279,7 @@ jobs:
             ${{ runner.temp }}/integration-results.json
             ${{ runner.temp }}/clipboard-native-api.json
             ${{ runner.temp }}/exit-timezone.json
+            ${{ runner.temp }}/workspace-language.json
             ${{ runner.temp }}/clipboard-terminal.png
           if-no-files-found: warn
       - name: Export the verified native environment
@@ -310,7 +313,7 @@ jobs:
         if: github.repository == 'engeeeee/ENGE-SPX' && github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: ENGE-SPX-Runtime-0.15.1
+          name: ENGE-SPX-Runtime-0.15.2
           path: ${{ runner.temp }}/runtime-package/*
           compression-level: 0
           retention-days: 1
@@ -329,7 +332,7 @@ jobs:
         run: python3 tools/reuse_ui_hotfix_runtime.py --output "$RUNNER_TEMP/runtime-package"
       - uses: actions/upload-artifact@v4
         with:
-          name: ENGE-SPX-Runtime-0.15.1
+          name: ENGE-SPX-Runtime-0.15.2
           path: ${{ runner.temp }}/runtime-package/*
           compression-level: 0
           retention-days: 1
@@ -344,11 +347,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: ENGE-SPX-Windows-x64-0.15.1
+          name: ENGE-SPX-Windows-x64-0.15.2
           path: verified-package
       - uses: actions/download-artifact@v4
         with:
-          name: ENGE-SPX-Runtime-0.15.1
+          name: ENGE-SPX-Runtime-0.15.2
           path: verified-runtime
       - name: Publish the verified ENGE SPX release
         uses: actions/github-script@v7

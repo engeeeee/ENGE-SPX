@@ -71,6 +71,40 @@ class UpdateUITests(unittest.TestCase):
         box.setCurrentIndex(0)
         self.assertEqual(self.c.captured_settings()[4], 'exit')
 
+    def test_line_selector_excludes_plain_landing_and_switches_addresses_without_touching_landing(self):
+        from enge_spx.nodes import uri_node
+        landing = uri_node('socks5://192.0.2.2:1080#landing')
+        first = uri_node('trojan://fixture@192.0.2.10:443#first')
+        second = uri_node('trojan://fixture@192.0.2.20:443#second')
+        self.store.write('nodes.json', [landing, first, second])
+        self.c.refresh_nodes()
+        self.c.selected.set(landing['id'])
+        self.c.line_mode.set('managed')
+        self.c.relay_enabled.set(True)
+        self.w.show_page('connection')
+        box = self.w.managed_line_box
+        self.assertEqual(box.findData(landing['id']), -1)
+        box.setCurrentIndex(box.findData(first['id']))
+        self.c.line_server_ip.set('192.0.2.11')
+        self.c.line_expected_ip.set('1.1.1.1')
+        box.setCurrentIndex(box.findData(second['id']))
+        self.assertEqual(self.c.line_selected.get(), second['id'])
+        self.assertEqual(self.c.selected.get(), landing['id'])
+        self.assertEqual(self.c.line_server_ip.get(), '192.0.2.20')
+        self.assertEqual(self.c.line_expected_ip.get(), '')
+        box.setCurrentIndex(box.findData(first['id']))
+        self.assertEqual((self.c.line_server_ip.get(), self.c.line_expected_ip.get()), ('192.0.2.11', '1.1.1.1'))
+        self.c.line_mode.set('local')
+        self.assertFalse(box.isEnabled())
+        self.assertEqual(self.c.line_expected_ip.get(), '')
+
+    def test_language_choices_are_explicit_and_do_not_replace_chinese_ui(self):
+        box = self.w.language_mode_box
+        self.assertEqual(box.currentData(), 'unchanged')
+        box.setCurrentIndex(box.findData('line'))
+        self.assertEqual(self.c.captured_settings()[5], 'line')
+        self.assertIn('线路出口', box.currentText())
+
     def test_startup_accepts_new_exit_timezone_before_confirmation_without_losing_pending_edits(self):
         from enge_spx.nodes import uri_node
         node = uri_node('socks5://192.0.2.10:1080#fixture')

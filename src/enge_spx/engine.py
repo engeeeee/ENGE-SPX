@@ -324,7 +324,7 @@ class Engine:
             self.store.write("nodes.json", [])
             self.store.write("settings.json", settings)
 
-    def save_settings(self, selected: str, timezone: str, context: str, relay=None, timezone_mode=None):
+    def save_settings(self, selected: str, timezone: str, context: str, relay=None, timezone_mode=None, language_mode=None):
         try:
             ZoneInfo(timezone)
         except (ZoneInfoNotFoundError, ValueError) as error:
@@ -349,11 +349,13 @@ class Engine:
                 raise SPXError("已安装的环境不能切换 Docker 上下文。请使用新的专用数据目录。")
             from .exit_timezone import mode as validate_timezone_mode
             timezone_mode = validate_timezone_mode({"timezone_mode": timezone_mode or old.get("timezone_mode", "exit")})
+            from .workspace_language import mode as validate_language_mode
+            language_mode = validate_language_mode({'language_mode': old.get('language_mode', 'unchanged') if language_mode is None else language_mode})
             old_route = route_config(old["relay"])
             new_route = route_config(relay)
-            if (old["selected"], old["timezone"], old["context"], old_route, old.get("timezone_mode", "exit")) != (selected, timezone, context, new_route, timezone_mode):
+            if (old["selected"], old["timezone"], old["context"], old_route, old.get("timezone_mode", "exit"), old.get('language_mode', 'unchanged')) != (selected, timezone, context, new_route, timezone_mode, language_mode):
                 self._stop("设置已更新，请重新检查连接。")
-            self.store.write("settings.json", {**old, "selected": selected, "timezone": timezone, "manual_timezone": timezone if timezone_mode == 'manual' else old.get('manual_timezone', timezone), "timezone_mode": timezone_mode, "context": context, "relay": relay})
+            self.store.write("settings.json", {**old, "selected": selected, "timezone": timezone, "manual_timezone": timezone if timezone_mode == 'manual' else old.get('manual_timezone', timezone), "timezone_mode": timezone_mode, "language_mode": language_mode, "context": context, "relay": relay})
 
     def node(self):
         return self.node_by_id(self.store.settings()["selected"])
@@ -379,6 +381,9 @@ class Engine:
         result = {"node": self.node(), "line": line, "timezone": settings["timezone"], "context": settings["context"], "relay": relay, "recipe": self.recipe, "line_guard": 2, "network_policy": 1, "proxy_backend": self.backend.name}
         from .workspace_profiles import load, policy, SHARED
         result['timezone_mode'] = settings.get('timezone_mode', 'exit')
+        from .workspace_language import mode as language_mode
+        if language_mode(settings) != 'unchanged':
+            result['language'] = {'mode': language_mode(settings), 'value': settings.get('environment_language')}
         workspace = load(self.store)
         if workspace["selected"] != SHARED or workspace["projects"]:
             result["workspace"] = policy(workspace)
@@ -559,6 +564,8 @@ class Engine:
                 from .exit_timezone import apply_verified_exit
                 zone = apply_verified_exit(self, evidence)
                 state['timezone'] = zone
+                from .workspace_language import apply_verified_exit as apply_language
+                state['environment_language'] = apply_language(self, state, evidence)
                 state.update({"phase": "review", "policy": self.policy(), "checked": time.time(), "evidence": evidence})
                 self.store.write("runtime.json", state)
                 return evidence
@@ -633,6 +640,8 @@ class Engine:
                 from .exit_timezone import mode as timezone_mode, validate_zone
                 if timezone_mode(self.store.settings()) == 'exit' and validate_zone(evidence.get('timezone')) != self.store.settings()['timezone']:
                     raise SPXError('复核时落地时区发生变化，请重新检查并核对；未启用工作区。')
+                from .workspace_language import verify as verify_language
+                verify_language(self, evidence)
                 state.update({"phase": "ready", "evidence": evidence, "heartbeat": time.time(), "confirmed": time.time(), "browser_token": secrets.token_hex(32)})
                 self.set_lease(time.time() + 180, state)
                 self.store.write("runtime.json", state)
@@ -961,11 +970,12 @@ class Engine:
         from .storage import migrate_home
         return migrate_home(self.store, target, self._stop, progress)
 
-    def proxy_env(self, state):
+    def proxy_env(self, state, browser=False):
         result = []
         for key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"):
             result += ["--env", key + "=" + state["proxy"]]
-        return [*result, "--env", "NO_PROXY=localhost,127.0.0.1,::1", "--env", "no_proxy=localhost,127.0.0.1,::1", "--env", "BROWSER=/usr/local/bin/xdg-open", "--env", "TZ=" + self.store.settings()["timezone"]]
+        from .workspace_language import environment
+        return [*result, "--env", "NO_PROXY=localhost,127.0.0.1,::1", "--env", "no_proxy=localhost,127.0.0.1,::1", "--env", "BROWSER=/usr/local/bin/xdg-open", "--env", "TZ=" + self.store.settings()["timezone"], *environment(self.store.settings(), browser=browser)]
 
     def control_env(self, state):
         self.secret_values.add(state["browser_token"])
@@ -1008,7 +1018,7 @@ class Engine:
             self.docker.run('stop', previous['Id'])
         old = self._retire_stopped_browser()
         try:
-            obj = self.ensure_container("browser", browser_image_id, ["--label", PROFILE + "=" + identity, "--network", "container:" + state["session"], "--shm-size", "512m", *arguments(), "--volume", data["browser-home"] + ":/home/workspace", "--volume", data["downloads"] + ":/home/workspace/Downloads", *self.proxy_env(state)], validate_existing=verify)
+            obj = self.ensure_container("browser", browser_image_id, ["--label", PROFILE + "=" + identity, "--network", "container:" + state["session"], "--shm-size", "512m", *arguments(), "--volume", data["browser-home"] + ":/home/workspace", "--volume", data["downloads"] + ":/home/workspace/Downloads", *self.proxy_env(state, browser=True)], validate_existing=verify)
             verify(obj)
             from .workspace_timezone import probe as timezone_probe, ready as timezone_ready, zone_name
             if not timezone_ready(timezone_probe(self, obj['Id'], zone_name(self))):
@@ -1106,6 +1116,8 @@ class Engine:
             verify(obj)
             from .workspace_timezone import prepare_project
             prepare_project(self, obj)
+            from .workspace_language import prepare_project as prepare_language
+            prepare_language(self, obj)
         except SPXError:
             self._stop("项目身份、目录或权限核验失败，工作区已停止。")
             raise

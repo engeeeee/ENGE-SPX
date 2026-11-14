@@ -193,7 +193,9 @@ def browser_evidence(raw):
 
 
 def _exec_json(engine, container, name, active=False, authorization=None, timezone_name=None):
-    result = engine.docker.run("exec", *(["-i"] if authorization is not None else []), *(['--env', 'TZ=' + timezone_name] if timezone_name else []), container, "python3", "-c", script(name), *(["--active"] if active else []), input_data=json.dumps(authorization) if authorization is not None else None, timeout=25 if authorization is not None else 12)
+    from .workspace_language import environment
+    language = environment(engine.store.settings()) if timezone_name else []
+    result = engine.docker.run("exec", *(["-i"] if authorization is not None else []), *(['--env', 'TZ=' + timezone_name] if timezone_name else []), *language, container, "python3", "-c", script(name), *(["--active"] if active else []), input_data=json.dumps(authorization) if authorization is not None else None, timeout=25 if authorization is not None else 12)
     if len(result) > 128 * 1024:
         raise ValueError("Oversized diagnostic evidence")
     return json.loads(result)

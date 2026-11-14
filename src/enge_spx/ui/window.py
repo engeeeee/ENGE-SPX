@@ -308,30 +308,48 @@ class Window(QMainWindow):
         return widget
 
     def refresh_node_boxes(self):
+        from ..line_security import managed_line
         for widget, value, line in self.node_boxes:
             widget.blockSignals(True)
             widget.clear()
-            widget.addItem("选择线路节点" if line else "选择落地代理", "")
+            widget.addItem("选择第一跳加密线路" if line else "选择最终落地代理", "")
             for node in self.c.nodes:
-                widget.addItem(f"{protocol(node)}  ·  {node['label']}", node["id"])
+                if line:
+                    try:
+                        managed_line(node, '192.0.2.1')
+                    except SPXError:
+                        if node['id'] == value.get():
+                            widget.addItem('不可作加密第一跳 · ' + node['label'], node['id'])
+                            widget.model().item(widget.count() - 1).setEnabled(False)
+                        continue
+                widget.addItem(f"{'第一跳' if line else '落地'} · {protocol(node)}  ·  {node['label']}", node["id"])
             widget.setCurrentIndex(max(0, widget.findData(value.get())))
             widget.blockSignals(False)
 
     def build_connection(self):
         page = Page("连接与代理", "分别选择前置线路与落地，清楚掌握工作区的网络路径。")
-        panel = page.panel("落地代理", "支持 SOCKS5、HTTP、HTTPS，也可以导入已有链接和订阅。")
+        panel = page.panel("落地代理 · 最终出口", "这里选择最后一跳，不是前置线路。支持 SOCKS5、HTTP、HTTPS，也可导入其他受支持节点。")
         row = panel.row()
         row.addWidget(self.node_combo(self.c.selected), 1)
         row.addWidget(self.action("添加代理", self.proxy_dialog, True))
         row.addWidget(self.action("批量导入", self.import_dialog))
         row.addWidget(self.action("删除所选代理", self.c.delete_selected_node, ghost=True))
         panel.layout.addWidget(label("代理配置使用 Windows 当前账户加密；跨盘迁移保留，换电脑前请阅读凭据迁移说明。" if self.c.store.credentials.enabled else "此系统使用私有文件权限保存代理配置，未使用 Windows DPAPI 加密。", "Muted"))
-        panel = page.panel("前置线路", "已有 v2ray 可作为本机前置，也可在软件内组合固定加密线路与落地。")
+        panel = page.panel("前置线路 · 第一跳", "线路负责中转，落地决定最终出口。本机 v2ray 模式不需要再选择软件内第一跳。")
         panel.layout.addWidget(check("启用前置线路", self.c.relay_enabled))
         mode = combo(self.c.line_mode, list(LINE_MODES.items()))
         panel.field("接入方式", mode)
-        panel.field("软件内双跳的线路节点", self.node_combo(self.c.line_selected, True), "从 v2ray 复制受支持的线路分享链接，使用上方批量导入。")
-        panel.field("线路服务器 IPv4", entry(self.c.line_server_ip, "线路地址为域名时填写"), "保留 TLS 名称和证书校验，避免通过本机 DNS 解析线路域名。")
+        self.managed_line_box = self.node_combo(self.c.line_selected, True)
+        self.line_server_entry = entry(self.c.line_server_ip, "线路地址为域名时填写")
+        panel.field("第一跳 · 加密线路", self.managed_line_box, "只列出支持加密第一跳的节点。普通 SOCKS5 / HTTP 请在上方选择为落地。")
+        panel.field("当前线路的服务器 IPv4", self.line_server_entry, "随线路切换；域名线路需填写对应服务器 IPv4，不会沿用上一条线路的地址。")
+        def line_controls(unused=None):
+            enabled = self.c.relay_enabled.get() and self.c.line_mode.get() == 'managed'
+            self.managed_line_box.setEnabled(enabled)
+            self.line_server_entry.setEnabled(enabled)
+        self.c.line_mode.changed.connect(line_controls)
+        self.c.relay_enabled.changed.connect(line_controls)
+        line_controls()
         row = QHBoxLayout()
         row.addWidget(entry(self.c.relay_url, "http://127.0.0.1:10809 或 socks5://127.0.0.1:10808"), 1)
         row.addWidget(self.action("读取系统代理", self.c.read_system_proxy))
@@ -821,6 +839,8 @@ class Window(QMainWindow):
         timezone_entry.setEnabled(self.c.timezone_mode.get() == 'manual')
         self.c.timezone_mode.changed.connect(lambda value: timezone_entry.setEnabled(value == 'manual'))
         panel.field("IANA 时区", timezone_entry)
+        self.language_mode_box = combo(self.c.language_mode, [('保持现有语言', 'unchanged'), ('跟随第一跳线路出口', 'line'), ('跟随最终落地出口', 'exit')])
+        panel.field("容器语言", self.language_mode_box, "需主动启用，重新检查后随出口确认。调整容器 locale 和浏览器首选语言，不改 Windows、软件界面或中文输入。")
         panel.field("本机 Docker 上下文", entry(self.c.context))
         panel.layout.addWidget(self.action("保存环境设置", self.c.save_settings, True), alignment=Qt.AlignmentFlag.AlignLeft)
         panel = page.panel('软件更新', '从 ENGE SPX 官方 GitHub Releases 下载正式版，校验后更新并重新打开。')

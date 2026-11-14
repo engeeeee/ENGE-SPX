@@ -1,5 +1,24 @@
 # Changes
 
+## 0.15.2 line selection and opt-in regional language — 2026-11-14
+
+- Label the landing as the final exit and the encrypted line as the first hop.
+  Exclude ordinary SOCKS5/HTTP landings from the encrypted-line selector and
+  disable managed-line controls in local-v2ray mode. Keep the two roles separate.
+- Switch the server IPv4 and optional exit lock with the selected first-hop
+  node; retain per-node values during the current UI session, so a newly chosen
+  line does not inherit the old server or expected exit.
+- Add explicit opt-in language modes for the first-hop or final exit. Query
+  the exact verified IP through the controlled gateway; no direct lookup,
+  inferred personal language, unsupported-country fallback or host changes.
+- Provision installed glibc UTF-8 locale data and Chromium ForcedLanguages.
+  Keep CLI diagnostic messages English, Chinese/Unicode input, account data,
+  project writable layers, browser sandbox and existing network guards.
+  Existing configurations keep their language until the user enables the mode.
+- Use focused UI/locale regressions and real Japanese/English Chromium checks;
+  retain the existing bounded client packaging and network safety checks,
+  without repeating unrelated protocol matrices or resource benchmarks.
+
 ## 0.15.1 timezone selector and startup confirmation hotfix — 2026-11-14
 
 - Synchronize the derived final-exit timezone in the connection preparation

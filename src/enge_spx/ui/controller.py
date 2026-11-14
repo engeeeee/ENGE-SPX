@@ -1,6 +1,7 @@
 """Desktop state and bounded worker delivery, independent of widget layouts."""
 from datetime import datetime
 import hashlib
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -133,6 +134,7 @@ class Controller(QObject):
             "selected": settings["selected"], "line_selected": relay.get("line_id", ""),
             "timezone": settings["timezone"], "context": settings["context"],
             "timezone_mode": settings.get("timezone_mode", "exit"),
+            "language_mode": settings.get("language_mode", "unchanged"),
             "auto_check_updates": self.update_preferences['auto_check'],
             "update_status": update_message, "update_progress": 0, "update_available": False,
             "project": (settings["projects"] or [""])[-1], "relay_enabled": relay.get("enabled", False),
@@ -171,7 +173,11 @@ class Controller(QObject):
         for name, value in self.values.items():
             setattr(self, name, value)
         self.steps = ["等待检测", "等待核验", "等待配置", "由你确认"]
-        for name in ("selected", "line_selected", "timezone", "timezone_mode", "context", "relay_enabled", "relay_url", "relay_downloads", "line_mode", "line_server_ip", "line_expected_ip"):
+        self.line_context = (self.line_mode.get(), self.line_selected.get())
+        self.line_presets = {}
+        self.line_selected.changed.connect(self.line_selection_changed)
+        self.line_mode.changed.connect(self.line_selection_changed)
+        for name in ("selected", "line_selected", "timezone", "timezone_mode", "language_mode", "context", "relay_enabled", "relay_url", "relay_downloads", "line_mode", "line_server_ip", "line_expected_ip"):
             self.values[name].changed.connect(lambda unused: self.schedule_refresh())
         self.resource_mode.changed.connect(self.resource_preset_changed)
         self.timezone_mode.changed.connect(lambda value: self.timezone.set(self.store.settings().get('manual_timezone', 'America/Los_Angeles')) if value == 'manual' else None)
@@ -632,6 +638,23 @@ class Controller(QObject):
     def captured_relay(self):
         return relay_config(self.relay_enabled.get(), self.relay_url.get(), self.relay_downloads.get(), self.line_mode.get(), self.line_selected.get(), self.line_server_ip.get(), self.line_expected_ip.get())
 
+    def line_selection_changed(self, unused=None):
+        current = (self.line_mode.get(), self.line_selected.get())
+        if current == self.line_context:
+            return
+        self.line_presets[self.line_context] = (self.line_server_ip.get(), self.line_expected_ip.get())
+        self.line_context = current
+        values = self.line_presets.get(current)
+        if values is None:
+            node = next((node for node in getattr(self, 'nodes', []) if node['id'] == current[1]), None)
+            try:
+                address = str(ipaddress.IPv4Address(node['outbound']['server'])) if node and current[0] == 'managed' else ''
+            except ipaddress.AddressValueError:
+                address = ''
+            values = address, ''
+        self.line_server_ip.set(values[0])
+        self.line_expected_ip.set(values[1])
+
     def save_update_preferences(self):
         value = {'schema': 1, 'auto_check': self.auto_check_updates.get()}
         def save(engine):
@@ -692,13 +715,13 @@ class Controller(QObject):
         self.run(action, done, True, '下载并准备软件更新…')
 
     def captured_settings(self):
-        return self.selected.get(), self.timezone.get().strip(), self.context.get().strip(), self.captured_relay(), self.timezone_mode.get()
+        return self.selected.get(), self.timezone.get().strip(), self.context.get().strip(), self.captured_relay(), self.timezone_mode.get(), self.language_mode.get()
 
     def settings_match(self):
         saved = self.store.settings()
         try:
-            selected, timezone, context, relay, zone_mode = self.captured_settings()
-            return (selected, timezone, context, route_config(relay), zone_mode) == (saved["selected"], saved["timezone"], saved["context"], route_config(saved["relay"]), saved.get("timezone_mode", "exit"))
+            selected, timezone, context, relay, zone_mode, language_mode = self.captured_settings()
+            return (selected, timezone, context, route_config(relay), zone_mode, language_mode) == (saved["selected"], saved["timezone"], saved["context"], route_config(saved["relay"]), saved.get("timezone_mode", "exit"), saved.get("language_mode", "unchanged"))
         except SPXError:
             return False
 
@@ -997,6 +1020,9 @@ class Controller(QObject):
             return
         evidence = status_snapshot(self.store).get("evidence") or {}
         text = f"前置线路出口：{evidence.get('line_ip', '—')}\n落地出口：{evidence.get('ip', '—')}\n地区：{evidence.get('country', '—')} / {evidence.get('city', '—')}\n时区：{self.timezone.get()}\n\n确认实际出口后启用工作区？"
+        language = self.store.settings().get('environment_language')
+        if self.language_mode.get() != 'unchanged' and language:
+            text = text.replace('\n\n确认', f"\n环境语言：{language['tag']}（{'第一跳线路出口' if self.language_mode.get() == 'line' else '最终落地出口'}）\n终端仍支持中文输入；不改 Windows 语言。\n\n确认")
         if self.ask("核对线路与落地", text):
             self.run(lambda engine: engine.confirm())
 

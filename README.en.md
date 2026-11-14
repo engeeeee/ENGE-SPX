@@ -2,7 +2,7 @@
 <h1 align="center">ENGE SPX</h1>
 <p align="center"><strong>An isolated AI coding workspace for Windows</strong></p>
 <p align="center">Run Claude Code, Codex and a workspace browser in Linux containers with a chosen, verified proxy exit.</p>
-<p align="center"><a href="README.md">简体中文</a> · <strong>English</strong> · <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.1-windows">Download</a></p>
+<p align="center"><a href="README.md">简体中文</a> · <strong>English</strong> · <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.2-windows">Download</a></p>
 
 [Official website](https://enge1337.cn/) · [Website source](website/README.md)
 
@@ -66,12 +66,12 @@ This is an actual **Linux capture of the 0.15.1 product terminal and Codex 0.169
 
 ## Download and start
 
-Current release: **[0.15.1 stable](https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.1-windows)**. Windows x64 requires Docker Desktop with Linux containers / WSL 2 and Docker Engine 28+. Packaged builds do not require a separate Python installation. Executables are currently unsigned.
+Current release: **[0.15.2 stable](https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.2-windows)**. Windows x64 requires Docker Desktop with Linux containers / WSL 2 and Docker Engine 28+. Packaged builds do not require a separate Python installation. Executables are currently unsigned.
 
-**0.15.1 stable** fixes startup confirmation after an automatic timezone change and the timezone selector's labels/values. It includes workspace timezone selection from the verified final exit, plus in-app stable-release checks, verified downloads and restart-to-update for Windows installer and portable builds. Manual timezone remains available; existing project layers and accounts stay in place. Caption clicks restore Acrylic correctly and tool badges follow the chosen tint. Recheck and confirm the exit after upgrading. See [implementation, reproducible probes and validation limits](docs/terminal-appearance-performance.zh-CN.md). See [Smart Clipboard](docs/smart-clipboard.zh-CN.md), [release notes](docs/releases/0.15.1.zh-CN.md) and [validation scope](docs/validation-smart-clipboard.zh-CN.md).
+**0.15.2 stable** separates encrypted first-hop and final-landing selection, switches server/exit pins with the selected line, and adds opt-in regional UTF-8 and Chromium language settings. Choose the first-hop or final-exit source explicitly. Chinese/Unicode input, existing English CLI diagnostics, accounts and project layers remain available. See [release notes](docs/releases/0.15.2.zh-CN.md) and [language settings](docs/workspace-language.zh-CN.md).
 
-- **[Windows installer](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.1-windows/ENGE-SPX-Windows-x64-0.15.1-Setup.exe)**: per-user setup with shortcuts.
-- **[Portable ZIP](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.1-windows/ENGE-SPX-Windows-x64-0.15.1-Portable.zip)**: extract everything, run `ENGE-SPX.exe` and keep `_internal` beside it.
+- **[Windows installer](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.2-windows/ENGE-SPX-Windows-x64-0.15.2-Setup.exe)**: per-user setup with shortcuts.
+- **[Portable ZIP](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.2-windows/ENGE-SPX-Windows-x64-0.15.2-Portable.zip)**: extract everything, run `ENGE-SPX.exe` and keep `_internal` beside it.
 - Both packages contain `spx.exe`. Checksums and the matching runtime are on the release page.
 
 1. Install [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/) once and complete its license, WSL and Linux-engine initialization.

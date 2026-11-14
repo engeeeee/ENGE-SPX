@@ -103,7 +103,13 @@ os.replace('/etc/timezone.spx-next','/etc/timezone')
 
 def browser_image(engine, base):
     zone = zone_name(engine)
-    key = fingerprint({'base': base, 'zone': zone, 'prepare': PREPARE})[:24]
+    from .workspace_language import resolved, BROWSER_PREPARE
+    language = resolved(engine.store.settings())
+    prepare, extra = PREPARE, []
+    if language:
+        prepare += BROWSER_PREPARE
+        extra = [language['locale'], language['tag']]
+    key = fingerprint({'base': base, 'zone': zone, 'prepare': prepare, **({'language': extra} if language else {})})[:24]
     tag = 'enge-spx/timezone-' + engine.store.instance + ':' + key
     image = engine.docker.inspect('image', base)
     config = image.get('Config') or {}
@@ -126,9 +132,9 @@ def browser_image(engine, base):
                                        '--label', engine.role + '=timezone-builder', '--label', LABEL + '=' + zone,
                                        '--label', BASE + '=' + base, '--label', FORMAT + '=' + key,
                                        '--network', 'none', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
-                                       '--pids-limit', '32', '--memory', '128m', '--cpus', '1', '--user', '0:0',
-                                       '--entrypoint', 'python3', base, '-I', '-c', PREPARE, zone)
-        engine.docker.run('start', '--attach', identifier, timeout=30)
+                                       '--pids-limit', '32', '--memory', '256m' if language else '128m', '--cpus', '1', '--user', '0:0',
+                                       '--entrypoint', 'python3', base, '-I', '-c', prepare, zone, *extra)
+        engine.docker.run('start', '--attach', identifier, timeout=40 if language else 30)
         state = engine.owned(engine.docker.inspect('container', identifier), 'timezone-builder')
         if state['State'].get('ExitCode') != 0:
             raise SPXError('浏览器离线时区准备失败，未更改正在使用的镜像。')

@@ -5,7 +5,8 @@ from pathlib import Path
 
 BASELINE = '30c17f4de0d5c8b13ce100adba91837d0033cb48'
 ALLOWED = {'__init__.py', '__main__.py', 'engine.py', 'state.py', 'gui.py', 'smart_terminal.py',
-           'window_effects.py', 'network_diagnostics.py', 'app_updates.py', 'update_apply.py', 'exit_timezone.py'}
+           'window_effects.py', 'network_diagnostics.py', 'app_updates.py', 'update_apply.py', 'exit_timezone.py',
+           'workspace_language.py', 'workspace_timezone.py'}
 root = Path(__file__).resolve().parents[1]
 
 
@@ -22,9 +23,10 @@ for path in changed:
     elif path.startswith('src/enge_spx/'):
         assert path.startswith('src/enge_spx/ui/') or path.split('/')[-1] in ALLOWED, 'Non-client code changed; use full CI'
     else:
-        assert path.startswith(('docs/', 'tests/', 'tools/', 'packaging/windows/', '.github/workflows/')) or path in {'README.md', 'README.en.md', 'CHANGELOG.md', 'SECURITY.md'}, 'Unexpected release scope'
+        assert path.startswith(('docs/', 'tests/', 'tools/', 'website/', 'packaging/windows/', '.github/workflows/')) or path in {'README.md', 'README.en.md', 'CHANGELOG.md', 'SECURITY.md'}, 'Unexpected release scope'
 
-for path, allowed in [('src/enge_spx/engine.py', {'save_settings', 'policy', 'check', 'confirm'}),
+for path, allowed in [('src/enge_spx/engine.py', {'save_settings', 'policy', 'check', 'confirm', 'proxy_env', '_browser', '_project'}),
+                      ('src/enge_spx/workspace_timezone.py', {'browser_image'}),
                       ('src/enge_spx/state.py', {'settings'})]:
     def methods(text):
         result = {}
@@ -39,4 +41,25 @@ for path, allowed in [('src/enge_spx/engine.py', {'save_settings', 'policy', 'ch
     before, after = methods(previous(path)), methods((root / path).read_text())
     for key in before.keys() | after.keys():
         assert key.split('.')[-1] in allowed or before.get(key) == after.get(key), 'Guard, topology, lifecycle or proxy engine changed; use full CI: ' + key
-print('Client scope verified against 0.14.6: runtime recipes, routing, guard, sandbox and lifecycle unchanged')
+before = ast.parse(previous('src/enge_spx/engine.py'))
+after = ast.parse((root / 'src/enge_spx/engine.py').read_text())
+def find(tree, name):
+    return next(node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == name)
+for name in ('proxy_env', '_browser', '_project'):
+    old, new = find(before, name), find(after, name)
+    class LocaleImports(ast.NodeTransformer):
+        def visit_ImportFrom(self, node):
+            return None if node.module == 'workspace_language' else node
+        def visit_Expr(self, node):
+            return None if isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name) and node.value.func.id == 'prepare_language' else node
+    new = LocaleImports().visit(new)
+    for node in ast.walk(new):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == 'proxy_env':
+            node.keywords = [kw for kw in node.keywords if kw.arg != 'browser']
+        if name == 'proxy_env' and isinstance(node, ast.List):
+            node.elts = [elt for elt in node.elts if not (isinstance(elt, ast.Starred) and isinstance(elt.value, ast.Call) and isinstance(elt.value.func, ast.Name) and elt.value.func.id == 'environment')]
+    if name == 'proxy_env':
+        new.args.args = new.args.args[:-1]
+        new.args.defaults = new.args.defaults[:-1]
+    assert ast.dump(old, include_attributes=False) == ast.dump(new, include_attributes=False), 'Change exceeds locale-only integration: ' + name
+print('Client scope verified: runtime recipes, routing, guard, sandbox and lifecycle unchanged; locale-only launch integration reviewed')
