@@ -31,9 +31,11 @@ print(json.dumps({'schema':1,'removed':removed}))
 def prepare(engine, obj, volume):
     engine.owned(obj, 'browser')
     current = obj['Id']
-    output = engine.docker.run('ps', '--no-trunc', '--filter', 'status=running', '--filter', 'volume=' + volume, '--format', '{{.ID}}', timeout=8)
-    users = set(output.splitlines())
-    if not re.fullmatch('[a-f0-9]{64}', current) or users != {current}:
+    output = engine.docker.run('ps', '--all', '--no-trunc', '--filter', 'volume=' + volume, '--format', '{{.ID}} {{.State}}', timeout=8)
+    rows = [row.split() for row in output.splitlines()]
+    valid = all(len(row) == 2 and re.fullmatch('[a-f0-9]{64}', row[0]) and row[1] in ('running', 'created', 'exited', 'paused', 'restarting', 'removing', 'dead') for row in rows)
+    users = {row[0] for row in rows if len(row) == 2 and row[1] not in ('created', 'exited')}
+    if not valid or [current, 'running'] not in rows or not re.fullmatch('[a-f0-9]{64}', current) or users != {current}:
         raise SPXError('浏览器资料仍被其他容器使用，或无法核验使用状态；未清理 Profile 锁。请先正常停止其他浏览器。')
     try:
         result = json.loads(engine.docker.run('exec', current, 'python3', '-I', '-c', RECOVER, timeout=8))
