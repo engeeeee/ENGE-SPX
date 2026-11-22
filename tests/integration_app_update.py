@@ -10,7 +10,6 @@ import json
 import os
 from pathlib import Path
 import queue
-import shutil
 import subprocess
 import tempfile
 import threading
@@ -20,6 +19,7 @@ from enge_spx import __version__
 from enge_spx.app_updates import extract_package
 from enge_spx.downloads import digest
 from enge_spx.state import Store, atomic_json
+from desktop_harness import environment as desktop_environment, fake_desktop
 
 
 def stop_owned(pid, root):
@@ -42,7 +42,7 @@ def stop_owned(pid, root):
         kernel.CloseHandle(handle)
 
 
-def exercise(bundle, setup, installed):
+def exercise(bundle, setup, installed, environment):
     with tempfile.TemporaryDirectory(prefix='spx update 空格-') as folder:
         base = Path(folder)
         root, stage = base / 'app', base / 'stage'
@@ -61,7 +61,6 @@ def exercise(bundle, setup, installed):
         old_id = store.instance
         payload = stage / 'payload'
         extract_package(bundle, payload)
-        environment = {**os.environ, 'PYINSTALLER_RESET_ENVIRONMENT': '1'}
         parent = subprocess.Popen([str(root / 'ENGE-SPX.exe'), '--data', str(store.home)], env=environment,
                                   cwd=str(root), creationflags=subprocess.CREATE_NO_WINDOW)
         helper = None
@@ -97,8 +96,19 @@ def exercise(bundle, setup, installed):
             assert Store(store.home).instance == old_id
             assert (store.home / 'account-fixture.txt').read_bytes() == b'synthetic-account-marker'
             assert (root / 'my-project.txt').read_text(encoding='utf-8') == 'preserve this extra user file'
-            time.sleep(1.5)
             assert result['restarted_pid'] > 0
+            # Let the restarted GUI reap the read-only Docker probe before
+            # stopping it. The probe inherits the fixture's program directory.
+            log = store.home / 'logs' / 'gui.log'
+            pid = f"pid={result['restarted_pid']} "
+            deadline = time.monotonic() + 15
+            while time.monotonic() < deadline:
+                if log.is_file() and any(pid in row and 'docker-check-idle reason=docker_stopped' in row
+                                         for row in log.read_text(encoding='utf-8').splitlines()):
+                    break
+                time.sleep(.05)
+            else:
+                raise AssertionError('The restarted GUI did not complete the isolated Docker probe.')
             return {'kind': 'installed' if installed else 'portable', 'helper_ready': True, 'version_verified': True,
                     'same_data_instance': True, 'private_data_and_extra_file_preserved': True, 'restart_requested': True}
         finally:
@@ -124,6 +134,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if os.name != 'nt':
         parser.error('requires a disposable Windows desktop')
-    report = {'schema': 1, 'version': __version__, 'cases': [exercise(args.bundle.resolve(), args.setup.resolve(), installed) for installed in (False, True)]}
+    with fake_desktop() as (base, cli):
+        environment = {**desktop_environment(base, cli, 'cli'), 'PYINSTALLER_RESET_ENVIRONMENT': '1'}
+        cases = [exercise(args.bundle.resolve(), args.setup.resolve(), installed, environment) for installed in (False, True)]
+    report = {'schema': 1, 'version': __version__, 'cases': cases}
     args.output.write_text(json.dumps(report, indent=2), encoding='utf-8')
     print(json.dumps(report))
