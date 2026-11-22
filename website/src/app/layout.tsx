@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { GeistSans } from "geist/font/sans";
-import { product } from "@/lib/content";
+import { product, themeStorageKey } from "@/lib/content";
 import { SiteInteractions } from "@/components/interactions";
 import "./globals.css";
 
@@ -38,8 +38,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-    themeColor: "#faf9f5",
-    colorScheme: "light",
+    themeColor: "#1b1a17",
+    colorScheme: "dark light",
     width: "device-width",
     initialScale: 1,
 };
@@ -48,7 +48,14 @@ export default function RootLayout({
     children,
 }: Readonly<{ children: React.ReactNode }>) {
     return (
-        <html lang="zh-CN" className={GeistSans.variable}>
+        <html lang="zh-CN" className={GeistSans.variable} data-theme="dark" suppressHydrationWarning>
+            <head>
+                <script
+                    dangerouslySetInnerHTML={{
+                        __html: `try{if(localStorage.getItem(${JSON.stringify(themeStorageKey)})==="light")document.documentElement.dataset.theme="light"}catch{}`,
+                    }}
+                />
+            </head>
             <body>
                 <SiteInteractions>{children}</SiteInteractions>
             </body>

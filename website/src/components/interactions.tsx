@@ -17,6 +17,8 @@ import {
     Check,
     Expand,
     Menu,
+    Moon,
+    Sun,
     X,
     ZoomIn,
     ZoomOut,
@@ -26,17 +28,46 @@ import {
     docs,
     navigation,
     product,
+    screenshotPath,
     screenshots,
+    themeStorageKey,
     type ScreenshotId,
+    type Theme,
 } from "@/lib/content";
 
-const Gallery = createContext<(id: ScreenshotId) => void>(() => {});
+const Site = createContext({
+    openScreenshot: (_id: ScreenshotId) => {},
+    theme: "dark" as Theme,
+    toggleTheme: () => {},
+});
 
 export function SiteInteractions({ children }: { children: ReactNode }) {
     const [selected, setSelected] = useState<ScreenshotId>("overview");
     const [reading, setReading] = useState(false);
+    const [theme, setTheme] = useState<Theme>("dark");
     const dialog = useRef<HTMLDialogElement>(null);
     const picture = screenshots.find((item) => item.id === selected)!;
+    const source = screenshotPath(picture, theme);
+    useEffect(() => {
+        setTheme(document.documentElement.dataset.theme === "light" ? "light" : "dark");
+    }, []);
+    useEffect(() => {
+        document.querySelector('meta[name="theme-color"]')?.setAttribute(
+            "content",
+            theme === "dark" ? "#1b1a17" : "#faf9f5",
+        );
+    }, [theme]);
+
+    const toggleTheme = () => {
+        const next = theme === "dark" ? "light" : "dark";
+        document.documentElement.dataset.theme = next;
+        setTheme(next);
+        try {
+            localStorage.setItem(themeStorageKey, next);
+        } catch {
+            // The theme remains usable in this tab when storage is unavailable.
+        }
+    };
     const change = (direction: number) =>
         setSelected(
             (id) =>
@@ -49,11 +80,15 @@ export function SiteInteractions({ children }: { children: ReactNode }) {
         );
 
     return (
-        <Gallery.Provider
-            value={(id) => {
-                setSelected(id);
-                setReading(false);
-                dialog.current?.showModal();
+        <Site.Provider
+            value={{
+                theme,
+                toggleTheme,
+                openScreenshot(id) {
+                    setSelected(id);
+                    setReading(false);
+                    dialog.current?.showModal();
+                },
             }}
         >
             {children}
@@ -96,7 +131,7 @@ export function SiteInteractions({ children }: { children: ReactNode }) {
                             </button>
                             <a
                                 className="gallery-original"
-                                href={asset(picture.source)}
+                                href={source}
                                 target="_blank"
                                 rel="noreferrer"
                             >
@@ -124,7 +159,7 @@ export function SiteInteractions({ children }: { children: ReactNode }) {
                         aria-label="高清软件截图，放大后可滚动阅读"
                     >
                         <img
-                            src={asset(picture.source)}
+                            src={source}
                             width={picture.width * picture.pixelRatio}
                             height={picture.height * picture.pixelRatio}
                             alt={picture.alt}
@@ -174,7 +209,7 @@ export function SiteInteractions({ children }: { children: ReactNode }) {
                     </p>
                 </div>
             </dialog>
-        </Gallery.Provider>
+        </Site.Provider>
     );
 }
 
@@ -189,17 +224,17 @@ export function Screenshot({
     priority?: boolean;
     caption?: boolean;
 }) {
-    const open = useContext(Gallery);
+    const { openScreenshot, theme } = useContext(Site);
     const item = screenshots.find((s) => s.id === id)!;
     return (
         <figure className={`product-shot ${className}`}>
             <button
                 className="shot-button"
-                onClick={() => open(id)}
+                onClick={() => openScreenshot(id)}
                 aria-label={`放大查看${item.title}真实截图`}
             >
                 <img
-                    src={asset(item.source)}
+                    src={screenshotPath(item, theme)}
                     alt={item.alt}
                     width={item.width}
                     height={item.height}
@@ -227,6 +262,8 @@ export function Screenshot({
 export function Navigation() {
     const dialog = useRef<HTMLDialogElement>(null);
     const [active, setActive] = useState("");
+    const { theme, toggleTheme } = useContext(Site);
+    const themeLabel = theme === "dark" ? "切换到浅色模式" : "切换到深色模式";
     useEffect(() => {
         const observer = new IntersectionObserver(
             (entries) => {
@@ -296,6 +333,9 @@ export function Navigation() {
                             <ArrowDownToLine size={15} />
                             下载 Windows 版
                         </a>
+                        <button className="theme-button icon-button" aria-label={themeLabel} title={themeLabel} onClick={toggleTheme}>
+                            {theme === "dark" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
+                        </button>
                         <button
                             className="menu-button icon-button"
                             aria-label="打开导航菜单"

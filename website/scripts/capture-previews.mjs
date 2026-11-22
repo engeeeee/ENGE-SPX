@@ -43,6 +43,7 @@ try {
     await page.goto(origin, { waitUntil: "networkidle" });
     await page.evaluate(() => document.fonts.ready);
     assert.match(await page.title(), /ENGE SPX/);
+    assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
     if (process.env.CAPTURE_ONLY !== "1") {
         assert.equal(
             await page
@@ -179,6 +180,21 @@ try {
     await capture("mobile-full.png", "完整移动端网页", page, {
         fullPage: true,
     });
+    await page.getByRole("button", { name: "切换到浅色模式" }).click();
+    assert.equal(await page.locator("html").getAttribute("data-theme"), "light");
+    await page.reload({ waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "切换到深色模式" }).waitFor();
+    assert.equal(await page.locator("html").getAttribute("data-theme"), "light");
+    const hero = page.locator(".hero-stage img");
+    await hero.evaluate((img) => img.decode());
+    assert.match(await hero.getAttribute("src"), /\/light\/overview\.png$/);
+    await capture("light-mobile.png", "浅色首页 · 手机");
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await capture("light-desktop.png", "浅色首页 · 桌面");
+    await page.getByRole("button", { name: "切换到深色模式" }).click();
+    assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
+    await hero.evaluate((img) => img.decode());
+    assert.match(await hero.getAttribute("src"), /\/dark\/overview\.png$/);
     await page.setViewportSize({ width: 1200, height: 630 });
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: "public/og.png" });

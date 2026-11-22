@@ -1,20 +1,23 @@
+export const themeStorageKey = "enge-spx-color-mode";
+export type Theme = "dark" | "light";
+
 export const product = {
     name: "ENGE SPX",
-    version: "0.15.4",
+    version: "0.15.5",
     published: "2026-11-22",
     site: "https://enge1337.cn",
     repository: "https://github.com/engeeeee/ENGE-SPX",
     release:
-        "https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.4-windows",
+        "https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.5-windows",
     installer:
-        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.4-windows/ENGE-SPX-Windows-x64-0.15.4-Setup.exe",
+        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.5-windows/ENGE-SPX-Windows-x64-0.15.5-Setup.exe",
     portable:
-        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.4-windows/ENGE-SPX-Windows-x64-0.15.4-Portable.zip",
+        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.5-windows/ENGE-SPX-Windows-x64-0.15.5-Portable.zip",
     installerSha256:
-        "647f2ad0e0cb8a26f30b1576c7263ef93d6c2b9c4a932ccfcbf9c174b781b3e0",
+        "e8e14f8df069f3adc75e191451d94a9c3effec228bc5bba668040c651a77b836",
     portableSha256:
-        "3505626ca114ef95a6787b9332e15e9b3fe963d9b7fc55e7cc1925492f169744",
-    screenshotVersion: "0.13.2",
+        "0c92bf446f59f84dbec3219c689fedb7c792cae351742f5b0be9e591894a768c",
+    screenshotVersion: "0.15.5",
 } as const;
 
 export const docs = {
@@ -46,49 +49,53 @@ export const screenshots = [
     {
         id: "overview",
         title: "工作台",
-        alt: "ENGE SPX 0.13.2 Windows 工作台：一键准备、线路和落地出口、工作区路径",
-        source: "/screenshots/overview-web@3x.png",
+        alt: "ENGE SPX Windows 工作台：一键准备、线路和落地出口、工作区路径",
+        source: `/screenshots/${product.screenshotVersion}/dark/overview.png`,
+        lightSource: `/screenshots/${product.screenshotVersion}/light/overview.png`,
         width: 960,
         height: 840,
         pixelRatio: 3,
         platform: "Windows 原生界面",
-        version: "0.13.2",
+        version: product.screenshotVersion,
         context: "未配置账号与节点",
     },
     {
         id: "workspace",
         title: "项目工作区",
         alt: "真实项目工作区界面：本地目录、身份授权、Claude Code、Codex、终端及 Chromium 入口",
-        source: "/screenshots/workspace-web@3x.png",
+        source: `/screenshots/${product.screenshotVersion}/dark/workspace.png`,
+        lightSource: `/screenshots/${product.screenshotVersion}/light/workspace.png`,
         width: 1120,
         height: 1050,
         pixelRatio: 3,
         platform: "Windows 原生界面",
-        version: "0.13.2",
+        version: product.screenshotVersion,
         context: "未配置账号与节点",
     },
     {
         id: "connection",
         title: "连接与代理",
         alt: "真实连接与代理界面：分别选择落地、前置线路和本机代理",
-        source: "/screenshots/connection-web@3x.png",
+        source: `/screenshots/${product.screenshotVersion}/dark/connection.png`,
+        lightSource: `/screenshots/${product.screenshotVersion}/light/connection.png`,
         width: 840,
         height: 1050,
         pixelRatio: 3,
         platform: "Windows 原生界面",
-        version: "0.13.2",
+        version: product.screenshotVersion,
         context: "未配置账号与节点",
     },
     {
         id: "resources",
         title: "资源与性能",
         alt: "真实资源预算界面：网关、会话、CLI 与 Chromium 的 CPU、内存上限",
-        source: "/screenshots/resources-web@3x.png",
+        source: `/screenshots/${product.screenshotVersion}/dark/resources.png`,
+        lightSource: `/screenshots/${product.screenshotVersion}/light/resources.png`,
         width: 840,
         height: 1000,
         pixelRatio: 3,
         platform: "Windows 原生界面",
-        version: "0.13.2",
+        version: product.screenshotVersion,
         context: "未配置账号与节点",
     },
     {
@@ -108,6 +115,9 @@ export const screenshots = [
 export type ScreenshotId = (typeof screenshots)[number]["id"];
 export const asset = (path: string) =>
     `${process.env.NEXT_PUBLIC_BASE_PATH || ""}${path}`;
+
+export const screenshotPath = (item: { source: string; lightSource?: string }, theme: Theme) =>
+    asset(theme === "light" ? item.lightSource ?? item.source : item.source);
 
 export const faqs = [
     {
