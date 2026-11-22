@@ -79,7 +79,7 @@ jobs:
           QT_SCALE_FACTOR: '1.5'
         run: python tools/check_ui_dpi.py
       - name: Verify Windows Show Desktop then restore only the terminal
-        if: runner.os == 'Windows' && env.SPX_UI_HOTFIX == 'true'
+        if: runner.os == 'Windows' && env.SPX_WORKSPACE_UPDATE != 'true'
         run: python tools/probe_windows_show_desktop.py
       - name: Focused Windows client, update and exit regression
         if: runner.os == 'Windows' && env.SPX_CLIENT_RELEASE == 'true' && env.SPX_UI_HOTFIX != 'true'
