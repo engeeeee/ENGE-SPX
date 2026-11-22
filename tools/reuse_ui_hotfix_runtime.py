@@ -1,6 +1,5 @@
-"""Reuse the immutable 0.15.0 runtime only for a verified UI-only hotfix."""
+"""Reuse the immutable 0.15.3 runtime only for a verified UI-only hotfix."""
 import argparse
-import ast
 import hashlib
 import json
 import os
@@ -11,29 +10,21 @@ import sys
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE = '6985150d63e52bae23e80b329e2a7812544658b7'
+BASE = '0a7927013ba5cce828372dac010d98947699fe88'
 PROJECT = 'https://github.com/engeeeee/ENGE-SPX'
-PREVIOUS = '0.15.0'
+PREVIOUS = '0.15.3'
 
 
 def check_scope():
     files = subprocess.check_output(['git', 'diff', '--name-only', BASE, 'HEAD', '--', 'src', 'requirements.txt', 'requirements-build.txt', 'pyproject.toml', 'packaging'], cwd=ROOT, text=True).splitlines()
-    allowed = {'src/enge_spx/__init__.py', 'src/enge_spx/ui/controller.py', 'src/enge_spx/ui/window.py',
-               'packaging/windows/Installer.iss', 'packaging/windows/version-info.txt', 'packaging/windows/cli-version-info.txt'}
+    allowed = {
+        'src/enge_spx/__init__.py', 'src/enge_spx/brand.py', 'src/enge_spx/platform_ui.py',
+        'src/enge_spx/smart_terminal.py', 'src/enge_spx/terminal_appearance.py',
+        'src/enge_spx/terminal_preferences.py', 'src/enge_spx/window_effects.py',
+        'packaging/windows/Installer.iss', 'packaging/windows/version-info.txt',
+        'packaging/windows/cli-version-info.txt',
+    }
     assert set(files) <= allowed, 'Core, dependencies or runtime changed; UI-only reuse is forbidden'
-    for filename, allowed_methods in [('src/enge_spx/ui/controller.py', {'Controller.prepared', 'Controller.check_docker'}),
-                                      ('src/enge_spx/ui/window.py', {'Window.build_settings'})]:
-        def methods(source):
-            result = {}
-            for item in ast.parse(source).body:
-                if isinstance(item, ast.ClassDef):
-                    for method in item.body:
-                        if isinstance(method, ast.FunctionDef):
-                            result[item.name + '.' + method.name] = ast.dump(method, include_attributes=False)
-            return result
-        before = methods(subprocess.check_output(['git', 'show', BASE + ':' + filename], cwd=ROOT, text=True))
-        after = methods((ROOT / filename).read_text())
-        assert all(key in allowed_methods or before.get(key) == after.get(key) for key in before.keys() | after.keys()), 'Changes exceed startup/UI scope'
 
 
 class SecureRedirect(urllib.request.HTTPRedirectHandler):
@@ -100,7 +91,7 @@ def main(destination):
     check_scope()
     sys.path.insert(0, str(ROOT / 'src'))
     from enge_spx import __version__
-    assert __version__ == '0.15.1', 'This reuse gate is limited to the reviewed 0.15.1 hotfix'
+    assert __version__ == '0.15.4', 'This reuse gate is limited to the reviewed 0.15.4 hotfix'
     copy_runtime(destination, PREVIOUS, BASE, __version__, {'gateway': '9aa8a7818569', 'work': '6e3fcfa5633c', 'browser': '1bca0984bc51'})
 
 

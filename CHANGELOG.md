@@ -1,5 +1,11 @@
 # Changes
 
+## 0.15.4 terminal appearance and taskbar — 2026-11-22
+
+- Give the smart terminal its own Windows taskbar group.
+- Distinguish soft blur, Mica, and Mica Alt, including separate tint fallbacks on older Windows.
+- Move opacity into the terminal appearance panel with click-to-position, drag, arrow keys, and exact percentages.
+
 ## 0.15.3 workspace switching, Antigravity and terminal materials — 2026-11-22
 
 - Wait for the gateway listeners before checking a new route. Bind the loopback forwarder to the current connection, so derived timezone and language updates do not invalidate its heartbeat.

@@ -10,7 +10,20 @@ DEFAULTS = {"font_size": 11, "font_family": "", "copy_on_select": True, "right_c
             "appearance": "solid", "tint": "clay", "opacity": 65}
 TINTS = {"clay": "#1c1a18", "purple": "#302034", "graphite": "#1d252c"}
 MATERIALS = {'solid': '纯色', 'acrylic': 'Acrylic 毛玻璃', 'blur': '柔和模糊',
-             'mica': 'Mica 云母（Windows 11）', 'mica-alt': 'Mica Alt（Windows 11）'}
+             'mica': 'Mica 云母', 'mica-alt': 'Mica Alt 深色云母'}
+
+
+def display_color(tint, material):
+    from PySide6.QtGui import QColor
+
+    base = QColor(TINTS[tint])
+    # Keep the tint family and give each filter a visible signature even when
+    # the compositor accepts a backdrop but replaces it with its default fill.
+    overlay = {'blur': (104, 98, 92), 'mica': (96, 75, 57),
+               'mica-alt': (28, 44, 80)}.get(material)
+    if overlay is None:
+        return base
+    return QColor(*(round(channel * .55 + target * .45) for channel, target in zip(base.getRgb()[:3], overlay)))
 
 
 def validate(value):

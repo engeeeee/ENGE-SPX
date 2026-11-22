@@ -21,7 +21,7 @@ import pyte
 from wcwidth import wcwidth
 from PySide6.QtCore import Qt, QTimer, Signal, QEvent, QRectF, QSize, QPointF
 from PySide6.QtGui import QColor, QFont, QFontMetricsF, QGuiApplication, QIcon, QKeySequence, QPainter, QContextMenuEvent, QInputMethodEvent, QTextLayout, QTextOption, QTextCharFormat, QRegion, QImage
-from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollBar, QFrame, QMenu, QToolButton, QSizePolicy, QSlider, QWidgetAction, QFontComboBox
+from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollBar, QFrame, QMenu, QToolButton, QSizePolicy
 
 from .clipboard import WindowsClipboard
 from .clipboard_transfer import Transfer, text_frame
@@ -736,7 +736,7 @@ class TerminalView(QWidget):
         self.option_changed.emit(name, enabled)
 
     def apply_display(self, preferences, glass=False):
-        from .terminal_preferences import TINTS
+        from .terminal_preferences import display_color
         families = [preferences["font_family"]] if preferences["font_family"] else (["Cascadia Mono", "Cascadia Code", "Consolas"] if os.name == "nt" else ["DejaVu Sans Mono", "Liberation Mono"])
         font_changed = self.font.families() != families or self.font.pointSize() != preferences["font_size"]
         if font_changed:
@@ -744,11 +744,11 @@ class TerminalView(QWidget):
             self.font.setPointSize(preferences["font_size"])
             self.setFont(self.font)
             self._measure_font()
-        background = QColor(TINTS[preferences["tint"]])
+        background = display_color(preferences["tint"], preferences["appearance"] if glass else "solid")
         background.setAlpha(round(preferences["opacity"] * 2.55) if glass else 255)
         changed = font_changed or background != self.background
         self.background = background
-        self.screen.terminal_background = TINTS[preferences["tint"]]
+        self.screen.terminal_background = background.name()
         if changed:
             self.colors.clear()
             self.fonts.clear()
@@ -1335,7 +1335,10 @@ class TerminalWindow(QMainWindow):
         self.interaction_guard.timeout.connect(self.recover_interaction)
         self.effect_key = self.chrome_key = None
         self._frame_configured = False
-        self.translucent_surface = os.name == "nt" and self.preferences.value["appearance"] != "solid"
+        self.appearance_dialog = None
+        # Qt chooses the HWND surface at creation. Paint an opaque fill in
+        # solid mode so later material changes need no window recreation.
+        self.translucent_surface = os.name == "nt"
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, self.translucent_surface)
         self.setWindowTitle("ENGE SPX · " + tool + " · 智能粘贴终端")
         self.setObjectName("SmartTerminal")
@@ -1457,21 +1460,22 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: trans
             self.message.setText(self.preferences.load_error)
 
     def apply_preferences(self, values):
-        from .terminal_preferences import MATERIALS, TINTS
+        from .terminal_preferences import TINTS
         from .window_effects import GLASS_BACKENDS, apply_backdrop
         color = QColor(TINTS[values["tint"]])
         material = values['appearance']
         effect_key = material, color.name()
         if effect_key != self.effect_key:
-            self.backdrop_backend = apply_backdrop(self, color, material) if self.translucent_surface else "solid"
+            self.backdrop_backend = apply_backdrop(self, color, material) if self.translucent_surface else "unsupported"
             self.effect_key = effect_key
             if self.interaction_active:
                 self.sync_move_effect()
         glass = self.translucent_surface and self.backdrop_backend in GLASS_BACKENDS
         self.view.apply_display(values, glass)
+        color = self.view.background
         self.font_size.setText(str(values["font_size"]) + " pt  ·  UTF-8")
         base = "transparent" if glass else color.name()
-        header = f"rgba({color.red()+8}, {color.green()+8}, {color.blue()+8}, {round(values['opacity'] * 2.55) if glass else 255})"
+        header = f"rgba({color.red()+8}, {color.green()+8}, {color.blue()+8}, {color.alpha()})"
         chrome_key = base, header, glass
         if chrome_key != self.chrome_key:
             sheet = self.base_stylesheet.replace("#1c1a18", base).replace("#24221f", header)
@@ -1484,12 +1488,6 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: trans
                 sheet = sheet.replace('#4a4239', 'rgba(232, 227, 220, 45)').replace('#39352f', 'rgba(232, 227, 220, 24)')
             self.setStyleSheet(sheet)
             self.chrome_key = chrome_key
-        if material != 'solid' and not self.translucent_surface:
-            self.message.setText(MATERIALS[material] + "已保存，重新打开终端后应用。")
-        elif material != 'solid' and not glass:
-            self.message.setText("当前系统的透明效果不可用，终端使用纯色背景。")
-        elif material.startswith('mica') and self.backdrop_backend in ('accent-blur', 'transparent'):
-            self.message.setText("此 Windows 版本使用柔和模糊或透明底色显示所选材质。")
 
     def sync_move_effect(self):
         # DWM materials stay installed. Legacy Accent Acrylic can stall the
@@ -1567,47 +1565,21 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: trans
             self.apply_preferences(self.preferences.value)
 
     def show_options(self, button):
-        from PySide6.QtGui import QActionGroup
-        from .terminal_preferences import MATERIALS
         menu = self.view.create_context_menu()
         menu.addSeparator()
-        for title, key, choices in (("背景效果", "appearance", tuple((label, value) for value, label in MATERIALS.items())),
-                                    ("背景配色", "tint", (("暖灰", "clay"), ("紫晶", "purple"), ("石墨", "graphite")))):
-            submenu = menu.addMenu(title)
-            group = QActionGroup(submenu)
-            group.setExclusive(True)
-            for label, value in choices:
-                action = submenu.addAction(label)
-                action.setCheckable(True)
-                action.setChecked(self.preferences.value[key] == value)
-                group.addAction(action)
-                action.triggered.connect(lambda checked, k=key, v=value: self.preferences.set(k, v))
-        opacity = QWidgetAction(menu)
-        panel = QWidget()
-        row = QHBoxLayout(panel)
-        opacity_label = QLabel(f"背景不透明度 {self.preferences.value['opacity']}%")
-        row.addWidget(opacity_label)
-        slider = QSlider(Qt.Orientation.Horizontal)
-        slider.setRange(30, 100)
-        slider.setValue(self.preferences.value["opacity"])
-        slider.setToolTip("仅影响背景，文字保持清晰；建议 55–70%")
-        slider.valueChanged.connect(lambda value: opacity_label.setText(f"背景不透明度 {value}%"))
-        slider.valueChanged.connect(lambda value: self.preferences.set("opacity", value))
-        row.addWidget(slider)
-        opacity.setDefaultWidget(panel)
-        menu.addAction(opacity)
-        font_action = QWidgetAction(menu)
-        fonts = QFontComboBox()
-        fonts.setEditable(False)
-        fonts.setFontFilters(QFontComboBox.FontFilter.MonospacedFonts)
-        fonts.setCurrentFont(self.view.font)
-        fonts.currentFontChanged.connect(lambda font: self.preferences.set("font_family", font.family()))
-        font_action.setDefaultWidget(fonts)
-        menu.addAction(font_action)
-        menu.addSeparator()
+        menu.addAction("终端外观…", self.show_appearance)
         menu.addAction("恢复终端默认设置", self.preferences.reset)
         menu.aboutToHide.connect(menu.deleteLater)
         menu.popup(button.mapToGlobal(button.rect().bottomLeft()))
+
+    def show_appearance(self):
+        from .terminal_appearance import AppearanceDialog
+        if self.appearance_dialog is None:
+            self.appearance_dialog = AppearanceDialog(self)
+        self.appearance_dialog.sync(self.preferences.value)
+        self.appearance_dialog.show()
+        self.appearance_dialog.raise_()
+        self.appearance_dialog.activateWindow()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -1630,12 +1602,20 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: trans
         event.accept()
 
 
+def terminal_application():
+    from .brand import TERMINAL_APP_ID
+    from .platform_ui import prepare_windows
+    from .ui import style
+    prepare_windows(dpi=False, app_id=TERMINAL_APP_ID)
+    app = QApplication.instance() or QApplication([])
+    style.apply(app)
+    return app
+
+
 def run(engine, project, tool, session, container):
     from pathlib import Path
     from .terminal_pty import DockerPTY
-    app = QApplication.instance() or QApplication([])
-    from .ui import style
-    style.apply(app)
+    app = terminal_application()
     command = engine.attach_command(project, tool, session, container, interactive=True, terminal_capabilities=True, terminal_relay=True)
     transfer = Transfer(engine, project, tool, session, container) if tool in ("claude", "codex") else None
     pty = DockerPTY(command, engine.docker.environment(), project)
@@ -1660,9 +1640,7 @@ def preview():
     from pathlib import Path
     from .terminal import discover
     from .terminal_pty import start
-    app = QApplication.instance() or QApplication([])
-    from .ui import style
-    style.apply(app)
+    app = terminal_application()
     shell = discover("powershell") if os.name == "nt" else "/bin/bash"
     if not shell:
         raise SPXError("未找到测试用命令行。")

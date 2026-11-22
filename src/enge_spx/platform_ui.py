@@ -18,11 +18,14 @@ def restore_message():
     return user.RegisterWindowMessageW(APP_ID + ".RestoreWindow")
 
 
-def prepare_windows(dpi=True):
+def prepare_windows(dpi=True, *, app_id=APP_ID):
     if os.name != "nt":
         return
     try:
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
+        set_app_id = ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID
+        set_app_id.argtypes = [ctypes.c_wchar_p]
+        set_app_id.restype = ctypes.c_long
+        set_app_id(app_id)
     except (AttributeError, OSError):
         pass
     if not dpi:

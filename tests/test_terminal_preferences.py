@@ -129,6 +129,45 @@ class TerminalPreferenceTests(unittest.TestCase):
                 validate({'schema': 1, **patch})
         self.assertFalse((self.store.home / FILE).exists())
 
+    def test_opacity_track_click_and_drag_commit_on_release(self):
+        from PySide6.QtCore import QPoint, Qt
+        from PySide6.QtTest import QTest
+        from enge_spx.terminal_appearance import OpacitySlider
+        slider = OpacitySlider(None)
+        try:
+            slider.resize(240, 32)
+            slider.setValue(65)
+            slider.show()
+            self.app.processEvents()
+            left = Qt.MouseButton.LeftButton
+            QTest.mouseClick(slider, left, pos=QPoint(slider.width() - 1, 16))
+            self.assertEqual(slider.value(), 100)
+            QTest.mousePress(slider, left, pos=QPoint(slider.width() - 8, 16))
+            QTest.mouseMove(slider, QPoint(0, 16))
+            self.assertEqual(slider.sliderPosition(), 30)
+            self.assertEqual(slider.value(), 100)
+            QTest.mouseRelease(slider, left, pos=QPoint(0, 16))
+            self.assertEqual(slider.value(), 30)
+            QTest.keyClick(slider, Qt.Key.Key_Right)
+            self.assertEqual(slider.value(), 31)
+        finally:
+            slider.close()
+
+    def test_glass_material_colors_are_distinct_at_the_same_opacity(self):
+        from enge_spx.smart_terminal import TerminalView
+        view = TerminalView(FixturePTY(), tool='codex')
+        try:
+            for tint in ('clay', 'purple', 'graphite'):
+                colors = set()
+                for material in ('blur', 'mica', 'mica-alt'):
+                    view.apply_display({**DEFAULTS, 'tint': tint, 'appearance': material}, glass=True)
+                    self.assertEqual(view.background.alpha(), round(DEFAULTS['opacity'] * 2.55))
+                    colors.add(view.background.name())
+                self.assertEqual(len(colors), 3)
+        finally:
+            view.stop()
+            view.reader.join(2)
+
     def test_reopening_product_window_restores_display_and_mouse_preferences(self):
         from enge_spx.smart_terminal import TerminalWindow
         first = TerminalWindow(FixturePTY(), 'codex', self.store.home, preferences_store=self.store)

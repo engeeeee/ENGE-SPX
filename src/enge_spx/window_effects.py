@@ -53,7 +53,8 @@ def apply_acrylic(window, color, enabled=True):
     return apply_backdrop(window, color, 'acrylic' if enabled else 'solid')
 
 
-GLASS_BACKENDS = frozenset(('system-acrylic', 'accent-acrylic', 'accent-blur', 'system-mica', 'system-mica-alt', 'transparent'))
+GLASS_BACKENDS = frozenset(('system-acrylic', 'accent-acrylic', 'accent-blur', 'system-mica', 'system-mica-alt',
+                           'mica-tint', 'mica-alt-tint', 'transparent'))
 
 
 def apply_backdrop(window, color, material):
@@ -110,7 +111,8 @@ def apply_backdrop(window, color, material):
             if dwm.DwmSetWindowAttribute(hwnd, 38, ctypes.byref(value), ctypes.sizeof(value)) >= 0 and material in system:
                 return backend
         if material in ('mica', 'mica-alt'):
-            return 'accent-blur' if accent(3) else 'transparent'
+            accent(0)
+            return material + '-tint'
         if material == 'blur':
             if accent(3):
                 return 'accent-blur'

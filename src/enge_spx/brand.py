@@ -3,6 +3,7 @@ from pathlib import Path
 
 APP_NAME = "ENGE SPX"
 APP_ID = "ENGE.SPX"
+TERMINAL_APP_ID = APP_ID + ".Terminal"
 MAINTAINER = "engeeeee"
 REPOSITORY = "engeeeee/ENGE-SPX"
 PROJECT_URL = "https://github.com/" + REPOSITORY

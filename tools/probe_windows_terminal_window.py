@@ -24,11 +24,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication
-from enge_spx.smart_terminal import TerminalWindow
+from enge_spx.brand import APP_ID, TERMINAL_APP_ID
+from enge_spx.smart_terminal import TerminalWindow, terminal_application
 from enge_spx.state import Store
 from enge_spx.terminal_preferences import save
-from enge_spx.ui import style
 
 
 class FixturePTY:
@@ -39,9 +38,20 @@ class FixturePTY:
     def close(self): self.queue.put(b'')
 
 
-app = QApplication([])
-style.apply(app)
+app = terminal_application()
+shell = ctypes.WinDLL('shell32')
+get_app_id = shell.GetCurrentProcessExplicitAppUserModelID
+get_app_id.argtypes, get_app_id.restype = [ctypes.POINTER(ctypes.c_wchar_p)], ctypes.c_long
+app_id = ctypes.c_wchar_p()
+assert get_app_id(ctypes.byref(app_id)) == 0, 'Terminal has no process taskbar identity'
+try:
+    assert app_id.value == TERMINAL_APP_ID and app_id.value != APP_ID
+finally:
+    ole = ctypes.WinDLL('ole32')
+    ole.CoTaskMemFree.argtypes, ole.CoTaskMemFree.restype = [ctypes.c_void_p], None
+    ole.CoTaskMemFree(app_id)
 user = ctypes.WinDLL('user32', use_last_error=True)
+user.GetWindow.argtypes, user.GetWindow.restype = [wintypes.HWND, wintypes.UINT], wintypes.HWND
 user.GetClientRect.argtypes, user.GetClientRect.restype = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)], wintypes.BOOL
 user.ClientToScreen.argtypes, user.ClientToScreen.restype = [wintypes.HWND, ctypes.POINTER(wintypes.POINT)], wintypes.BOOL
 user.SendMessageTimeoutW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM, wintypes.UINT, wintypes.UINT, ctypes.POINTER(ctypes.c_size_t)]
@@ -75,6 +85,7 @@ with tempfile.TemporaryDirectory(prefix='spx-owned-window-') as folder, context:
         assert window._frame_configured
         hwnd = wintypes.HWND(int(window.winId()))
         original_hwnd = int(window.winId())
+        assert not user.GetWindow(hwnd, 4), 'Terminal taskbar window has an owner'
         backend = window.backdrop_backend
         alpha = window.view.background.alpha()
         def hit(point):
@@ -139,6 +150,32 @@ with tempfile.TemporaryDirectory(prefix='spx-owned-window-') as folder, context:
         native_caption = wintypes.POINT(round(caption.x() * bounds.right / window.width()), round(caption.y() * bounds.bottom / window.height()))
         assert user.ClientToScreen(hwnd, ctypes.byref(native_caption))
         assert int(user.WindowFromPoint(native_caption) or 0) == original_hwnd, 'caption input passes to another window'
+        # Switch effects and edit opacity in the same already visible window.
+        materials = {}
+        for material in ('blur', 'mica', 'mica-alt'):
+            window.preferences.set('appearance', material)
+            materials[material] = {'backend': window.backdrop_backend, 'color': window.view.background.name()}
+        assert len({result['color'] for result in materials.values()}) == 3
+        if args.legacy_accent:
+            assert materials['mica']['backend'] == 'mica-tint'
+            assert materials['mica-alt']['backend'] == 'mica-alt-tint'
+        window.show_appearance()
+        pump()
+        panel = window.appearance_dialog
+        slider = panel.opacity
+        assert slider.isEnabled()
+        QTest.mouseClick(slider, Qt.MouseButton.LeftButton, pos=QPoint(1, slider.height() // 2))
+        assert window.preferences.value['opacity'] == panel.percent.value() == 30
+        QTest.mousePress(slider, Qt.MouseButton.LeftButton, pos=QPoint(1, slider.height() // 2))
+        QTest.mouseMove(slider, QPoint(slider.width() - 1, slider.height() // 2))
+        assert panel.percent.value() == 100 and window.preferences.value['opacity'] == 30
+        QTest.mouseRelease(slider, Qt.MouseButton.LeftButton, pos=QPoint(slider.width() - 1, slider.height() // 2))
+        assert window.preferences.value['opacity'] == panel.percent.value() == 100
+        panel.close()
+        window.preferences.set('appearance', 'solid')
+        assert window.view.background.alpha() == 255 and int(window.winId()) == original_hwnd
+        window.preferences.set('appearance', args.material)
+        window.preferences.set('opacity', 65)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         assert image.save(str(args.output.with_suffix('.png')))
         report = {'schema': 1, 'scope': 'Owned Windows HWND hit-testing, resize/maximize and move-loop messages; no physical mouse or visual acceptance',
@@ -147,6 +184,8 @@ with tempfile.TemporaryDirectory(prefix='spx-owned-window-') as folder, context:
                   'caption_alpha_and_window_pick': True,
                   'resize_corners': True, 'maximized_client_visible': True, 'move_loop_preserves_background_alpha': True,
                   'same_hwnd_and_input': True, 'preferences_preserved': True, 'foreground_opacity': window.windowOpacity(),
+                  'process_taskbar_id': TERMINAL_APP_ID, 'top_level_hwnd_without_owner': True,
+                  'material_render_colors': materials, 'opacity_track_and_drag': True,
                   'move_resize_dispatch_median_ms': round(statistics.median(durations), 3),
                   'move_resize_dispatch_p95_ms': round(sorted(durations)[int(len(durations)*.95)-1], 3),
                   'physical_windows10_drag': 'not_tested'}
