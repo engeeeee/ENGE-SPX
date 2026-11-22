@@ -1,5 +1,12 @@
 # Changes
 
+## 0.15.7 workbench regression fixes — 2026-11-22
+
+- Keep dashboard controls and resource inputs visible with long project paths.
+- Keep preparation and resource actions in view on short high-DPI windows.
+- Open General settings when a manual update check finds a new release.
+- Cover the native Show Desktop flow and both proxy selectors in the full UI workflow.
+
 ## 0.15.6 workbench layout redesign — 2026-11-22
 
 - Replace the sidebar with primary navigation across the top and a management menu.

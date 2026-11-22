@@ -3,13 +3,19 @@ from PySide6.QtCore import Qt, QSize, Signal
 from PySide6.QtWidgets import (QWidget, QFrame, QLabel, QHBoxLayout, QVBoxLayout, QBoxLayout,
                              QPushButton, QLineEdit, QComboBox, QCheckBox,
                              QProgressBar, QScrollArea, QDialog, QDialogButtonBox,
-                             QDoubleSpinBox, QSpinBox, QAbstractSpinBox)
+                             QDoubleSpinBox, QSpinBox, QAbstractSpinBox, QSizePolicy)
 
 
 def label(text="", kind="", wrap=False):
     widget = QLabel(str(text))
     widget.setTextFormat(Qt.TextFormat.PlainText)
     widget.setWordWrap(wrap)
+    if wrap:
+        # A path or other unbroken value should wrap within the viewport.
+        # Preserve the label's height-for-width flag when dropping its width hint.
+        policy = widget.sizePolicy()
+        policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)
+        widget.setSizePolicy(policy)
     if kind:
         widget.setObjectName(kind)
     return widget
@@ -213,6 +219,12 @@ class Page(QScrollArea):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        compact = self.viewport().height() < 350
+        spacing = 14 if compact else 22
+        if self.layout.spacing() != spacing:
+            self.layout.setSpacing(spacing)
+            margins = (24, 16, 24, 20) if compact else (32, 26, 32, 24)
+            self.layout.setContentsMargins(*margins)
         self.resized.emit(self.viewport().width(), self.viewport().height())
 
 

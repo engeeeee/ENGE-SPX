@@ -105,7 +105,9 @@ with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"LOCALA
     store.write("nodes.json", nodes)
     controller.refresh_nodes()
     assert controller.selected.get() == nodes[0]["id"]
-    assert window.node_boxes[0][0].currentData() == nodes[0]["id"]
+    landing = next(box for box, _, is_line in window.node_boxes if not is_line)
+    assert landing.currentData() == nodes[0]["id"]
+    assert window.managed_line_box.findData(nodes[0]["id"]) == -1
     assert not window.confirm_button.isEnabled()
 
     entered, release = threading.Event(), threading.Event()

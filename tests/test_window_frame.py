@@ -114,6 +114,18 @@ class NativeWindowTests(unittest.TestCase):
         self.window.nav["settings"].trigger()
         self.assertTrue(self.window.settings_tabs["general"].isChecked())
 
+    def test_long_project_name_does_not_push_workbench_controls_out_of_view(self):
+        self.window.resize(810, 620)
+        self.controller.project.set(str(Path(self.folder.name) / ("project" * 28)))
+        for section in ("overview", "resources"):
+            with self.subTest(section=section):
+                self.window.show_page(section)
+                if section == "resources":
+                    self.window.select_resource_view("budget")
+                QTest.qWait(40)
+                page = self.window.pages[section]
+                self.assertLessEqual(page.content.width(), page.viewport().width())
+
     def test_value_emits_only_real_changes(self):
         value = Value("before")
         spy = QSignalSpy(value.changed)

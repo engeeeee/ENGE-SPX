@@ -41,9 +41,11 @@ class UpdateUITests(unittest.TestCase):
     def test_manual_check_updates_page_without_starting_docker(self):
         with patch('enge_spx.app_updates.check', return_value={'version': '1.2.3'}), patch('enge_spx.engine.Engine.doctor') as doctor:
             self.c.check_updates()
+            self.w.select_settings_view('environment')
             self.spin(lambda: not self.c.busy)
         self.assertTrue(self.c.update_available.get())
         self.assertIn('1.2.3', self.c.update_status.get())
+        self.assertTrue(self.w.settings_tabs['general'].isChecked())
         doctor.assert_not_called()
         self.assertEqual(self.c.timezone_mode.get(), 'exit')
 

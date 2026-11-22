@@ -124,7 +124,7 @@ class Window(QMainWindow):
         for key in MANAGEMENT:
             item = self.management_menu.addAction(NAMES[key])
             item.setCheckable(True)
-            item.triggered.connect(lambda _checked, page=key: self.open_management(page))
+            item.triggered.connect(lambda _checked, page=key: self.navigate(page))
             self.nav[key] = item
         self.management_button.setMenu(self.management_menu)
         self.nav_layout.addWidget(self.management_button)
@@ -137,7 +137,6 @@ class Window(QMainWindow):
         row = QHBoxLayout(status)
         row.setContentsMargins(25, 5, 12, 5)
         self.operation = bind_text(label(kind="Caption", wrap=True), self.c.operation)
-        self.operation.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         row.addWidget(self.operation, 1)
         row.addWidget(label(__version__, "Caption"))
         row.addWidget(QSizeGrip(self))
@@ -152,7 +151,7 @@ class Window(QMainWindow):
         self.c.update_available.changed.connect(self.update_management_label)
         self.c.workspace_changed.connect(self.refresh_workspace_profiles)
         self.c.logs_added.connect(self.append_logs)
-        self.c.page_requested.connect(self.show_page)
+        self.c.page_requested.connect(self.navigate)
         self.c.proxy_requested.connect(lambda: self.proxy_dialog())
         self.c.close_requested.connect(self.finish_close)
         self.c.activation_requested.connect(self.return_from_desktop)
@@ -197,7 +196,7 @@ class Window(QMainWindow):
         self.management_button.setText("管理" if self.compact else "管理 · 有更新" if available else title)
         self.management_button.setToolTip("有可用更新" if available else "下载、日志和偏好设置")
 
-    def open_management(self, page):
+    def navigate(self, page):
         if page == "settings":
             self.show_settings("general")
         else:
@@ -250,6 +249,20 @@ class Window(QMainWindow):
         actions.addWidget(self.startup_cancel)
         actions.addStretch()
 
+        def size_intro(width, height):
+            compact = width < 600 or height < 350
+            if self.hero_title.property("compact") != compact:
+                self.hero_title.setProperty("compact", compact)
+                painter = self.hero_title.style()
+                painter.unpolish(self.hero_title)
+                painter.polish(self.hero_title)
+                self.hero_title.updateGeometry()
+                margins = (18, 16, 18, 16) if compact else (26, 26, 26, 24)
+                focus.layout.setContentsMargins(*margins)
+                focus.layout.setSpacing(8 if compact else 12)
+
+        page.resized.connect(size_intro)
+
         project = Panel("项目与工具", surface="LaunchPanel")
         current_project = label("", "ProjectTitle", True)
         identity = label("", "Muted", True)
@@ -284,9 +297,7 @@ class Window(QMainWindow):
             row.addWidget(value)
             self.step_labels.append(value)
         checks.layout.addWidget(progress(self.c.startup_progress))
-        detail = bind_text(label(kind="Caption", wrap=True), self.c.startup_detail)
-        detail.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-        checks.layout.addWidget(detail)
+        checks.layout.addWidget(bind_text(label(kind="Caption", wrap=True), self.c.startup_detail))
         row = checks.row()
         row.addWidget(button("下载与安装", lambda: self.show_page("downloads"), ghost=True))
         row.addWidget(button("使用说明", self.c.help, ghost=True))
@@ -587,7 +598,10 @@ class Window(QMainWindow):
         panel.layout.addWidget(check("随工具启动浏览器", self.c.auto_browser))
         panel.layout.addWidget(label("关闭此项后仍可单独打开 Chromium；显式点击登录会准备浏览器，不会回退到本机浏览器。", "Caption", True))
         panel = section("budget", "当前项目的独立预算", "先在项目工作区选择目录；未单独设置的项目沿用上方 CLI 预算。")
-        panel.layout.addWidget(bind_text(label(kind="Muted", wrap=True), self.c.project))
+        project_path = bind_text(label(kind="Muted", wrap=True), self.c.project)
+        project_path.setToolTip(self.c.project.get())
+        self.c.project.changed.connect(project_path.setToolTip)
+        panel.layout.addWidget(project_path)
         panel.layout.addWidget(check("启用独立项目预算", self.c.project_budget_enabled))
         row = panel.row()
         project_inputs = row
@@ -953,13 +967,6 @@ class Window(QMainWindow):
         row.addWidget(self.action("项目仓库 ↗", lambda: webbrowser.open(PROJECT_URL), ghost=True))
         row.addWidget(self.action("复制诊断信息", self.copy_diagnostics, ghost=True))
         row.addStretch()
-        for item in page.findChildren(QLabel):
-            if item.wordWrap():
-                # Long Windows data paths must wrap within the viewport instead
-                # of making every settings panel wider than a high-DPI window.
-                policy = item.sizePolicy()
-                policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)
-                item.setSizePolicy(policy)
         previous_narrow = None
         def adapt(width, height):
             nonlocal previous_narrow

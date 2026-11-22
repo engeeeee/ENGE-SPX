@@ -122,6 +122,7 @@ QFrame#Inset { background: @inset@; border: 1px solid @line@; border-radius: 8px
 QLabel { background: transparent; border: none; }
 QLabel#Heading { font-family: "@display_font@"; font-size: 36px; font-weight: 600; }
 QLabel#HeroTitle { font-family: "@display_font@"; font-size: 39px; font-weight: 600; }
+QLabel#HeroTitle[compact="true"] { font-size: 28px; }
 QLabel#ProjectTitle { font-family: "@display_font@"; font-size: 25px; font-weight: 600; }
 QLabel#SectionTitle { font-size: 17px; font-weight: 600; }
 QLabel#Brand { font-family: "Georgia"; font-size: 17px; font-weight: 600; }
