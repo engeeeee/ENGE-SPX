@@ -3,20 +3,20 @@ export type Theme = "dark" | "light";
 
 export const product = {
     name: "ENGE SPX",
-    version: "0.15.7",
+    version: "0.15.8",
     published: "2026-11-22",
     site: "https://enge1337.cn",
     repository: "https://github.com/engeeeee/ENGE-SPX",
     release:
-        "https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.7-windows",
+        "https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.8-windows",
     installer:
-        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.7-windows/ENGE-SPX-Windows-x64-0.15.7-Setup.exe",
+        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.8-windows/ENGE-SPX-Windows-x64-0.15.8-Setup.exe",
     portable:
-        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.7-windows/ENGE-SPX-Windows-x64-0.15.7-Portable.zip",
+        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.8-windows/ENGE-SPX-Windows-x64-0.15.8-Portable.zip",
     installerSha256:
-        "8eb22fa8fb6d76ae8aad8815b8587ec609cc518b3ccb25229b47f6ed8baf4b09",
+        "575c791cc22cd43528d2f76e8fc5dc9c0a26ebfc57e5b817f2d5de7af1f460d6",
     portableSha256:
-        "43a14be48dee523abfcefa495d3bf537b9441a5fa4afea5a332dfad8fb4c9bfb",
+        "5c62f3f9bdedfbf36f2ee1993a658edee4479a13369aa976ead9ab195fa8e467",
     screenshotVersion: "0.15.6",
 } as const;
 
@@ -130,6 +130,6 @@ export const faqs = [
     },
     {
         question: "如何更新 ENGE SPX？",
-        answer: "打开“管理 → 偏好设置 → 常规”，在软件更新里检查正式版。",
+        answer: "软件打开时自动检查正式版。点顶部的「偏好设置」，在「常规」里查看结果、手动检查或关闭自动检查。",
     },
 ] as const;
