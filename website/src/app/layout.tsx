@@ -8,7 +8,7 @@ export const metadata: Metadata = {
     metadataBase: new URL(product.site),
     title: "ENGE SPX — Windows AI 编程隔离工作台",
     description:
-        "在 Windows 管理 Claude Code、Codex 与 Chromium 容器工作区。支持截图和文件粘贴、独立身份、固定代理链路、出口核验、资源预算、自动时区与软件内更新。",
+        "在 Windows 上使用 Docker 容器运行 Claude Code、Codex 和 Antigravity。按工作区隔离账号与浏览器资料，并分别核对代理出口。",
     applicationName: product.name,
     alternates: { canonical: "/" },
     openGraph: {
@@ -38,8 +38,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-    themeColor: "#191815",
-    colorScheme: "dark",
+    themeColor: "#faf9f5",
+    colorScheme: "light",
     width: "device-width",
     initialScale: 1,
 };

@@ -48,27 +48,6 @@ export function SiteInteractions({ children }: { children: ReactNode }) {
                 ].id,
         );
 
-    useEffect(() => {
-        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches)
-            return;
-        const observer = new IntersectionObserver(
-            (entries) => {
-                for (const entry of entries)
-                    if (entry.isIntersecting) {
-                        entry.target.removeAttribute("data-pending");
-                        observer.unobserve(entry.target);
-                    }
-            },
-            { threshold: 0.09 },
-        );
-        document.querySelectorAll("[data-reveal]").forEach((element) => {
-            if (element.getBoundingClientRect().top > window.innerHeight * 0.95)
-                element.setAttribute("data-pending", "true");
-            observer.observe(element);
-        });
-        return () => observer.disconnect();
-    }, []);
-
     return (
         <Gallery.Provider
             value={(id) => {
@@ -230,14 +209,14 @@ export function Screenshot({
                 />
                 <span className="shot-zoom">
                     <Expand size={14} />
-                    <span>查看高清原图</span>
+                    <span>放大截图</span>
                 </span>
             </button>
             {caption && (
                 <figcaption>
-                    <span className="tiny-dot" /> {item.platform} · v
+                    {item.platform} · v
                     {item.version}{" "}
-                    <span className="caption-separator">/</span>{" "}
+                    ·{" "}
                     {item.context}
                 </figcaption>
             )}
@@ -245,40 +224,17 @@ export function Screenshot({
     );
 }
 
-export function HeroVisual() {
-    return (
-        <div className="hero-visual">
-            <div className="hero-orbit orbit-one" aria-hidden="true" />
-            <div className="hero-orbit orbit-two" aria-hidden="true" />
-            <div className="hero-cross cross-one" aria-hidden="true">
-                +
-            </div>
-            <div className="hero-cross cross-two" aria-hidden="true">
-                +
-            </div>
-            <div className="hero-frame">
-                <Screenshot id="overview" priority />
-                <div className="hero-underlabel">
-                    <span>YOUR PROJECT. ITS OWN WORKSPACE.</span>
-                    <span>WINDOWS / NATIVE 3×</span>
-                </div>
-            </div>
-        </div>
-    );
-}
-
 export function Navigation() {
     const dialog = useRef<HTMLDialogElement>(null);
     const [active, setActive] = useState("");
-    const [scrolled, setScrolled] = useState(false);
     useEffect(() => {
-        const scroll = () => setScrolled(window.scrollY > 24);
-        scroll();
-        window.addEventListener("scroll", scroll, { passive: true });
         const observer = new IntersectionObserver(
             (entries) => {
-                for (const entry of entries)
-                    if (entry.isIntersecting) setActive(entry.target.id);
+                for (const entry of entries) {
+                    const id = entry.target.id;
+                    if (entry.isIntersecting) setActive(id);
+                    else setActive((current) => (current === id ? "" : current));
+                }
             },
             { rootMargin: "-15% 0px -60% 0px" },
         );
@@ -286,17 +242,14 @@ export function Navigation() {
             const element = document.getElementById(id);
             if (element) observer.observe(element);
         });
-        return () => {
-            window.removeEventListener("scroll", scroll);
-            observer.disconnect();
-        };
+        return () => observer.disconnect();
     }, []);
     return (
         <>
             <a className="skip-link" href="#main">
                 跳到主要内容
             </a>
-            <header className={`site-header ${scrolled ? "is-scrolled" : ""}`}>
+            <header className="site-header">
                 <div className="nav-inner">
                     <a href="#" className="brand" aria-label="ENGE SPX 首页">
                         <img
@@ -324,7 +277,7 @@ export function Navigation() {
                             target="_blank"
                             rel="noreferrer"
                         >
-                            文档 <ArrowUpRight size={12} />
+                            文档
                         </a>
                     </nav>
                     <div className="nav-actions">
@@ -334,7 +287,7 @@ export function Navigation() {
                             target="_blank"
                             rel="noreferrer"
                         >
-                            GitHub <ArrowUpRight size={13} />
+                            GitHub
                         </a>
                         <a
                             className="button button-small button-primary nav-download"
@@ -378,15 +331,13 @@ export function Navigation() {
                     </button>
                 </div>
                 <nav>
-                    {navigation.map(({ id, label }, i) => (
+                    {navigation.map(({ id, label }) => (
                         <a
                             key={id}
                             href={`#${id}`}
                             onClick={() => dialog.current?.close()}
                         >
-                            <span className="mono">0{i + 1}</span>
                             {label}
-                            <ArrowUpRight />
                         </a>
                     ))}
                     <a
@@ -395,8 +346,7 @@ export function Navigation() {
                         rel="noreferrer"
                         onClick={() => dialog.current?.close()}
                     >
-                        <span className="mono">05</span>使用文档
-                        <ArrowUpRight />
+                        使用文档
                     </a>
                 </nav>
                 <a className="button button-primary" href={product.installer}>

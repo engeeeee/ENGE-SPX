@@ -6,7 +6,6 @@ import { NetworkSection } from "@/components/sections/network";
 import { WorkspaceSection } from "@/components/sections/workspace";
 import { TerminalSection } from "@/components/sections/terminal";
 import { ResourcesSection } from "@/components/sections/resources";
-import { SecuritySection } from "@/components/sections/security";
 import { GetStartedSection } from "@/components/sections/get-started";
 import { FaqSection } from "@/components/sections/faq";
 import { Footer } from "@/components/sections/footer";
@@ -23,7 +22,7 @@ export default function Home() {
         downloadUrl: product.installer,
         license: docs.license,
         description:
-            "Windows AI 编程隔离工作台，为 Claude Code、Codex 与 Chromium 提供容器工作区、身份隔离和可核对的代理路径。",
+            "Windows AI 编程隔离工作台，为 Claude Code、Codex、Antigravity 与 Chromium 提供容器工作区、身份隔离和可核对的代理路径。",
     };
     return (
         <>
@@ -44,7 +43,6 @@ export default function Home() {
                 <WorkspaceSection />
                 <TerminalSection />
                 <ResourcesSection />
-                <SecuritySection />
                 <GetStartedSection />
                 <FaqSection />
             </main>

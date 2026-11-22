@@ -8,9 +8,8 @@ export default function NotFound() {
                 height="64"
                 alt="ENGE SPX"
             />
-            <span className="eyebrow">404 / THIS SPACE IS EMPTY</span>
-            <h1>这里还没有工作区。</h1>
-            <p>你要找的页面可能已移动，回到首页继续。</p>
+            <span className="eyebrow">404</span>
+            <h1>找不到页面</h1>
             <a className="button button-primary" href={asset("/")}>
                 返回 ENGE SPX 首页
             </a>

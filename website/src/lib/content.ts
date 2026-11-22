@@ -1,19 +1,19 @@
 export const product = {
     name: "ENGE SPX",
-    version: "0.15.1",
-    published: "2026-11-14",
+    version: "0.15.4",
+    published: "2026-11-22",
     site: "https://enge1337.cn",
     repository: "https://github.com/engeeeee/ENGE-SPX",
     release:
-        "https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.1-windows",
+        "https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.4-windows",
     installer:
-        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.1-windows/ENGE-SPX-Windows-x64-0.15.1-Setup.exe",
+        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.4-windows/ENGE-SPX-Windows-x64-0.15.4-Setup.exe",
     portable:
-        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.1-windows/ENGE-SPX-Windows-x64-0.15.1-Portable.zip",
+        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.4-windows/ENGE-SPX-Windows-x64-0.15.4-Portable.zip",
     installerSha256:
-        "043af7f05940f75a9e3e98c2eec4715653f534a3568640e1fa872225eafc889d",
+        "647f2ad0e0cb8a26f30b1576c7263ef93d6c2b9c4a932ccfcbf9c174b781b3e0",
     portableSha256:
-        "7b7844e3bb425835f239c4998c14d76486c12d80e8822048a2d67a6a34606976",
+        "3505626ca114ef95a6787b9332e15e9b3fe963d9b7fc55e7cc1925492f169744",
     screenshotVersion: "0.13.2",
 } as const;
 
@@ -37,11 +37,9 @@ export const docs = {
 } as const;
 
 export const navigation = [
-    { id: "features", label: "功能" },
+    { id: "workspace", label: "工作区" },
     { id: "architecture", label: "网络路径" },
-    { id: "workspace", label: "项目工作区" },
-    { id: "terminal", label: "智能终端" },
-    { id: "resources", label: "资源管理" },
+    { id: "terminal", label: "终端" },
 ] as const;
 
 export const screenshots = [
@@ -113,35 +111,15 @@ export const asset = (path: string) =>
 
 export const faqs = [
     {
-        question: "可以直接把截图粘贴到 Codex 或 Claude Code 吗？",
-        answer: "可以。在偏好设置选择“自动（AI 智能粘贴）”或“智能粘贴终端”，打开工具后，在原来的 CLI 输入区按 Ctrl+V。截图与 PNG/JPEG/WebP 会导入并等待原生图片标记，文字和已有草稿保留，最后由你按 Enter。普通文件以可访问路径引用，具体格式能否解析取决于 CLI 和已有工具。Windows Terminal、PowerShell 和自定义外部终端不接管附件粘贴。",
-    },
-    {
-        question: "时区会按哪个出口调整？Windows 的时区会变吗？",
-        answer: "自动模式跟随核验后的最终落地出口，显示 IANA 时区并由你随出口确认。容器内工具与浏览器使用一致的时区，不修改 Windows 系统时区。也可以手动指定固定时区；已有会话需要停止后重新检查与确认。",
-    },
-    {
-        question: "以后怎么更新软件？",
-        answer: "0.15 起可在“偏好设置 → 软件更新”检查正式版，下载并校验后由你确认重启。安装版和便携版保留原有配置与数据，更新前正常停止工作区。0.14 及更早版本需先手动安装一次 0.15 或更新版本。",
-    },
-    {
-        question: "这是 Windows 虚拟机吗？",
-        answer: "Windows 运行 ENGE SPX 控制界面和你选择的终端窗口。Claude Code、Codex 和 Chromium 实际运行在 Docker Linux 容器中，通常由 Docker Desktop / WSL2 承载，并不是一套独立安装的 Windows 虚拟机。",
+        question: "外部终端能用智能粘贴吗？",
+        answer: "截图和文件粘贴在 ENGE SPX 自带终端中可用。Windows Terminal、PowerShell 和其他外部终端保留各自的快捷键。",
     },
     {
         question: "我已经在用 v2rayN，可以继续用吗？",
-        answer: "可以。选择本机 v2ray 兼容模式即可沿用现有客户端，外部客户端的按目标分流仍由你配置。也可以导入受支持的加密线路，由 ENGE SPX 固定“线路 → 落地”路径；两种模式的控制边界不同。",
+        answer: "可以。选用本机 v2ray 兼容模式，再选择落地代理。按目标分流仍由 v2rayN 管理。",
     },
     {
-        question: "不同项目会共享账号和浏览器登录状态吗？",
-        answer: "默认共享模式保留旧资料，同一身份内的项目会共享账号。需要分开时，请显式创建并绑定不同 Workspace Profile；工具账号、Cookie、Local Storage 和下载按身份保留。切换项目本身不会自动切换身份。",
-    },
-    {
-        question: "打开软件就会启动 Docker 吗？",
-        answer: "不会。打开软件只检查状态，由你点击“一键准备环境”或“启动并检测”后才启动 Docker。X 隐藏到托盘；真正退出默认先停止工作区，也可以保存同时正常关闭 Docker Desktop 的偏好。",
-    },
-    {
-        question: "可以把数据放到 D 盘吗？",
-        answer: "可以迁移应用配置、日志和下载缓存。Docker 的镜像、容器、数据卷则使用单独的数据盘迁移助手，并在 Docker Desktop 中应用位置变更。这两项迁移相互独立，项目目录也保留在你选择的位置。",
+        question: "如何更新 ENGE SPX？",
+        answer: "0.15 及以上可在“偏好设置 → 软件更新”检查正式版。更早版本可下载新版安装包手动更新。",
     },
 ] as const;

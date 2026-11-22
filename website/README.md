@@ -30,7 +30,7 @@ src/app/layout.tsx                站点元数据、字体和全局交互
 src/app/globals.css               颜色、排版、布局、响应式和动效
 src/components/sections/          功能、终端、网络等内容分区与 Footer
 src/components/architecture.tsx   两种接入模式与网络路径示意
-src/components/interactions.tsx   导航、高清截图浏览器、滚动呈现
+src/components/interactions.tsx   导航、高清截图浏览器、校验值复制
 src/lib/content.ts               版本、真实下载地址、文档、截图、FAQ
 public/brand/logo.svg             仓库原始 Logo
 public/screenshots/               原始软件截图与来源清单
@@ -38,17 +38,15 @@ scripts/capture-previews.mjs      短浏览器检查和实际网页预览
 scripts/deploy-static.py          Linux 上的静态目录原子发布
 ```
 
-更新软件版本时，修改 `src/lib/content.ts` 中的版本、发布日期、Releases 与附件地址、SHA-256，并同步 `sections/faq.tsx` 的最新版本说明。下载地址应先从真实 [GitHub Releases](https://github.com/engeeeee/ENGE-SPX/releases)核对。截图版本单独标识，不用新版本号描述旧界面。
+更新软件版本时，修改 `src/lib/content.ts` 中的版本、发布日期、Releases 与附件地址、SHA-256。下载地址应先从真实 [GitHub Releases](https://github.com/engeeeee/ENGE-SPX/releases)核对。截图版本单独标识，不用新版本号描述旧界面。
 
 ## 软件截图的真实性与清晰度
 
 工作台、连接、项目和资源窗口使用原生 Windows 3× DPI 截图，最高 **3360×3150 PNG**。真实窗口的逻辑尺寸按页面展示空间选择，让软件文字少被缩小，而非简单把原图插值放大。工作台、连接和资源页使用软件原有紧凑导航；项目页使用完整导航。像素、逻辑尺寸与 SHA-256 见 `public/screenshots/capture-web-3x.json`，旧 1× / 2× 图片保留。
 
-在 1920px、100% 缩放的普通 DPI 桌面，四张软件截图按原始逻辑宽度展示，避免额外缩字。普通 DPI 屏幕上的截图保持正视，首屏只展示一个软件窗口，以柔和阴影区分前后；高 DPI 屏幕保留克制透视。首屏只裁切底部，图片内部内容不修改。点击可适应窗口查看、按各图的原始逻辑尺寸滚动阅读，或打开完整高清 PNG。网页中的网络图与挂载图是明确的架构示意，不是软件界面。
+首屏只展示一张工作台截图，保留正视比例并从顶部裁切。点击任意软件截图可查看全图、按原始逻辑尺寸滚动阅读，或打开原始 PNG。
 
-当前产品说明与下载对应 ENGE SPX **0.15.1**。四张主程序截图仍为 **0.13.2 Windows** 空配置画面；新增 **0.15.1 Linux 产品终端 + Codex 0.169.0** 的 2200×1360 原生 2× 图，展示未发送的中文、图片与文件引用草稿。分别标注平台与版本，不把 Linux 画面描述成 Windows 或毛玻璃实测。终端原图与 README 一致，来源清单见 `public/screenshots/terminal-capture-0.15.1.json`；复现脚本见 `../docs/screenshots/capture_terminal.py`。
-
-终端功能说明区分原生图片与普通文件引用，并明确外部终端不接管智能附件粘贴。环境设置介绍最终出口自动时区、手动模式与软件内更新。页面使用功能描述，不添加虚构性能数据或账号演示。事实、设计与边界见 [DESIGN.md](DESIGN.md)，完整产品说明见 [项目 README](https://github.com/engeeeee/ENGE-SPX#readme)。
+四张主程序截图为 **0.13.2 Windows** 空配置画面。终端截图来自 **0.15.1 Linux 产品终端 + Codex 0.169.0**，使用 2200×1360 原生 2× 图。图片来源与展示方式见 [DESIGN.md](DESIGN.md)。
 
 ## 预览与简短检查
 

@@ -1,167 +1,43 @@
-import {
-    ArrowRight,
-    Box,
-    CircleDot,
-    Fingerprint,
-    FolderOpen,
-    SquareTerminal,
-} from "lucide-react";
-import { SectionLabel, TextLink } from "@/components/section-ui";
+import { Box, FolderLock, Gauge } from "lucide-react";
 import { docs } from "@/lib/content";
+
+const features = [
+    {
+        icon: Box,
+        title: "容器工作区",
+        body: "AI 编程工具在 Docker Desktop 的 Linux 容器里运行，可按需启动独立的 Chromium。",
+        href: docs.security,
+        link: "安全模型",
+    },
+    {
+        icon: FolderLock,
+        title: "独立资料与文件权限",
+        body: "新建工作区时从空白登录状态开始。只挂载你选择的项目，支持只读和读写。",
+        href: docs.workspaces,
+        link: "工作区说明",
+    },
+    {
+        icon: Gauge,
+        title: "资源控制",
+        body: "给 CLI、浏览器和网关分别设置 CPU 与内存预算。关闭浏览器后可继续使用 CLI。",
+        href: "#resources",
+        link: "查看资源设置",
+    },
+];
 
 export function FeaturesSection() {
     return (
-        <section id="features" className="section features-section">
-            <div className="container">
-                <div className="section-heading" data-reveal>
-                    <div>
-                        <SectionLabel number="01">
-                            核心功能
-                        </SectionLabel>
-                        <h2>
-                            工具运行在容器，
-                            <br />
-                            <span className="muted-heading">
-                                项目保存在本机。
-                            </span>
-                        </h2>
-                    </div>
-                    <p className="heading-description">
-                        把工具依赖、登录资料和代理路径集中管理。
-                        <br />
-                        选择项目目录与权限，再启动编程工具。
-                    </p>
-                </div>
-                <div className="feature-grid">
-                    <article
-                        className="feature-card feature-container"
-                        data-reveal
-                    >
-                        <span className="card-index mono">
-                            01 / LINUX CONTAINERS
-                        </span>
-                        <div className="feature-copy">
-                            <span className="feature-icon">
-                                <Box />
-                            </span>
-                            <h3>
-                                工具在容器。
-                                <br />
-                                项目在本机。
-                            </h3>
-                            <p>
-                                Claude Code、Codex 与 Linux
-                                命令运行在容器内。只挂载选中的项目目录，不需要把工具依赖安装到 Windows 日常环境。
-                            </p>
-                        </div>
-                        <div
-                            className="isolation-illustration"
-                            aria-label="项目授权挂载到 Linux 工具容器的结构示意"
-                        >
-                            <div className="local-folder">
-                                <FolderOpen size={31} />
-                                <span>你选中的项目</span>
-                                <small>本机目录</small>
-                            </div>
-                            <span className="mount-line">
-                                <span>授权挂载</span>
-                                <ArrowRight size={15} />
-                            </span>
-                            <div className="isolated-tools">
-                                <span className="isolated-tools-label">
-                                    <Box size={12} />
-                                    LINUX WORKSPACE
-                                </span>
-                                <div>
-                                    <SquareTerminal size={16} />
-                                    <span>Claude Code</span>
-                                </div>
-                                <div>
-                                    <SquareTerminal size={16} />
-                                    <span>Codex</span>
-                                </div>
-                                <div>
-                                    <span className="illustration-prompt">
-                                        &gt;_
-                                    </span>
-                                    <span>Linux 终端</span>
-                                </div>
-                            </div>
-                        </div>
-                        <span className="feature-footnote">
-                            目录按需授权，不挂载 Docker 管理接口。
-                        </span>
+        <section id="features" className="section container" aria-labelledby="features-title">
+            <h2 id="features-title">工作区功能</h2>
+            <div className="features-grid">
+                {features.map(({ icon: Icon, title, body, href, link }) => (
+                    <article key={title}>
+                        <Icon size={23} strokeWidth={1.5} aria-hidden="true" />
+                        <h3>{title}</h3>
+                        <p>{body}</p>
+                        <a className="text-link" href={href}>{link}</a>
                     </article>
-                    <article
-                        className="feature-card feature-identity"
-                        data-reveal
-                    >
-                        <span className="card-index mono">
-                            02 / WORKSPACE PROFILES
-                        </span>
-                        <div className="identity-art" aria-hidden="true">
-                            <div className="identity-ring ring-one" />
-                            <div className="identity-ring ring-two" />
-                            <Fingerprint />
-                            <span className="identity-point point-a" />
-                            <span className="identity-point point-b" />
-                        </div>
-                        <div className="feature-copy">
-                            <h3>
-                                一个身份，
-                                <br />
-                                一份登录状态。
-                            </h3>
-                            <p>
-                                为工作区选择独立
-                                Profile。工具账号、Cookie、Storage
-                                与下载按身份保留，浏览器不继承本机登录资料。
-                            </p>
-                        </div>
-                        <TextLink href={docs.workspaces}>了解身份隔离</TextLink>
-                    </article>
-                    <article
-                        className="feature-card feature-verification"
-                        data-reveal
-                    >
-                        <div>
-                            <span className="card-index mono">
-                                03 / REVIEW BEFORE YOU RUN
-                            </span>
-                            <h3>
-                                先核对出口。
-                                <br />
-                                <span>再开始工作。</span>
-                            </h3>
-                            <p>
-                                线路与落地分别核验，由你确认后启用。运行期间检测到连接、出口或拓扑异常，停止本环境。
-                            </p>
-                        </div>
-                        <div className="verification-pair">
-                            <div>
-                                <span className="verification-number mono">
-                                    01
-                                </span>
-                                <div>
-                                    <strong>线路出口</strong>
-                                    <span>确认第一跳路径</span>
-                                </div>
-                                <CircleDot size={16} />
-                            </div>
-                            <span className="verification-rule" />
-                            <div>
-                                <span className="verification-number mono">
-                                    02
-                                </span>
-                                <div>
-                                    <strong>落地出口</strong>
-                                    <span>确认最终出口</span>
-                                </div>
-                                <CircleDot size={16} />
-                            </div>
-                        </div>
-                    </article>
-                </div>
+                ))}
             </div>
         </section>
     );

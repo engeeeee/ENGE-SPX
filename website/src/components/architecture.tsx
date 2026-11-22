@@ -5,7 +5,6 @@ import {
     ArrowRight,
     Box,
     Cable,
-    Check,
     CircleDot,
     Globe,
     Laptop,
@@ -31,7 +30,7 @@ export function Architecture() {
     const [mode, setMode] = useState<"managed" | "local">("managed");
     const managed = mode === "managed";
     return (
-        <div className="architecture-panel" data-reveal>
+        <div className="architecture-panel">
             <div className="architecture-toolbar">
                 <div
                     className="mode-tabs"
@@ -66,7 +65,7 @@ export function Architecture() {
                         onClick={() => setMode("managed")}
                     >
                         <LockKeyhole size={14} />
-                        软件内双跳<span>推荐</span>
+                        软件内双跳
                     </button>
                     <button
                         id="local-tab"
@@ -80,8 +79,8 @@ export function Architecture() {
                         本机 v2ray 兼容
                     </button>
                 </div>
-                <span className="diagram-label mono">
-                    NETWORK PATH / 结构示意
+                <span className="diagram-label">
+                    网络路径示意
                 </span>
             </div>
             <div
@@ -95,13 +94,12 @@ export function Architecture() {
                     <Laptop size={15} />
                     <strong>Windows 桌面控制端</strong>
                     <span>配置 · 授权 · 核对出口</span>
-                    <span className="control-dash" aria-hidden="true" />
                 </div>
                 <div className="route-flow">
                     <div className="docker-boundary">
                         <span className="docker-label">
                             <Box size={12} />
-                            DOCKER LINUX 工作区
+                            Docker Linux 工作区
                         </span>
                         <div className="workspace-node">
                             <Box size={23} />
@@ -121,7 +119,7 @@ export function Architecture() {
                     </div>
                     <Connector />
                     <div className="route-node line-node">
-                        <span className="hop-label mono">FIRST HOP</span>
+                        <span className="hop-label">第一跳</span>
                         {managed ? (
                             <LockKeyhole size={24} />
                         ) : (
@@ -140,7 +138,7 @@ export function Architecture() {
                     </div>
                     <Connector />
                     <div className="route-node landing-node">
-                        <span className="hop-label mono">LANDING</span>
+                        <span className="hop-label">第二跳</span>
                         <Network size={24} />
                         <strong>落地代理</strong>
                         <div className="landing-options">
@@ -161,9 +159,7 @@ export function Architecture() {
                         <span>通过所选出口访问</span>
                     </div>
                 </div>
-                <div
-                    className={`route-explanation ${managed ? "" : "compatibility-note"}`}
-                >
+                <div className="route-explanation">
                     <span className="route-note-icon">
                         {managed ? (
                             <LockKeyhole size={16} />
@@ -172,36 +168,11 @@ export function Architecture() {
                         )}
                     </span>
                     <p>
-                        {managed ? (
-                            <>
-                                <strong>固定路径，不设 DIRECT 备用。</strong>{" "}
-                                分别核验线路与最终出口，由你确认后启用；检测到连接、出口或拓扑异常时停止本环境。
-                            </>
-                        ) : (
-                            <>
-                                <strong>
-                                    保留熟悉的客户端，也明确它的边界。
-                                </strong>{" "}
-                                本机 v2ray
-                                的按目标分流由外部客户端控制，检测服务出口一致不能证明每个目标都经过同一线路。
-                            </>
-                        )}
+                        {managed
+                            ? "检查连接并确认两处出口后启用固定链路。异常时停止工作区。"
+                            : "本机 v2ray 的按目标分流由外部客户端控制。"}
                     </p>
                 </div>
-            </div>
-            <div className="architecture-bottom">
-                <span>
-                    <Check size={13} />
-                    保留 TLS 证书验证
-                </span>
-                <span>
-                    <Check size={13} />
-                    线路与落地分别选择
-                </span>
-                <span>
-                    <Check size={13} />
-                    出口变化需重新核对
-                </span>
             </div>
         </div>
     );
