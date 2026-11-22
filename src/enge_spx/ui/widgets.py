@@ -1,6 +1,6 @@
 """Small native widgets shared by pages and modal dialogs."""
 from PySide6.QtCore import Qt, QSize, Signal
-from PySide6.QtWidgets import (QWidget, QFrame, QLabel, QHBoxLayout, QVBoxLayout,
+from PySide6.QtWidgets import (QWidget, QFrame, QLabel, QHBoxLayout, QVBoxLayout, QBoxLayout,
                              QPushButton, QLineEdit, QComboBox, QCheckBox,
                              QProgressBar, QScrollArea, QDialog, QDialogButtonBox,
                              QDoubleSpinBox, QSpinBox, QAbstractSpinBox)
@@ -112,12 +112,15 @@ def progress(value):
 
 
 class Panel(QFrame):
-    def __init__(self, title=None, caption=None, hero=False):
+    def __init__(self, title=None, caption=None, surface="Section"):
         super().__init__()
-        self.setObjectName("Hero" if hero else "Panel")
+        self.setObjectName(surface)
         self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(22, 20, 22, 20)
-        self.layout.setSpacing(14)
+        if surface == "Section":
+            self.layout.setContentsMargins(0, 16, 0, 4)
+        else:
+            self.layout.setContentsMargins(22, 20, 22, 20)
+        self.layout.setSpacing(12)
         if title:
             self.layout.addWidget(label(title, "SectionTitle"))
         if caption:
@@ -142,7 +145,7 @@ class Panel(QFrame):
 
 class Page(QScrollArea):
     resized = Signal(int, int)
-    def __init__(self, title, subtitle):
+    def __init__(self, title=None, subtitle=None):
         super().__init__()
         self.setWidgetResizable(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -151,20 +154,59 @@ class Page(QScrollArea):
         self.content = QWidget()
         self.content.setObjectName("Page")
         self.layout = QVBoxLayout(self.content)
-        self.layout.setContentsMargins(28, 24, 28, 28)
-        self.layout.setSpacing(18)
-        header = QVBoxLayout()
-        header.setSpacing(8)
-        header.addWidget(label(title, "Heading"))
-        self.subtitle = label(subtitle, "Muted", True)
-        header.addWidget(self.subtitle)
-        self.layout.addLayout(header)
+        self.layout.setContentsMargins(32, 26, 32, 24)
+        self.layout.setSpacing(22)
+        if title:
+            header = QVBoxLayout()
+            header.setSpacing(5)
+            header.addWidget(label(title, "Heading"))
+            if subtitle:
+                header.addWidget(label(subtitle, "Muted", True))
+            self.layout.addLayout(header)
         self.setWidget(self.content)
 
-    def panel(self, title=None, caption=None, hero=False):
-        widget = Panel(title, caption, hero)
+    def panel(self, title=None, caption=None, *, surface="Section"):
+        widget = Panel(title, caption, surface)
         self.layout.addWidget(widget)
         return widget
+
+    def pair(self, left, right, *, breakpoint=860, weights=(1, 1), fill=False):
+        group = QWidget()
+        row = QHBoxLayout(group)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(24)
+        for widget, weight in zip((left, right), weights):
+            row.addWidget(widget, weight)
+        if not fill:
+            row.setAlignment(left, Qt.AlignmentFlag.AlignTop)
+            row.setAlignment(right, Qt.AlignmentFlag.AlignTop)
+        self.layout.addWidget(group)
+
+        def adapt(width, _height):
+            direction = QBoxLayout.Direction.LeftToRight if width >= breakpoint else QBoxLayout.Direction.TopToBottom
+            if row.direction() != direction:
+                row.setDirection(direction)
+
+        self.resized.connect(adapt)
+        adapt(self.viewport().width(), self.viewport().height())
+        return group
+
+    def tabs(self, choices, select):
+        bar = QFrame()
+        bar.setObjectName("Subnav")
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(0, 0, 0, 1)
+        row.setSpacing(6)
+        buttons = {}
+        for key, title in choices:
+            item = button(title, lambda value=key: select(value))
+            item.setObjectName("SectionTab")
+            item.setCheckable(True)
+            row.addWidget(item)
+            buttons[key] = item
+        row.addStretch()
+        self.layout.addWidget(bar)
+        return buttons
 
     def finish(self):
         self.layout.addStretch()

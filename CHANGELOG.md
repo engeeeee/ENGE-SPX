@@ -1,5 +1,12 @@
 # Changes
 
+## 0.15.6 workbench layout redesign — 2026-11-22
+
+- Replace the sidebar with primary navigation across the top and a management menu.
+- Rebuild the dashboard around environment setup, project tools, and observed exits.
+- Separate workspace authorization from launch controls and show the two proxy stages in a responsive pair.
+- Redesign network reports, resource controls, downloads, and logs. Group settings by purpose.
+
 ## 0.15.5 workbench themes and Show Desktop — 2026-11-22
 
 - Let Windows fully minimize the frameless workbench on Show Desktop so restoring the terminal keeps the workbench minimized.

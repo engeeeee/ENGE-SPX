@@ -105,23 +105,32 @@ QWidget { color: @ink@; font-size: 14px; }
 QMainWindow, QDialog { background: @canvas@; }
 QFrame#Shell { background: @canvas@; border: 1px solid @line@; border-radius: 11px; }
 QWidget#TitleBar { background: @canvas@; border-bottom: 1px solid @line@; }
-QWidget#Sidebar { background: @sidebar@; border-right: 1px solid @line@; }
+QFrame#WorkbenchNav { background: @sidebar@; border-bottom: 1px solid @line@; }
+QFrame#StatusStrip { border-top: 1px solid @line@; background: @sidebar@; }
+QFrame#Subnav { border-bottom: 1px solid @line@; }
 QWidget#Page, QWidget#Viewport { background: @canvas@; }
 QScrollArea { border: none; background: transparent; }
-QFrame#Panel { background: @paper@; border: 1px solid @line@; border-radius: 10px; }
-QFrame#Hero { background: @hero@; border: 1px solid @hero_line@; border-radius: 14px; }
+QFrame#Section { background: transparent; border: none; border-top: 1px solid @line@; }
+QFrame#Hero {
+    background: qlineargradient(x1:0, y1:0, x2:0.93, y2:1, stop:0 @hero@, stop:1 @wash@);
+    border: 1px solid @hero_line@;
+    border-radius: 16px;
+}
+QFrame#LaunchPanel { background: @paper@; border: 1px solid @line@; border-radius: 14px; }
+QFrame#RoutePanel { background: @inset@; border: 1px solid @line@; border-radius: 12px; }
 QFrame#Inset { background: @inset@; border: 1px solid @line@; border-radius: 8px; }
 QLabel { background: transparent; border: none; }
-QLabel#Heading { font-family: "@display_font@"; font-size: 32px; font-weight: 600; }
-QLabel#HeroTitle { font-family: "@display_font@"; font-size: 25px; font-weight: 600; }
-QLabel#SectionTitle { font-size: 16px; font-weight: 600; }
-QLabel#Brand { font-family: "Georgia"; font-size: 20px; font-weight: 600; }
+QLabel#Heading { font-family: "@display_font@"; font-size: 36px; font-weight: 600; }
+QLabel#HeroTitle { font-family: "@display_font@"; font-size: 39px; font-weight: 600; }
+QLabel#ProjectTitle { font-family: "@display_font@"; font-size: 25px; font-weight: 600; }
+QLabel#SectionTitle { font-size: 17px; font-weight: 600; }
+QLabel#Brand { font-family: "Georgia"; font-size: 17px; font-weight: 600; }
+QLabel#RouteText { font-family: "Consolas"; font-size: 15px; }
 QLabel#Metric { font-size: 19px; font-weight: 600; }
 QLabel#Muted { color: @muted@; font-size: 13px; }
 QLabel#Caption { color: @faint@; font-size: 12px; }
 QLabel#Accent { color: @clay@; font-size: 12px; font-weight: 600; }
 QLabel#Chip { color: @muted@; background: @inset@; border: 1px solid @line@; border-radius: 12px; padding: 4px 10px; font-size: 12px; }
-QLabel#StepNumber { background: @wash@; color: @clay@; border-radius: 14px; font-size: 12px; font-weight: 600; }
 QPushButton { background: @paper@; border: 1px solid @line@; border-radius: 7px; padding: 9px 15px; font-size: 13px; font-weight: 500; }
 QPushButton:hover { background: @hover@; border-color: @edge@; }
 QPushButton:pressed { background: @inset@; }
@@ -133,16 +142,23 @@ QPushButton#Primary:hover { background: @primary_hover@; border-color: @primary_
 QPushButton#Primary:pressed { background: @primary_down@; }
 QPushButton#Primary:disabled { background: @wash@; color: @quiet@; border-color: @line@; }
 QPushButton#Ghost { background: transparent; border-color: transparent; color: @muted@; }
-QPushButton#Ghost:hover, QPushButton#Nav:hover { background: @hover@; color: @ink@; }
-QPushButton#Nav { text-align: left; background: transparent; border: 1px solid transparent; padding: 12px 15px; color: @muted@; }
-QPushButton#Nav:checked { background: @wash@; border-color: @hero_line@; color: @clay@; }
+QPushButton#Ghost:hover, QPushButton#Nav:hover, QPushButton#SectionTab:hover { background: @hover@; color: @ink@; }
+QPushButton#Nav, QPushButton#SectionTab, QPushButton#Manage {
+    background: transparent; border: 1px solid transparent; padding: 9px 11px; color: @muted@; font-weight: 600;
+}
+QPushButton#Nav:checked, QPushButton#SectionTab:checked { background: @wash@; color: @clay@; }
+QPushButton#Manage:hover { background: @hover@; }
+QPushButton#LaunchTile { text-align: left; padding: 15px 13px; background: @paper@; border: 1px solid @line@; font-weight: 600; }
+QPushButton#LaunchTile:hover { background: @hover@; border-color: @edge@; }
+QPushButton#LaunchTile:disabled { background: @disabled@; color: @quiet@; }
 QPushButton#WindowControl, QPushButton#WindowClose, QPushButton#WindowTheme { background: transparent; border: 1px solid transparent; border-radius: 5px; padding: 2px; color: @muted@; }
 QPushButton#WindowControl { font-size: 16px; }
 QPushButton#WindowClose { font-size: 20px; }
 QPushButton#WindowControl:hover, QPushButton#WindowTheme:hover { background: @hover@; color: @ink@; }
-QPushButton#WindowTheme:focus, QPushButton#Nav:focus { border-color: @clay@; }
+QPushButton#WindowTheme:focus, QPushButton#Nav:focus, QPushButton#SectionTab:focus, QPushButton#Manage:focus { border-color: @clay@; }
 QPushButton#WindowClose:hover { background: #9C4D40; color: #FFF2EB; }
 QLineEdit, QComboBox, QPlainTextEdit, QSpinBox, QDoubleSpinBox { background: @field@; border: 1px solid @line@; border-radius: 7px; padding: 10px 11px; color: @ink@; selection-background-color: @wash@; selection-color: @ink@; }
+QPlainTextEdit#LogConsole { background: @inset@; padding: 14px; border-radius: 10px; }
 QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover { border-color: @edge@; }
 QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus { border-color: @clay@; }
 QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled { color: @quiet@; border-color: @line@; }

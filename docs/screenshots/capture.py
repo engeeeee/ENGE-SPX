@@ -50,16 +50,12 @@ def main():
                 if page == "resources":
                     window.select_resource_view("budget")
                 sizes = {"overview": (960, 840), "workspace": (1120, 1050),
-                         "connection": (840, 1050), "resources": (840, 1000)}
+                         "connection": (960, 960), "resources": (840, 1000)}
                 window.resize(*(sizes[page] if args.profile == "website" else (1280, 1000)))
                 window.pages[page].verticalScrollBar().setValue(0)
                 QTest.qWait(150)
-                if window.compact:
-                    assert window.titlebar.caption.text().startswith("ENGE SPX"), "Compact product title is missing"
-                    assert window.titlebar.caption.width() >= window.titlebar.caption.sizeHint().width(), "Compact title is cropped"
-                else:
-                    assert window.brand_label.width() >= window.brand_label.sizeHint().width(), "Product name is cropped"
-                    assert window.brand_label.height() >= window.brand_label.sizeHint().height(), "Product name is cropped"
+                assert window.brand_label.width() >= window.brand_label.sizeHint().width(), "Product name is cropped"
+                assert window.brand_label.height() >= window.brand_label.sizeHint().height(), "Product name is cropped"
                 if page == "workspace":
                     viewport = window.pages[page].viewport()
                     for title in ("Claude Code", "Codex"):
@@ -73,7 +69,7 @@ def main():
         finally:
             window.finish_close()
     report = {"version": __version__, "theme": args.theme, "profile": args.profile, "source_commit": os.environ.get("GITHUB_SHA"), "platform": platform.system(), "python": platform.python_version(), "qt": PySide6.__version__, "captured_utc": datetime.now(timezone.utc).isoformat(), "state": "unconfigured temporary data; no accounts, proxies or Docker workspace started", "captures": captures}
-    (args.output / "capture.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    (args.output / "capture.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
     print(json.dumps(report, ensure_ascii=False), flush=True)
 
 

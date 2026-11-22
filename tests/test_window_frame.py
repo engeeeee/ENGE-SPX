@@ -86,17 +86,33 @@ class NativeWindowTests(unittest.TestCase):
         self.assertEqual(self.window.render_count, count)
         self.assertFalse(self.controller.delivery.isActive())
 
-    def test_small_width_uses_compact_sidebar_without_cropping_the_name(self):
+    def test_top_navigation_adapts_without_cropping_the_name(self):
         self.window.resize(810, 620)
         QTest.qWait(40)
         self.assertTrue(self.window.compact)
         self.assertIn("ENGE SPX", self.window.titlebar.caption.text())
+        self.assertEqual(self.window.nav["workspace"].text(), "项目")
         self.assertTrue(self.window.next_button.isVisible())
         self.window.resize(1200, 820)
         QTest.qWait(40)
         self.assertFalse(self.window.compact)
         self.assertTrue(self.window.brand_label.isVisible())
         self.assertGreaterEqual(self.window.brand_label.width(), self.window.brand_label.sizeHint().width())
+        self.assertEqual(self.window.nav["workspace"].text(), "项目工作区")
+
+    def test_navigation_and_settings_groups_keep_actions_reachable(self):
+        self.window.nav["workspace"].click()
+        self.assertEqual(self.window.current_page, "workspace")
+        self.assertTrue(self.window.workspace_apply_button.isVisible())
+        self.window.nav["settings"].trigger()
+        self.assertTrue(self.window.settings_tabs["general"].isChecked())
+        self.window.settings_tabs["terminal"].click()
+        self.assertTrue(self.window.terminal_path.isVisible())
+        self.assertFalse(self.window.close_desktop_check.isVisible())
+        self.window.settings_tabs["exit"].click()
+        self.assertTrue(self.window.close_desktop_check.isVisible())
+        self.window.nav["settings"].trigger()
+        self.assertTrue(self.window.settings_tabs["general"].isChecked())
 
     def test_value_emits_only_real_changes(self):
         value = Value("before")

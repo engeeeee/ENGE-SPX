@@ -81,18 +81,20 @@ with tempfile.TemporaryDirectory() as directory:
     if target:
         window.grab().save(str(path / (name + "-workspaces.png")))
         (path / (name + ".json")).write_text(json.dumps(report, indent=2), encoding="utf-8")
-    window.show_page("settings")
+    window.show_settings("storage")
     page = window.pages["settings"]
     QTest.qWait(80)
     assert page.content.width() <= page.viewport().width(), f"Settings page overflows horizontally: {page.content.width()} / {page.viewport().width()}"
     for widget in page.findChildren(QLabel):
-        if widget.wordWrap():
+        if widget.isVisible() and widget.wordWrap():
             assert widget.hasHeightForWidth(), "Settings explanation lost automatic wrap height"
             rect = QRect(widget.mapTo(page.viewport(), QPoint()), widget.size())
             assert rect.left() >= 0 and rect.right() <= page.viewport().width(), f"Settings explanation is clipped: {rect}"
     controller.data_location.set(r"C:\Users\Example\AppData\Local\Temp\a-long-data-directory-without-spaces")
     QTest.qWait(80)
     assert page.content.width() <= page.viewport().width(), "Long Windows path widens settings"
+    window.select_settings_view("exit")
+    QTest.qWait(80)
     for widget in (window.close_desktop_check, window.save_exit_preferences_button, window.stop_exit_button):
         page.ensureWidgetVisible(widget)
         QTest.qWait(20)
