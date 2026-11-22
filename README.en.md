@@ -41,14 +41,14 @@ This diagram shows managed chaining. The browser does not mount the project or t
 
 **Start from one workspace dashboard.** Prepare the runtime, review the selected route and exits, then open your project and tools. Opening the app checks status; you choose when Docker starts.
 
-![ENGE SPX 0.13.2 running on Windows: preparation steps, exit information and workspace route](docs/images/0.13.2/2x/overview.png)
+![ENGE SPX 0.15.6 running on Windows: preparation steps, exit information and workspace route](website/public/screenshots/0.15.6/dark/overview.png)
 
 | Projects, identities and tools | Lines and landing proxies |
 | --- | --- |
-| [![Windows workspace page with project grants and Claude Code, Codex and Chromium launch controls](docs/images/0.13.2/2x/workspace.png)](docs/images/0.13.2/2x/workspace.png) | [![Windows proxy page with landing selection and managed line settings](docs/images/0.13.2/2x/connection.png)](docs/images/0.13.2/2x/connection.png) |
+| [![Windows workspace page with project grants and Claude Code, Codex and Chromium launch controls](website/public/screenshots/0.15.6/dark/workspace.png)](website/public/screenshots/0.15.6/dark/workspace.png) | [![Windows proxy page with landing selection and managed line settings](website/public/screenshots/0.15.6/dark/connection.png)](website/public/screenshots/0.15.6/dark/connection.png) |
 | Select a local project, apply an identity and read-only/read-write grant, then use the tool and browser controls after connection confirmation. | Import nodes, choose a managed fixed chain or local-v2ray compatibility, and configure the line, landing and download proxy separately. |
 
-These are actual **0.13.2 native Windows UI captures** using temporary data without accounts, proxy nodes or a running Docker workspace. Click an image for full size. [Capture provenance and reproduction](docs/screenshots/README.md) includes the source commit, Windows run and image hashes. The UI is currently Chinese.
+These are actual **0.15.6 native Windows UI captures** using temporary data without accounts, proxy nodes or a running Docker workspace. Click an image for full size. [Capture provenance and reproduction](docs/screenshots/README.md) includes the source commit, Windows run and image hashes. The UI is currently Chinese.
 
 **Smart terminal: edit the current Codex draft and paste images or files in place.**
 

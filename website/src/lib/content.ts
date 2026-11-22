@@ -3,21 +3,21 @@ export type Theme = "dark" | "light";
 
 export const product = {
     name: "ENGE SPX",
-    version: "0.15.5",
+    version: "0.15.6",
     published: "2026-11-22",
     site: "https://enge1337.cn",
     repository: "https://github.com/engeeeee/ENGE-SPX",
     release:
-        "https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.5-windows",
+        "https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.6-windows",
     installer:
-        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.5-windows/ENGE-SPX-Windows-x64-0.15.5-Setup.exe",
+        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.6-windows/ENGE-SPX-Windows-x64-0.15.6-Setup.exe",
     portable:
-        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.5-windows/ENGE-SPX-Windows-x64-0.15.5-Portable.zip",
+        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.6-windows/ENGE-SPX-Windows-x64-0.15.6-Portable.zip",
     installerSha256:
-        "e8e14f8df069f3adc75e191451d94a9c3effec228bc5bba668040c651a77b836",
+        "b2acbed64d3569728f108ea18bcd696cbb198602ebcd6687b0e7d21b989d1fb4",
     portableSha256:
-        "0c92bf446f59f84dbec3219c689fedb7c792cae351742f5b0be9e591894a768c",
-    screenshotVersion: "0.15.5",
+        "86c3c8b8e24ce21eda33c159f0a2347fb3fbca035c6a236728c2fd03cf0dfb87",
+    screenshotVersion: "0.15.6",
 } as const;
 
 export const docs = {
@@ -49,7 +49,7 @@ export const screenshots = [
     {
         id: "overview",
         title: "工作台",
-        alt: "ENGE SPX Windows 工作台：一键准备、线路和落地出口、工作区路径",
+        alt: "ENGE SPX Windows 工作台：顶部导航、环境准备、项目工具与代理路径",
         source: `/screenshots/${product.screenshotVersion}/dark/overview.png`,
         lightSource: `/screenshots/${product.screenshotVersion}/light/overview.png`,
         width: 960,
@@ -78,8 +78,8 @@ export const screenshots = [
         alt: "真实连接与代理界面：分别选择落地、前置线路和本机代理",
         source: `/screenshots/${product.screenshotVersion}/dark/connection.png`,
         lightSource: `/screenshots/${product.screenshotVersion}/light/connection.png`,
-        width: 840,
-        height: 1050,
+        width: 960,
+        height: 960,
         pixelRatio: 3,
         platform: "Windows 原生界面",
         version: product.screenshotVersion,
@@ -130,6 +130,6 @@ export const faqs = [
     },
     {
         question: "如何更新 ENGE SPX？",
-        answer: "0.15 及以上可在“偏好设置 → 软件更新”检查正式版。更早版本可下载新版安装包手动更新。",
+        answer: "打开“管理 → 偏好设置 → 常规”，在软件更新里检查正式版。",
     },
 ] as const;

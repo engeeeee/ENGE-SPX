@@ -1,5 +1,9 @@
 # 软件界面截图与复现
 
+## 工作台 0.15.6
+
+新版工作台、项目、连接和资源页使用 Windows 上的 3× 原生采集，临时数据未配置账号或节点。文件尺寸与 SHA-256 见 [深色清单](../../website/public/screenshots/0.15.6/dark/capture.json) 和 [浅色清单](../../website/public/screenshots/0.15.6/light/capture.json)。[Windows 截图运行记录](https://github.com/engeeeee/ENGE-SPX/actions/runs/45031285658)
+
 README 中的四张主程序图片来自 **ENGE SPX 0.13.2 在原生 Windows 环境运行的真实 Qt 界面**。截取工作台、项目工作区、连接与代理、资源预算页面，PNG 原图保留，不经过图像生成、拼接或添加虚构状态。新增终端图的平台、版本与复现方法见下方“智能终端”。
 
 | 项目 | 记录 |

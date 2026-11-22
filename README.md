@@ -35,16 +35,16 @@
 
 ## 界面预览
 
-**工作台：从准备环境到确认出口，在一个入口完成。** 打开软件先查看状态，何时启动 Docker、准备环境和启用连接，由你决定。
+**工作台：顶部导航、环境启用和项目工具。** 打开软件先查看状态，何时启动 Docker、准备环境和启用连接，由你决定。
 
-![ENGE SPX 0.13.2 在 Windows 上运行的工作台，包含一键准备、出口信息和工作区网络路径](docs/images/0.13.2/2x/overview.png)
+![ENGE SPX 0.15.6 在 Windows 上运行的工作台，包含一键准备、出口信息和工作区网络路径](website/public/screenshots/0.15.6/dark/overview.png)
 
 | 项目工作区：选择项目、身份和工具 | 连接与代理：分别管理线路和落地 |
 | --- | --- |
-| [![Windows 项目工作区，展示目录选择、身份授权及 Claude Code、Codex 和 Chromium 入口](docs/images/0.13.2/2x/workspace.png)](docs/images/0.13.2/2x/workspace.png) | [![Windows 连接与代理页，展示 SOCKS5、HTTP、HTTPS 落地和前置线路设置](docs/images/0.13.2/2x/connection.png)](docs/images/0.13.2/2x/connection.png) |
+| [![Windows 项目工作区，展示目录选择、身份授权及 Claude Code、Codex 和 Chromium 入口](website/public/screenshots/0.15.6/dark/workspace.png)](website/public/screenshots/0.15.6/dark/workspace.png) | [![Windows 连接与代理页，展示 SOCKS5、HTTP、HTTPS 落地和前置线路设置](website/public/screenshots/0.15.6/dark/connection.png)](website/public/screenshots/0.15.6/dark/connection.png) |
 | 选择本地目录，应用身份和只读/读写权限；连接确认后，从同一页面打开 Claude Code、Codex、Linux 终端与工作区浏览器。 | 导入或添加节点，选择软件内双跳或本机 v2ray 兼容模式，配置线路服务器、落地和下载代理。 |
 
-截图为 **0.13.2 真实程序在 Windows 原生环境中的运行画面**，使用未配置账号与节点的临时数据，展示配置入口。点击图片可查看原图；[截图来源与复现](docs/screenshots/README.md)记录了源码版本、Windows CI 和文件校验信息。
+截图为 **0.15.6 真实程序在 Windows 原生环境中的运行画面**，使用未配置账号与节点的临时数据，展示配置入口。点击图片可查看原图；[截图来源与复现](docs/screenshots/README.md)记录了源码版本、Windows CI 和文件校验信息。
 
 **智能终端：在 Codex 原来的输入区编辑文字、粘贴图片和文件。**
 
