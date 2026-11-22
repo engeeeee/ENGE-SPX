@@ -385,39 +385,40 @@ class Window(QMainWindow):
         self.project_box = entry(self.c.project, "选择一个具体项目文件夹")
         row.addWidget(self.project_box, 1)
         row.addWidget(self.action("选择文件夹", self.choose_project))
-        projects = self.c.store.settings()["projects"]
-        if projects:
-            recent = Combo()
-            recent.addItem("最近使用的项目", "")
-            for item in reversed(projects):
-                recent.addItem(item, item)
-            recent.currentIndexChanged.connect(lambda index: self.c.project.set(recent.itemData(index)) if index > 0 else None)
-            panel.layout.addWidget(recent)
-        panel = page.panel("工作区身份与目录权限", "新身份从空白账号和浏览器资料开始。应用会先停止当前环境，需要重新检查并确认连接。")
+        recent = self.workspace_recent_box = Combo()
+        recent.currentIndexChanged.connect(lambda index: self.c.project.set(recent.itemData(index)) if index > 0 else None)
+        panel.layout.addWidget(recent)
+        panel = page.panel("切换工作区", "每个工作区使用独立的工具账号、浏览器资料和容器。切换后重新核对连接。")
         row = panel.row()
         responsive_rows.append(row)
         self.workspace_profile_box = Combo()
         self.workspace_profile_box.setSizeAdjustPolicy(Combo.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.workspace_profile_box.setMinimumContentsLength(12)
         row.addWidget(self.workspace_profile_box, 1)
-        row.addWidget(self.action("新建身份", self.new_workspace_profile))
+        row.addWidget(self.action("切换到所选工作区", self.c.switch_workspace, True))
+        row.addWidget(self.action("新建隔离工作区", self.new_workspace_profile))
         self.refresh_workspace_profiles()
         self.workspace_profile_box.currentIndexChanged.connect(lambda index: self.c.workspace_profile.set(self.workspace_profile_box.itemData(index)) if index >= 0 else None)
         self.c.workspace_profile.changed.connect(lambda unused: self.sync_workspace_profile())
         row = panel.row()
         responsive_rows.append(row)
         row.addWidget(combo(self.c.workspace_access, [("只读项目", "ro"), ("读写项目", "rw")]), 1)
-        self.workspace_apply_button = self.action("应用身份与授权", self.c.apply_workspace, True)
+        self.workspace_apply_button = self.action("应用项目与权限", self.c.apply_workspace, True)
         row.addWidget(self.workspace_apply_button)
         row.addWidget(self.action("恢复上次", lambda: self.c.apply_workspace(restore=True), ghost=True))
         panel.layout.addWidget(bind_text(label(kind="Muted", wrap=True), self.c.workspace_status))
-        panel.layout.addWidget(label("只读限制项目文件，登录与临时数据仍可保存。切换项目不会自动复制账号；原共享身份保持兼容。", "Caption", True))
+        panel.layout.addWidget(label("只读项目允许读取项目文件。若要隔离项目文件，请为新工作区选择单独的目录。", "Caption", True))
+        panel.layout.addWidget(self.action("启动并检查连接", self.c.prepare, ghost=True), alignment=Qt.AlignmentFlag.AlignLeft)
         panel = page.panel("打开你的工具", "使用已应用的身份与目录权限，账号和授权会话按身份保留。")
         row = panel.row()
         responsive_rows.append(row)
         for title, tool in (("Claude Code", "claude"), ("Codex", "codex"), ("Linux 终端", "shell")):
             row.addWidget(self.action(title + "  ↗", lambda command=tool: self.open_tool(command), tool == "claude", ready=True))
         row.addStretch()
+        row = panel.row()
+        responsive_rows.append(row)
+        row.addWidget(self.action("Antigravity CLI ↗", lambda: self.open_tool("antigravity"), ready=True))
+        row.addWidget(label("首次打开通过工作区代理下载约 100 MB，登录使用当前工作区浏览器。", "Caption", True), 1)
         self.terminal_hint = label("", "Muted", True)
         panel.layout.addWidget(self.terminal_hint)
         self.c.terminal_kind.changed.connect(lambda unused: self.update_terminal_hint())
@@ -451,6 +452,15 @@ class Window(QMainWindow):
     def refresh_workspace_profiles(self):
         if not hasattr(self, "workspace_profile_box"):
             return
+        from ..workspace_profiles import recent_projects
+        recent = self.workspace_recent_box
+        recent.blockSignals(True)
+        recent.clear()
+        recent.addItem('当前工作区最近使用的项目', '')
+        for path in reversed(recent_projects(self.c.workspace_config, self.c.store.settings()['projects'])):
+            recent.addItem(path, path)
+        recent.setVisible(recent.count() > 1)
+        recent.blockSignals(False)
         box = self.workspace_profile_box
         box.blockSignals(True)
         box.clear()
@@ -470,8 +480,8 @@ class Window(QMainWindow):
             box.blockSignals(False)
 
     def new_workspace_profile(self):
-        dialog = Dialog(self, "新建空白身份")
-        dialog.body.addWidget(label("新身份不会复制旧账号、Cookie 或浏览器资料。创建后仍需应用到项目并重新登录。", "Muted", True))
+        dialog = Dialog(self, "新建隔离工作区")
+        dialog.body.addWidget(label("新的工作区使用空白工具账号、浏览器和容器资料。切换后选择项目目录与权限。", "Muted", True))
         name = QLineEdit()
         name.setMaxLength(64)
         name.setPlaceholderText("例如：个人项目、独立测试")
@@ -482,7 +492,11 @@ class Window(QMainWindow):
         def create():
             if self.c.create_workspace(name.text()):
                 dialog.accept()
-        row.addWidget(button("创建空白身份", create, True))
+        def create_and_switch():
+            if self.c.create_workspace(name.text(), activate=True):
+                dialog.accept()
+        row.addWidget(button("仅创建", create, ghost=True))
+        row.addWidget(button("创建并切换", create_and_switch, True))
         dialog.body.addLayout(row)
         dialog.exec()
 

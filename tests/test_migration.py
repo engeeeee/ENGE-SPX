@@ -132,7 +132,7 @@ class MigrationTests(unittest.TestCase):
                 engine.take_over_legacy_guard = Mock()
                 engine.setup = Mock(return_value=state)
                 engine.ensure_forward = Mock()
-                engine.wait_line_listener = Mock()
+                engine.wait_proxy_listeners = Mock()
                 engine.policy = Mock(return_value="policy")
                 engine.probe_chain = Mock(return_value={"ip": "203.0.113.1", "direct_blocked": True, "timezone": "America/Los_Angeles"})
                 engine.set_lease = Mock()
@@ -217,6 +217,16 @@ class MigrationTests(unittest.TestCase):
             engine.ensure_forward(state)
         self.assertEqual(engine.docker.run.call_count, 2)
         self.assertEqual(engine.docker.run.call_args.args[:2], ("exec", state["gateway"]))
+
+    def test_forward_heartbeat_survives_derived_policy_but_not_a_route_switch(self):
+        from enge_spx.forward import binding, current_heartbeat
+        state = {'gateway': 'same-container', 'policy': 'before-geo', 'config_hash': 'route-a',
+                 'forward_id': 'check-a', 'forward_target': {'host': '127.0.0.1', 'port': 7890}}
+        heartbeat = {**binding(state), 'heartbeat': time.time()}
+        self.assertTrue(current_heartbeat({**state, 'policy': 'after-geo'}, heartbeat, 5))
+        self.assertFalse(current_heartbeat({**state, 'forward_id': 'check-b'}, heartbeat, 5))
+        self.assertFalse(current_heartbeat({**state, 'config_hash': 'route-b'}, heartbeat, 5))
+        self.assertFalse(current_heartbeat({**state, 'forward_target': {'host': '127.0.0.1', 'port': 1080}}, heartbeat, 5))
 
 
 if __name__ == "__main__":

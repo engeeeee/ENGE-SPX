@@ -138,7 +138,7 @@ class MonitorReliabilityTests(unittest.TestCase):
         engine.setup = Mock(side_effect=migrate_and_setup)
         engine.policy = Mock(return_value="policy")
         engine.ensure_forward = Mock()
-        engine.wait_line_listener = Mock()
+        engine.wait_proxy_listeners = Mock()
         engine.audit_topology = Mock()
         engine.probe_chain = Mock(return_value={"ip": "8.8.8.8", "timezone": "America/Los_Angeles"})
         engine.start_guard = Mock()

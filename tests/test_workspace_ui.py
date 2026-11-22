@@ -129,13 +129,34 @@ class WorkspaceUITests(unittest.TestCase):
         def submit():
             dialog = self.app.activeModalWidget()
             dialog.findChild(QLineEdit).setText("从窗口创建")
-            next(item for item in dialog.findChildren(QPushButton) if item.text() == "创建空白身份").click()
+            next(item for item in dialog.findChildren(QPushButton) if item.text() == "仅创建").click()
         QTimer.singleShot(30, submit)
         self.window.new_workspace_profile()
         self.wait()
         self.assertIn("从窗口创建", self.controller.workspace_config["profiles"].values())
         self.assertEqual(self.store.read(FILE)["selected"], "shared")
         self.assertFalse(self.controller.workspace_selection_matches())
+
+    def test_create_and_switch_clears_other_projects_and_switch_back_restores_grant(self):
+        c = self.controller
+        engine = Engine(self.store)
+        engine.configure_workspace('shared', str(self.project), 'rw')
+        engine.remember_project(self.project.resolve())
+        self.assertTrue(c.create_workspace('空白工作区', activate=True))
+        self.wait()
+        new = self.store.read(FILE)['selected']
+        self.assertNotEqual(new, 'shared')
+        self.assertEqual(c.project.get(), '')
+        self.assertEqual(self.window.workspace_recent_box.count(), 1)
+        self.assertFalse(c.workspace_selection_matches())
+        c.project.set(str(self.project))
+        self.assertEqual(c.workspace_profile.get(), new)
+        self.assertFalse(c.workspace_selection_matches(), 'An old project does not apply an old identity')
+        c.workspace_profile.set('shared')
+        self.assertTrue(c.switch_workspace())
+        self.wait()
+        self.assertEqual(c.project.get(), str(self.project.resolve()))
+        self.assertTrue(c.workspace_selection_matches())
 
     def test_network_page_is_lazy_readonly_and_exports_the_observed_report(self):
         c = self.controller

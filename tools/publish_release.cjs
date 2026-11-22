@@ -58,7 +58,9 @@ module.exports = async ({github, context, core}) => {
       ? fs.readFileSync(path.join('docs', 'releases', `${version}.zh-CN.md`), 'utf8').trim()
       : `本版本改动见 [CHANGELOG](https://github.com/${owner}/${repo}/blob/${tag}/CHANGELOG.md)。`,
     '',
-    process.env.SPX_UI_HOTFIX === 'true'
+    process.env.SPX_WORKSPACE_UPDATE === 'true'
+      ? '本次检查验证了切换 SOCKS5 后的线路与落地出口核验、Antigravity 在工作区内安装、资料隔离，以及 Windows 终端材质和程序包。基础镜像沿用 0.15.2，归档 SHA-256 保持一致。'
+      : process.env.SPX_UI_HOTFIX === 'true'
       ? '本次为界面热修复：验证时区下拉框及检查→确认的实际界面流程，完成安装包基础检查。核心、依赖及Docker资源源码未变，运行环境归档逐字节复用0.15.0的已验证资产并核验SHA-256；不重复Docker、协议或性能矩阵。已有账号、代理与项目数据保留。'
       : process.env.SPX_CLIENT_RELEASE === 'true'
       ? '本次客户端快速发布保留同一 CI 的 Linux 单元、Windows 重点回归、多档 Qt 布局、冻结更新／安装卸载、真实工作区／短时 guard／过期停机、中文 PTY、双跳故障和两种镜像存储导入验证。未改变的跨租期长时续期、完整协议矩阵和资源基准沿用0.14.6证据；生产监测不变。Windows 界面和更新结果见本次 CI Artifact。用户真实 Docker Desktop／WSL、v2ray、自定义终端和显示器仍需实机体验。Qt／PySide6／Shiboken6许可及来源随包提供。'

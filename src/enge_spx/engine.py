@@ -33,7 +33,8 @@ RECIPE = "io.enge.spx.recipe"
 GATEWAY_IMAGE = DEFAULT_BACKEND.image
 RESOURCES = CONTAINERS
 HIDDEN = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
-TOOLS = {"claude": ["claude"], "codex": ["codex"], "shell": ["bash", "-l"], "login-claude": ["claude", "auth", "login"], "login-codex": ["codex", "login"]}
+TOOLS = {"claude": ["claude"], "codex": ["codex"], "antigravity": ["agy"], "shell": ["bash", "-l"],
+         "login-claude": ["claude", "auth", "login"], "login-codex": ["codex", "login"]}
 
 
 def image_recipe(image):
@@ -470,9 +471,10 @@ class Engine:
     def ensure_forward(self, state):
         if not state.get("forward_target"):
             return
+        from .forward import current_heartbeat
         for attempt in range(40):
             current = self.store.read("forward.json", {})
-            if current.get("gateway") == state["gateway"] and current.get("policy") == state["policy"] and time.time() - current.get("heartbeat", 0) < 5:
+            if current_heartbeat(state, current, 5):
                 try:
                     # The host heartbeat can precede Docker exec and the guest
                     # listener. Check the actual endpoint instead of sleeping.
@@ -510,16 +512,27 @@ class Engine:
         except (SPXError, ValueError, KeyError, TypeError) as error:
             raise LineSecurityError("前置线路出口检查失败，已拒绝继续连接落地。请检查线路，不会改走直连。") from error
 
-    def wait_line_listener(self, state):
-        if not state.get("line_proxy"):
-            return
-        for _ in range(40):
-            try:
-                self.docker.run("exec", state["gateway"], "python3", "-c", "import socket; socket.create_connection(('127.0.0.1',2082),.3).close()", timeout=3)
-                return
-            except SPXError:
-                time.sleep(.1)
-        raise LineSecurityError("前置线路检查入口未能启动，请检查网关日志和节点配置。")
+    def wait_proxy_listeners(self, state):
+        from urllib.parse import urlsplit
+        proxy = urlsplit(state["proxy"])
+        # Configuration delivery starts sing-box asynchronously. Wait from the
+        # actual session namespace before firing the first outbound probe.
+        code = ("import socket,sys,time\n"
+                "deadline=time.monotonic()+5\n"
+                "while True:\n"
+                " try:\n"
+                "  socket.create_connection((sys.argv[1],int(sys.argv[2])),.3).close();break\n"
+                " except OSError:\n"
+                "  if time.monotonic()>=deadline:raise\n"
+                "  time.sleep(.1)\n")
+        try:
+            self.docker.run("exec", state["session"], "python3", "-I", "-c", code,
+                            proxy.hostname, str(proxy.port), timeout=8)
+            if state.get("line_proxy"):
+                self.docker.run("exec", state["gateway"], "python3", "-I", "-c", code,
+                                "127.0.0.1", "2082", timeout=8)
+        except SPXError as error:
+            raise LineSecurityError("代理网关未能就绪，连接已停止。请检查当前线路和落地设置。") from error
 
     def probe_chain(self, state, detailed=True, timings=None):
         def measured(scope, action):
@@ -556,9 +569,11 @@ class Engine:
                 # before either an old or a new guard can observe a new policy.
                 self.take_over_legacy_guard()
                 state.update({"phase": "checking", "policy": self.policy()})
+                if state.get("forward_target"):
+                    state["forward_id"] = secrets.token_hex(16)
                 self.store.write("runtime.json", state)
                 self.ensure_forward(state)
-                self.wait_line_listener(state)
+                self.wait_proxy_listeners(state)
                 self.log("通过所选节点核对两个出口来源，并检查容器直连是否被阻断…")
                 evidence = self.probe_chain(state)
                 from .exit_timezone import apply_verified_exit
@@ -609,8 +624,9 @@ class Engine:
         if fingerprint(config) != state["config_hash"] or self.policy() != state["policy"]:
             raise SPXError("节点或运行配置已改变，请重新检查。")
         if state.get("forward_target"):
+            from .forward import current_heartbeat
             forward = self.store.read("forward.json", {})
-            if forward.get("gateway") != state["gateway"] or forward.get("policy") != state["policy"] or time.time() - forward.get("heartbeat", 0) > 12:
+            if not current_heartbeat(state, forward, 12):
                 raise SPXError("本机线路中转已断开，请重新检查连接。")
         from .workspace_profiles import FILE, MARKER, load, validate_mounts
         workspace = load(self.store)
@@ -850,7 +866,7 @@ class Engine:
         self.store.write(FILE, config)
         return config
 
-    def create_workspace_profile(self, name):
+    def create_workspace_profile(self, name, *, activate=False):
         from .workspace_profiles import display_name, validate
         name = display_name(name)
         with self.store.lock(timeout=45):
@@ -862,6 +878,8 @@ class Engine:
             while identity in config["profiles"]:
                 identity = secrets.token_hex(6)
             config["profiles"][identity] = name
+            if activate:
+                config["selected"] = identity
             config = validate(config)
             self._save_workspace_locked(config, previous)
             return {"profile": identity, "config": config}
@@ -880,6 +898,22 @@ class Engine:
             if key:
                 config["projects"][key] = {"profile": identity, "access": access}
             return self._save_workspace_locked(validate(config), previous)
+
+    def remember_project(self, directory):
+        settings = self.store.settings()
+        path = str(directory)
+        projects = [item for item in settings['projects'] if item != path] + [path]
+        if projects != settings['projects']:
+            self.store.write('settings.json', {**settings, 'projects': projects})
+
+    def recent_workspace_project(self, config):
+        from .workspace_profiles import project_plan
+        for path in reversed(self.store.settings()['projects'][-40:]):
+            try:
+                return str(project_plan(self, path, config)['directory'])
+            except (SPXError, OSError):
+                continue
+        return ''
 
     def restore_workspace_profiles(self):
         from .workspace_profiles import FILE, MARKER, PREVIOUS, validate, check_files
@@ -1124,11 +1158,7 @@ class Engine:
         except SPXError:
             self._stop("项目身份、目录或权限核验失败，工作区已停止。")
             raise
-        settings = self.store.settings()
-        projects = list(dict.fromkeys([*settings["projects"], str(directory)]))
-        if projects != settings["projects"]:
-            settings["projects"] = projects
-            self.store.write("settings.json", settings)
+        self.remember_project(directory)
         return obj, key
 
     def tool_command(self, path, command, interactive=True, browser=None):
@@ -1164,10 +1194,11 @@ class Engine:
         config = self.store.settings()["terminal"]
         # Explicit external preferences, login windows and Linux shells keep
         # their original display host. Auto AI sessions use the owned input UI.
-        if config.get("kind", "auto") == "auto" and tool in ("claude", "codex"):
+        if config.get("kind", "auto") == "auto" and tool in ("claude", "codex", "antigravity"):
             config = {"kind": "smart"}
         resolve(config)
-        _, url = self._tool_session(path, TOOLS[tool], browser=True if tool.startswith("login-") else None, expected_workspace=expected_workspace)
+        browser = True if tool.startswith('login-') or tool == 'antigravity' else None
+        _, url = self._tool_session(path, TOOLS[tool], browser=browser, expected_workspace=expected_workspace)
         directory, _ = self.store.project(path)
         command = [*console_entry(), "--data", str(self.store.home), "--project", str(directory), "attach", tool, "--session", self.prepared_session, "--container", self.prepared_container]
         # The terminal gets a public CLI invocation, never the token environment.

@@ -13,6 +13,7 @@ import subprocess
 import tempfile
 import threading
 import time
+from unittest.mock import patch
 
 from enge_spx.engine import Engine, GATEWAY_IMAGE
 from enge_spx.nodes import uri_node, normalize
@@ -21,14 +22,25 @@ from enge_spx.line_security import LINE_CHECK_CODE
 from enge_spx.state import Store, SPXError, atomic_json
 
 
-def run(context):
+def run(context, runtime_manifest=None):
     with tempfile.TemporaryDirectory(prefix="spx-chain-") as directory:
         root = Path(directory)
         store = Store(root / "private")
         store.write("settings.json", {**store.settings(), "context": context, "timezone_mode": "manual"})
         engine = Engine(store, lambda text: None)
         engine.start_guard = lambda: None  # Check line loss deterministically below.
-        engine.install()
+        if runtime_manifest:
+            meta = json.loads(runtime_manifest.read_text())
+            resolved = {}
+            for role, identifier in meta['images'].items():
+                loaded = engine.docker.inspect('image', identifier) or engine.docker.inspect('image', meta['image_configs'][role])
+                assert engine.compatible_image(loaded, role), role
+                resolved[role] = loaded['Id']
+            store.write('images.json', resolved)
+            fixture_image = ['--entrypoint', '/usr/local/bin/sing-box', resolved['gateway']]
+        else:
+            engine.install()
+            fixture_image = [GATEWAY_IMAGE]
         engine.networks()
         name = engine.prefix + "-fixture"
         line_name = engine.prefix + "-encrypted-line"
@@ -37,7 +49,7 @@ def run(context):
         node_dir.mkdir()
         config = {"log": {"level": "error"}, "dns": {"servers": [{"type": "local", "tag": "local"}]}, "inbounds": [{"type": "mixed", "listen": "0.0.0.0", "listen_port": 8443, "users": [{"username": username, "password": password}]}], "outbounds": [{"type": "direct", "tag": "direct"}], "route": {"final": "direct", "default_domain_resolver": "local"}}
         atomic_json(node_dir / "config.json", config)
-        engine.docker.run("run", "-d", "--name", name, "--network", engine.external, "--mount", f"type=bind,source={node_dir},target=/config,readonly", GATEWAY_IMAGE, "run", "-c", "/config/config.json")
+        engine.docker.run("run", "-d", "--name", name, "--network", engine.external, "--mount", f"type=bind,source={node_dir},target=/config,readonly", *fixture_image, "run", "-c", "/config/config.json")
         ip = engine.docker.inspect("container", name)["NetworkSettings"]["Networks"][engine.external]["IPAddress"]
         line_password = secrets.token_hex(12)
         seen = []
@@ -75,23 +87,59 @@ def run(context):
         server.daemon_threads = True
         threading.Thread(target=server.serve_forever, daemon=True).start()
         try:
-            # Exercise both landing forms over the same local HTTP line proxy.
-            for scheme in ("socks5", "http"):
+            # Reproduce a first switch between two SOCKS5 settings with a
+            # derived policy change. Exit and direct-blocking probes are real;
+            # deterministic zones stand in for different landing geographies.
+            for scheme, host, zone in (("socks5", 'landing.spx.invalid', 'Asia/Tokyo'),
+                                       ('socks5', ip, 'Europe/London'),
+                                       ('http', 'landing.spx.invalid', 'America/Los_Angeles')):
                 # Only the proxy knows this name; host DNS must not resolve it.
-                node = uri_node(f"{scheme}://{username}:{password}@landing.spx.invalid:8443")
+                node = uri_node(f"{scheme}://{username}:{password}@{host}:8443")
                 engine.save_nodes([node])
                 middle = relay_config(True, f"http://line:{line_password}@127.0.0.1:{server.server_port}")
-                engine.save_settings(node["id"], store.settings()["timezone"], context, middle)
-                evidence = engine.check()
-                assert evidence["direct_blocked"]
-                assert evidence["line_ip"] and evidence["line_mode"] == "local"
-                engine.confirm()
+                engine.save_settings(node["id"], store.settings()["timezone"], context, middle, timezone_mode='exit')
+                probe = engine.probe
+                with patch.object(engine, 'probe', side_effect=lambda state, detailed=True: {**probe(state, detailed=False), 'timezone': zone}):
+                    evidence = engine.check()
+                    assert evidence["direct_blocked"]
+                    assert evidence["line_ip"] and evidence["line_mode"] == "local"
+                    engine.confirm()
+                assert store.settings()['timezone'] == zone
                 assert seen, "The line proxy did not carry landing connections"
                 print("PASS loopback HTTP line -> authenticated " + scheme.upper() + " landing -> verified exit", flush=True)
+            if runtime_manifest:
+                project = root / 'project-before-switch'
+                project.mkdir(mode=0o777)
+                # Real deployment of the vendor binary with no signed-in account.
+                command = engine.tool_command(str(project), ['agy', '--version'], interactive=False, browser=False)
+                result = subprocess.run(command, env=engine.docker.environment(), text=True, capture_output=True, timeout=270)
+                assert result.returncode == 0, (result.stdout + result.stderr)[-1000:]
+                assert 'SHA-512' in result.stdout and any(line[:1].isdigit() for line in result.stdout.splitlines()), result.stdout
+                again = subprocess.run(command, env=engine.docker.environment(), text=True, capture_output=True, timeout=20)
+                assert again.returncode == 0 and 'SHA-512' not in again.stdout
+                prior = engine.prepared_container
+                engine.docker.run('exec', prior, 'python3', '-c', "from pathlib import Path;Path('/home/workspace/.spx-profile-proof').write_text('old account')")
+                proof = engine.create_workspace_profile('Clean workspace', activate=True)
+                identity = proof['profile']
+                assert proof['config']['selected'] == identity and engine.recent_workspace_project(proof['config']) == ''
+                assert not engine.docker.inspect('container', prior)['State']['Running']
+                new_project = root / 'project-after-switch'
+                new_project.mkdir()
+                engine.configure_workspace(identity, str(new_project), 'ro')
+                engine.save_settings(node['id'], store.settings()['timezone'], context, middle, timezone_mode='manual')
+                engine.check()
+                engine.confirm()
+                command = engine.tool_command(str(new_project), ['python3', '-c',
+                    "from pathlib import Path;assert not Path('/home/workspace/.spx-profile-proof').exists();assert not Path('/home/workspace/.local/bin/agy').exists()"], interactive=False, browser=False)
+                subprocess.run(command, env=engine.docker.environment(), check=True, timeout=30)
+                assert engine.prepared_container != prior
+                restored = engine.configure_workspace('shared')
+                assert engine.recent_workspace_project(restored) == str(project)
+                print('PASS actual Antigravity install/reuse through the verified proxy and clean workspace switch', flush=True)
             # A bad line pin must stop before any request reaches the landing,
             # even though the landing itself is still available.
             wrong_ip = "1.1.1.1" if evidence["line_ip"] != "1.1.1.1" else "8.8.8.8"
-            engine.save_settings(node["id"], store.settings()["timezone"], context, {**middle, "expected_ip": wrong_ip})
+            engine.save_settings(node["id"], store.settings()["timezone"], context, {**middle, "expected_ip": wrong_ip}, timezone_mode='manual')
             before = len(seen)
             try:
                 engine.check()
@@ -135,7 +183,7 @@ def run(context):
             ss_password = secrets.token_hex(16)
             line_config = {"log": {"level": "error"}, "dns": {"servers": [{"type": "local", "tag": "local"}]}, "inbounds": [{"type": "shadowsocks", "listen": "0.0.0.0", "listen_port": 8444, "method": "aes-128-gcm", "password": ss_password}], "outbounds": [{"type": "direct", "tag": "fixture-direct"}], "route": {"final": "fixture-direct", "default_domain_resolver": "local"}}
             atomic_json(line_dir / "config.json", line_config)
-            engine.docker.run("run", "-d", "--name", line_name, "--network", "name=" + engine.external + ",gw-priority=1", "--add-host", "landing.spx.invalid:" + ip, "--mount", f"type=bind,source={line_dir},target=/config,readonly", GATEWAY_IMAGE, "run", "-c", "/config/config.json")
+            engine.docker.run("run", "-d", "--name", line_name, "--network", "name=" + engine.external + ",gw-priority=1", "--add-host", "landing.spx.invalid:" + ip, "--mount", f"type=bind,source={line_dir},target=/config,readonly", *fixture_image, "run", "-c", "/config/config.json")
             # Docker releases stopped endpoints' dynamic IPAM leases. Keep the
             # fixture away from the gateway/session addresses reserved by SPX.
             fixture_ip = str(ipaddress.ip_address(engine.networks()[0]) + 8)
@@ -255,4 +303,6 @@ def run(context):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--context", default="default")
-    run(parser.parse_args().context)
+    parser.add_argument('--runtime-manifest', type=Path, help='Use the digest-verified runtime already loaded by CI')
+    args = parser.parse_args()
+    run(args.context, args.runtime_manifest)

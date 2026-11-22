@@ -30,6 +30,39 @@ from .terminal_render import BACKGROUND, FOREGROUND, PALETTE, TerminalChar, Term
 from .terminal_paint import RowPainter
 
 
+def codex_composer_band(rows, cursor, columns, blank):
+    """Find the live, full-width Codex input surface by its prompt and cursor."""
+    y = cursor[1]
+    if columns < 4 or not 0 <= y < len(rows):
+        return None
+
+    def cell(row, column):
+        line = rows[row]
+        return line.get(column, blank) if hasattr(line, 'get') else line[column] if column < len(line) else blank
+
+    shade = cell(y, columns - 1).bg
+    if shade == 'default':
+        return None
+
+    def same_band(row):
+        return all(cell(row, x).bg == shade for x in (0, columns - 1))
+
+    if not same_band(y):
+        return None
+    start = end = y
+    while start and same_band(start - 1):
+        start -= 1
+    while end + 1 < len(rows) and same_band(end + 1):
+        end += 1
+    # Prompt can follow a blank padding row. Stop at the first visible cell
+    # so a preceding output panel with the same color cannot be included.
+    for row in range(start, y + 1):
+        first = next((cell(row, x).data for x in range(columns) if cell(row, x).data.strip()), '')
+        if first:
+            return (start, end, shade) if first in ('›', '❯') else None
+    return None
+
+
 class TerminalScreen(pyte.HistoryScreen):
     TEXT_RUNS = re.compile(r'[ -~]+|[^ -~]+')
 
@@ -394,6 +427,7 @@ class TerminalView(QWidget):
         self.sender = OrderedInput(pty, transfer, self.status.emit, self.ready, self.images)
         self.screen = TerminalScreen(110, 32, self.sender.respond)
         self.completed_frame = None
+        self.painted_composer = None
         self.completed_generation = self.presented_generation = 0
         self.stream = TerminalStream(self.screen, self._capture_frame)
         self.decoder = codecs.getincrementaldecoder("utf-8")("replace")
@@ -781,6 +815,16 @@ class TerminalView(QWidget):
         first = self.selection_start()
         blank = self.presented_blank if stable else self.screen.default_char
         rows = stable if stable else self.completed_frame[0] if completed else self.rows()
+        composer = None
+        if not stable:
+            if self.tool == 'codex' and not self.offset and self.selection_lines is None and self.screen.bracketed:
+                cursor = self.completed_frame[1] if completed else (self.screen.cursor.x, self.screen.cursor.y)
+                composer = codex_composer_band(rows, cursor, self.screen.columns, blank)
+            if composer != self.painted_composer:
+                for band in (self.painted_composer, composer):
+                    if band:
+                        dirty.update(range(band[0], band[1] + 1))
+                self.painted_composer = composer
         for y in range(self.screen.lines):
             if y not in dirty:
                 continue
@@ -797,6 +841,9 @@ class TerminalView(QWidget):
             else:
                 line = rows[y] if y < len(rows) else {}
                 cells = tuple(line.get(x, blank) for x in range(self.screen.columns))
+            if composer and composer[0] <= y <= composer[1]:
+                shade = composer[2]
+                cells = tuple(char._replace(bg='default') if char.bg == shade and not char.reverse else char for char in cells)
             record = cells, span
             if not complete and y < len(self.surface_rows) and self.surface_rows[y] == record:
                 continue
@@ -1288,7 +1335,7 @@ class TerminalWindow(QMainWindow):
         self.interaction_guard.timeout.connect(self.recover_interaction)
         self.effect_key = self.chrome_key = None
         self._frame_configured = False
-        self.translucent_surface = os.name == "nt" and self.preferences.value["appearance"] == "acrylic"
+        self.translucent_surface = os.name == "nt" and self.preferences.value["appearance"] != "solid"
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, self.translucent_surface)
         self.setWindowTitle("ENGE SPX · " + tool + " · 智能粘贴终端")
         self.setObjectName("SmartTerminal")
@@ -1347,7 +1394,7 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: trans
         header = QHBoxLayout(session)
         header.setContentsMargins(16, 8, 8, 8)
         header.setSpacing(12)
-        badge = QLabel({"codex": "Codex", "claude": "Claude Code", "shell": "Linux 终端"}.get(tool, tool))
+        badge = QLabel({"codex": "Codex", "claude": "Claude Code", "antigravity": "Antigravity", "shell": "Linux 终端"}.get(tool, tool))
         badge.setObjectName("ToolBadge")
         badge.setTextFormat(Qt.TextFormat.PlainText)
         header.addWidget(badge)
@@ -1410,16 +1457,17 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: trans
             self.message.setText(self.preferences.load_error)
 
     def apply_preferences(self, values):
-        from .terminal_preferences import TINTS
-        from .window_effects import apply_acrylic
+        from .terminal_preferences import MATERIALS, TINTS
+        from .window_effects import GLASS_BACKENDS, apply_backdrop
         color = QColor(TINTS[values["tint"]])
-        requested = values["appearance"] == "acrylic"
-        enabled = requested and not self.interaction_active
-        effect_key = enabled, color.name()
+        material = values['appearance']
+        effect_key = material, color.name()
         if effect_key != self.effect_key:
-            self.backdrop_backend = apply_acrylic(self, color, enabled) if self.translucent_surface else "solid"
+            self.backdrop_backend = apply_backdrop(self, color, material) if self.translucent_surface else "solid"
             self.effect_key = effect_key
-        glass = enabled and self.translucent_surface and self.backdrop_backend in ("system-acrylic", "accent-acrylic")
+            if self.interaction_active:
+                self.sync_move_effect()
+        glass = self.translucent_surface and self.backdrop_backend in GLASS_BACKENDS
         self.view.apply_display(values, glass)
         self.font_size.setText(str(values["font_size"]) + " pt  ·  UTF-8")
         base = "transparent" if glass else color.name()
@@ -1436,19 +1484,30 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: trans
                 sheet = sheet.replace('#4a4239', 'rgba(232, 227, 220, 45)').replace('#39352f', 'rgba(232, 227, 220, 24)')
             self.setStyleSheet(sheet)
             self.chrome_key = chrome_key
-        if requested and not self.translucent_surface:
-            self.message.setText("Acrylic 偏好已保存，下次打开终端生效；当前会话继续保留。")
-        elif requested and not glass and not self.interaction_active:
-            self.message.setText("当前系统未提供 Acrylic 或已关闭透明效果，使用纯色背景；偏好已保留。")
+        if material != 'solid' and not self.translucent_surface:
+            self.message.setText(MATERIALS[material] + "已保存，重新打开终端后应用。")
+        elif material != 'solid' and not glass:
+            self.message.setText("当前系统的透明效果不可用，终端使用纯色背景。")
+        elif material.startswith('mica') and self.backdrop_backend in ('accent-blur', 'transparent'):
+            self.message.setText("此 Windows 版本使用柔和模糊或透明底色显示所选材质。")
+
+    def sync_move_effect(self):
+        # DWM materials stay installed. Legacy Accent Acrylic can stall the
+        # native move loop, so switch its native filter while leaving Qt's
+        # translucent surface, alpha and text rasters as they were.
+        if self.backdrop_backend != 'accent-acrylic':
+            return
+        from .terminal_preferences import TINTS
+        from .window_effects import apply_backdrop
+        tint = QColor(TINTS[self.preferences.value['tint']])
+        apply_backdrop(self, tint, 'blur' if self.interaction_active else 'acrylic')
 
     def set_interaction_active(self, active):
         if os.name != 'nt' or self.interaction_active == active:
             return
         self.interaction_active = active
         self.interaction_guard.start() if active else self.interaction_guard.stop()
-        # Accent Acrylic on Windows 10 stalls in the system move/resize loop.
-        # Suspend composition before entering that loop, then restore once.
-        self.apply_preferences(self.preferences.value)
+        self.sync_move_effect()
 
     def recover_interaction(self):
         if self.interaction_active:
@@ -1509,9 +1568,10 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: trans
 
     def show_options(self, button):
         from PySide6.QtGui import QActionGroup
+        from .terminal_preferences import MATERIALS
         menu = self.view.create_context_menu()
         menu.addSeparator()
-        for title, key, choices in (("背景效果", "appearance", (("纯色", "solid"), ("Acrylic 毛玻璃（重新打开生效）", "acrylic"))),
+        for title, key, choices in (("背景效果", "appearance", tuple((label, value) for value, label in MATERIALS.items())),
                                     ("背景配色", "tint", (("暖灰", "clay"), ("紫晶", "purple"), ("石墨", "graphite")))):
             submenu = menu.addMenu(title)
             group = QActionGroup(submenu)

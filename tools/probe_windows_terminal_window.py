@@ -16,6 +16,7 @@ from unittest.mock import patch
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--legacy-accent', action='store_true')
+parser.add_argument('--material', choices=('acrylic', 'blur', 'mica', 'mica-alt'), default='acrylic')
 args = parser.parse_args()
 if os.name != 'nt':
     parser.error('requires a disposable Windows desktop')
@@ -65,7 +66,7 @@ real_build = sys.getwindowsversion().build
 context = patch('enge_spx.window_effects.sys.getwindowsversion', return_value=SimpleNamespace(build=19045)) if args.legacy_accent else __import__('contextlib').nullcontext()
 with tempfile.TemporaryDirectory(prefix='spx-owned-window-') as folder, context:
     store = Store(Path(folder) / 'data')
-    save(store, {'appearance': 'acrylic', 'tint': 'purple', 'opacity': 65})
+    save(store, {'appearance': args.material, 'tint': 'purple', 'opacity': 65})
     pty = FixturePTY()
     window = TerminalWindow(pty, 'codex', Path(folder), preferences_store=store)
     try:
@@ -75,6 +76,7 @@ with tempfile.TemporaryDirectory(prefix='spx-owned-window-') as folder, context:
         hwnd = wintypes.HWND(int(window.winId()))
         original_hwnd = int(window.winId())
         backend = window.backdrop_backend
+        alpha = window.view.background.alpha()
         def hit(point):
             bounds = wintypes.RECT()
             assert user.GetClientRect(hwnd, ctypes.byref(bounds))
@@ -90,7 +92,7 @@ with tempfile.TemporaryDirectory(prefix='spx-owned-window-') as folder, context:
         # Dispatch only messages to this fixture HWND. The test verifies state
         # transitions, not a physical mouse drag or Windows 10 visual quality.
         send(hwnd, 0x231)
-        assert window.interaction_active and window.view.background.alpha() == 255
+        assert window.interaction_active and window.view.background.alpha() == alpha
         durations = []
         for index in range(24):
             started = time.perf_counter()
@@ -98,6 +100,7 @@ with tempfile.TemporaryDirectory(prefix='spx-owned-window-') as folder, context:
             window.resize(880 + index % 5 * 8, 580 + index % 4 * 8)
             window.view.stream.feed(f'\x1b[?2026h\x1b[HMove/resize fixture {index:03d} 中文\x1b[?2026l')
             pump(.002)
+            assert window.view.background.alpha() == alpha
             durations.append((time.perf_counter() - started) * 1000)
         QTest.keyClicks(window.view, 'owned-input')
         pump()
@@ -111,7 +114,7 @@ with tempfile.TemporaryDirectory(prefix='spx-owned-window-') as folder, context:
         pump(.35)
         assert not window.interaction_active, 'Caption click left material suspended'
         assert window.backdrop_backend == backend, 'Caption click did not restore material'
-        assert window.preferences.value['appearance'] == 'acrylic'
+        assert window.preferences.value['appearance'] == args.material
         assert window.backdrop_backend == backend
         assert window.windowOpacity() == 1.0
         window.showMaximized()
@@ -139,10 +142,10 @@ with tempfile.TemporaryDirectory(prefix='spx-owned-window-') as folder, context:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         assert image.save(str(args.output.with_suffix('.png')))
         report = {'schema': 1, 'scope': 'Owned Windows HWND hit-testing, resize/maximize and move-loop messages; no physical mouse or visual acceptance',
-                  'windows_build': real_build, 'requested_legacy_accent_api': args.legacy_accent, 'backend': backend,
+                  'windows_build': real_build, 'requested_legacy_accent_api': args.legacy_accent, 'backend': backend, 'material': args.material,
                   'dpr': window.devicePixelRatioF(), 'caption_hit': True, 'buttons_remain_interactive': True,
                   'caption_alpha_and_window_pick': True,
-                  'resize_corners': True, 'maximized_client_visible': True, 'move_loop_suspends_effect': True,
+                  'resize_corners': True, 'maximized_client_visible': True, 'move_loop_preserves_background_alpha': True,
                   'same_hwnd_and_input': True, 'preferences_preserved': True, 'foreground_opacity': window.windowOpacity(),
                   'move_resize_dispatch_median_ms': round(statistics.median(durations), 3),
                   'move_resize_dispatch_p95_ms': round(sorted(durations)[int(len(durations)*.95)-1], 3),

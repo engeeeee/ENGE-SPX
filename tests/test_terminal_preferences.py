@@ -47,6 +47,31 @@ class TerminalPreferenceTests(unittest.TestCase):
         settings = read(Store(self.store.home))
         self.assertEqual((settings['font_size'], settings['opacity'], settings['tint'], settings['appearance']), (14, 70, 'purple', 'acrylic'))
 
+    def test_codex_live_composer_uses_terminal_background_and_preserves_history_fill(self):
+        from enge_spx.smart_terminal import TerminalView
+        view = TerminalView(FixturePTY(), tool='codex')
+        try:
+            view.resize(840, 520)
+            view._resize_grid()
+            columns = view.screen.columns
+            shade = '\x1b[48;2;55;53;51m'
+            def tinted(line, text):
+                return f'\x1b[{line};1H{shade}{text.ljust(columns)}\x1b[0m'
+            view.stream.feed('\x1b[?2004h' + tinted(3, '› sent message') + tinted(12, '› 中文草稿') + tinted(13, '  continued') + '\x1b[13;6H')
+            view._compose_surface()
+            self.assertEqual(view.painted_composer, (11, 12, '373533'))
+            self.assertEqual(view.surface_rows[11][0][0].bg, 'default')
+            self.assertEqual(view.surface_rows[12][0][0].bg, 'default')
+            self.assertEqual(view.surface_rows[2][0][0].bg, '373533')
+            self.assertEqual(view.screen.buffer[11][0].bg, '373533')
+            view.stream.feed('\x1b[?2004l\x1b[12;1Hrefreshed output')
+            view._compose_surface()
+            self.assertIsNone(view.painted_composer)
+            self.assertEqual(view.surface_rows[12][0][0].bg, '373533')
+        finally:
+            view.stop()
+            view.reader.join(2)
+
     def test_parallel_terminal_processes_merge_preferences_without_proxy_configuration(self):
         code = 'import sys,json;from pathlib import Path;from enge_spx.state import Store;from enge_spx.terminal_preferences import save;save(Store(Path(sys.argv[1])),json.loads(sys.argv[2]))'
         processes = [subprocess.Popen([sys.executable, '-c', code, str(self.store.home), json.dumps(patch)])

@@ -25,7 +25,7 @@ from ..line_security import LINE_MODES, v2ray_rules
 from ..nodes import fetch_subscription, normalize, parse_nodes
 from ..proxy import detect_system_proxy, download_proxy, protocol, proxy_url, relay_config, route_config
 from ..resource_limits import ROLES, preset as resource_preset, validate as validate_resources, validate_budget
-from ..workspace_profiles import load as load_workspace_profiles, display_name as workspace_display_name, SHARED
+from ..workspace_profiles import load as load_workspace_profiles, display_name as workspace_display_name, recent_projects, SHARED
 from ..startup import DOCKER_INSTALL_URL, StartupIssue, diagnostics, prepare_workspace
 from ..state import SPXError, Store, atomic_json, status_snapshot
 from ..storage import desktop_storage, plan_migration, prepare_docker_move, verify_docker_move
@@ -137,7 +137,7 @@ class Controller(QObject):
             "language_mode": settings.get("language_mode", "unchanged"),
             "auto_check_updates": self.update_preferences['auto_check'],
             "update_status": update_message, "update_progress": 0, "update_available": False,
-            "project": (settings["projects"] or [""])[-1], "relay_enabled": relay.get("enabled", False),
+            "project": (recent_projects(self.workspace_config, settings['projects']) or [''])[-1], "relay_enabled": relay.get("enabled", False),
             "relay_url": proxy_url(relay) or "", "relay_downloads": relay.get("downloads", True),
             "line_mode": relay.get("mode", "local" if relay.get("enabled") else "managed"),
             "line_server_ip": relay.get("server_ip", ""), "line_expected_ip": relay.get("expected_ip", ""),
@@ -217,9 +217,13 @@ class Controller(QObject):
     def load_workspace_project(self):
         if not self.workspace_config:
             return
+        identity = self.workspace_config['selected']
         binding = self.workspace_config["projects"].get(self.project_budget_key())
-        self.workspace_profile.set(binding["profile"] if binding else self.workspace_config["selected"])
-        self.workspace_access.set(binding["access"] if binding else "rw" if self.workspace_profile.get() == SHARED else "ro")
+        self.workspace_profile.set(identity)
+        if binding and binding['profile'] == identity:
+            self.workspace_access.set(binding['access'])
+        else:
+            self.workspace_access.set('rw' if not binding and identity == SHARED else 'ro')
         self.workspace_selection_changed()
 
     def workspace_selection_matches(self, require_project=True):
@@ -240,7 +244,7 @@ class Controller(QObject):
         selected = config["profiles"].get(self.workspace_profile.get(), "未选择")
         access = "只读" if self.workspace_access.get() == "ro" else "读写"
         if self.workspace_selection_matches():
-            self.workspace_status.set(f"当前身份：{current} · 项目{access}。浏览器、Claude Code 和 Codex 资料仅在同一身份内共享。")
+            self.workspace_status.set(f"当前工作区：{current} · 项目{access}。工具和浏览器资料按工作区保存。")
         else:
             self.workspace_status.set(f"当前运行身份：{current}。待应用：{selected} · 项目{access}；应用前不会启动所选身份的工具。")
 
@@ -250,18 +254,49 @@ class Controller(QObject):
         self.workspace_changed.emit()
         self.refresh()
 
-    def create_workspace(self, name):
+    def create_workspace(self, name, *, activate=False):
+        if self.busy or (activate and not self.consent_workspace_switch()):
+            return False
         try:
             name = workspace_display_name(name)
         except SPXError as error:
             self.notify("检查身份名称", error)
             return False
         def done(result):
+            if activate:
+                self.workspace_config = result['config']
+                self.project.set('')
+                self.reload_workspaces(result['config'])
+                self.operation.set('已切换到空白工作区。请选择项目目录、应用权限，再检查连接。')
+                return
             self.reload_workspaces(result["config"])
             self.workspace_profile.set(result["profile"])
             self.workspace_access.set("ro")
             self.operation.set("空白身份已创建。选择项目和目录权限后点击“应用身份与授权”。")
-        return self.run(lambda engine: engine.create_workspace_profile(name), done, description="创建空白身份，保留已有账号资料…")
+        return self.run(lambda engine: engine.create_workspace_profile(name, activate=activate), done, description="正在创建隔离工作区…")
+
+    def consent_workspace_switch(self):
+        return status_snapshot(self.store)['phase'] not in ('checking', 'review', 'ready') or self.ask(
+            '切换工作区', '切换会停止当前工具和浏览器。请保存工作，再切换并重新核对连接。继续？')
+
+    def switch_workspace(self):
+        identity = self.workspace_profile.get()
+        if self.busy or not self.workspace_config or identity == self.workspace_config['selected']:
+            return False
+        if not self.consent_workspace_switch():
+            return False
+
+        def action(engine):
+            config = engine.configure_workspace(identity)
+            return config, engine.recent_workspace_project(config)
+
+        def done(result):
+            self.workspace_config = result[0]
+            self.project.set(result[1])
+            self.reload_workspaces(result[0])
+            self.operation.set('工作区已切换。请重新检查并确认连接。')
+
+        return self.run(action, done, description='停止当前环境并切换工作区…')
 
     def apply_workspace(self, restore=False):
         if self.busy or self.exit_mode is not None:
@@ -1076,7 +1111,7 @@ class Controller(QObject):
             return
         path = self.project.get().strip()
         if path:
-            title = {"claude": "Claude Code", "codex": "Codex", "shell": "Linux 终端", "login-claude": "Claude Code 登录", "login-codex": "Codex 登录"}.get(tool, tool)
+            title = {"claude": "Claude Code", "codex": "Codex", "antigravity": "Antigravity CLI", "shell": "Linux 终端", "login-claude": "Claude Code 登录", "login-codex": "Codex 登录"}.get(tool, tool)
             expected = (self.workspace_profile.get(), self.workspace_access.get())
             self.run(lambda engine: engine.terminal(path, tool, expected_workspace=expected), description=f"正在启动 {title}，后台检查进行中时会自动等待…")
         else:

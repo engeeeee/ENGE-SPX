@@ -1,5 +1,12 @@
 # Changes
 
+## 0.15.3 workspace switching, Antigravity and terminal materials — 2026-11-22
+
+- Wait for the gateway listeners before checking a new route. Bind the loopback forwarder to the current connection, so derived timezone and language updates do not invalidate its heartbeat.
+- Add Google Antigravity CLI to the workspace. Download the official Linux release on demand through the verified proxy, check its SHA-512, and install it in the selected profile's home.
+- Create and switch to a clean workspace directly. Restore authorized recent projects when switching back, and separate the visible project history by active identity.
+- Add soft blur, Mica and Mica Alt. Preserve the translucent terminal surface during moves. Use the terminal background for the live Codex composer and preserve submitted message styling.
+
 ## 0.15.2 line selection and opt-in regional language — 2026-11-14
 
 - Label the landing as the final exit and the encrypted line as the first hop.

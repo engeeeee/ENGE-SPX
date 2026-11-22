@@ -54,36 +54,33 @@ def fetch(url, maximum, api=False):
     return body
 
 
-def main(destination):
-    check_scope()
-    sys.path.insert(0, str(ROOT / 'src'))
-    from enge_spx import __version__
-    assert __version__ == '0.15.1', 'This reuse gate is limited to the reviewed 0.15.1 hotfix'
-    release = json.loads(fetch('https://api.github.com/repos/engeeeee/ENGE-SPX/releases/tags/v0.15.0-windows', 256 * 1024, True))
-    assert not release['draft'] and not release['prerelease'] and release['target_commitish'] == BASE
+def copy_runtime(destination, previous, previous_commit, version, recipes):
+    tag = 'v' + previous + '-windows'
+    release = json.loads(fetch('https://api.github.com/repos/engeeeee/ENGE-SPX/releases/tags/' + tag, 256 * 1024, True))
+    assert not release['draft'] and not release['prerelease'] and release['target_commitish'] == previous_commit
     assets = {item['name']: item for item in release['assets']}
     def asset(name, maximum):
         value = assets[name]
-        assert value['browser_download_url'] == PROJECT + '/releases/download/v0.15.0-windows/' + name
+        assert value['browser_download_url'] == PROJECT + '/releases/download/' + tag + '/' + name
         assert value['state'] == 'uploaded' and 0 < value['size'] <= maximum
         assert re.fullmatch(r'sha256:[a-f0-9]{64}', value['digest'])
         return value
-    manifest_name = 'ENGE-SPX-Runtime-linux-amd64-0.15.0.json'
+    manifest_name = 'ENGE-SPX-Runtime-linux-amd64-' + previous + '.json'
     information = asset(manifest_name, 65536)
     raw = fetch(information['browser_download_url'], 65536)
     assert hashlib.sha256(raw).hexdigest() == information['digest'][7:]
     meta = json.loads(raw)
-    assert meta['schema'] == 1 and meta['version'] == PREVIOUS and meta['platform'] == 'linux/amd64'
-    assert meta['recipes'] == {'gateway': '9aa8a7818569', 'work': '6e3fcfa5633c', 'browser': '1bca0984bc51'}
+    assert meta['schema'] == 1 and meta['version'] == previous and meta['platform'] == 'linux/amd64'
+    assert meta['recipes'] == recipes
     for key in ('images', 'image_configs'):
         assert set(meta[key]) == {'gateway', 'work', 'browser'} and all(re.fullmatch(r'sha256:[a-f0-9]{64}', item) for item in meta[key].values())
-    name = 'ENGE-SPX-Runtime-linux-amd64-0.15.0.tar.gz'
+    name = 'ENGE-SPX-Runtime-linux-amd64-' + previous + '.tar.gz'
     archive = asset(name, 2 * 1024**3)
     assert archive['digest'] == 'sha256:' + meta['sha256'] and archive['size'] == meta['bytes'] and meta['filename'] == name
     checksum = asset(name + '.sha256', 512)
     assert fetch(checksum['browser_download_url'], 512).decode().strip() == meta['sha256'] + '  ' + name
     destination.mkdir(parents=True, exist_ok=True)
-    output_name = name.replace(PREVIOUS, __version__)
+    output_name = name.replace(previous, version)
     output = destination / output_name
     count, sha = 0, hashlib.sha256()
     with urllib.request.build_opener(SecureRedirect()).open(archive['browser_download_url'], timeout=90) as response, output.open('wb') as stream:
@@ -93,10 +90,18 @@ def main(destination):
             stream.write(data)
             sha.update(data)
     assert count == meta['bytes'] and sha.hexdigest() == meta['sha256'], 'Published runtime digest differs'
-    meta.update(version=__version__, filename=output_name, reused_from='v0.15.0-windows')
+    meta.update(version=version, filename=output_name, reused_from=tag)
     (destination / output_name.replace('.tar.gz', '.json')).write_text(json.dumps(meta, indent=2) + '\n')
     (destination / (output_name + '.sha256')).write_text(meta['sha256'] + '  ' + output_name + '\n')
-    print(json.dumps({'ui_scope_verified': True, 'runtime_reused_from': PREVIOUS, 'bytes': count, 'sha256': sha.hexdigest()}))
+    print(json.dumps({'runtime_reused_from': previous, 'bytes': count, 'sha256': sha.hexdigest()}))
+
+
+def main(destination):
+    check_scope()
+    sys.path.insert(0, str(ROOT / 'src'))
+    from enge_spx import __version__
+    assert __version__ == '0.15.1', 'This reuse gate is limited to the reviewed 0.15.1 hotfix'
+    copy_runtime(destination, PREVIOUS, BASE, __version__, {'gateway': '9aa8a7818569', 'work': '6e3fcfa5633c', 'browser': '1bca0984bc51'})
 
 
 if __name__ == '__main__':

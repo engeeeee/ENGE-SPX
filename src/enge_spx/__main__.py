@@ -5,7 +5,7 @@ import subprocess
 import sys
 
 from . import __version__
-from .engine import Engine
+from .engine import Engine, TOOLS
 from .nodes import fetch_subscription, parse_nodes
 from .state import Store, SPXError
 
@@ -72,7 +72,7 @@ def main():
     selector = sub.add_parser("select")
     selector.add_argument("index", type=int, help="节点序号，从 1 开始")
     attach = sub.add_parser("attach", help=argparse.SUPPRESS)
-    attach.add_argument("tool", choices=("claude", "codex", "shell", "login-claude", "login-codex"))
+    attach.add_argument("tool", choices=TOOLS)
     attach.add_argument("--session", required=True)
     attach.add_argument("--container", required=True)
     attach.add_argument("--smart-terminal", action="store_true", help=argparse.SUPPRESS)
@@ -80,11 +80,12 @@ def main():
     credentials.add_argument("operation", choices=("status", "migrate", "clear-proxies", "export-legacy"))
     credentials.add_argument("--output", type=Path)
     credentials.add_argument("--allow-plaintext", action="store_true")
-    for action in ("claude", "codex", "exec"):
+    tool_actions = ("claude", "codex", "antigravity")
+    for action in (*tool_actions, "exec"):
         item = sub.add_parser(action, add_help=False)
         item.add_argument("arguments", nargs=argparse.REMAINDER)
     args, forwarded = parser.parse_known_args()
-    if forwarded and args.action not in ("claude", "codex", "exec"):
+    if forwarded and args.action not in (*tool_actions, "exec"):
         if args.action == "network-test":
             parser.error("network-test 不接受自定义目标、代理或其它参数；仅支持 --output。")
         parser.error("unrecognized arguments: " + " ".join(forwarded))
@@ -123,7 +124,7 @@ def main():
             assert tunnel_type() and (ASSETS / "app.ico").is_file() and (PACKAGE_RESOURCES / "checks/exit_probe.py").is_file()
             for name in ("browser-seccomp.json", "sandbox_status.py", "runtime_secret.py"):
                 assert (PACKAGE_RESOURCES / "containers" / name).is_file()
-            for name in ("environment_probe.py", "browser_probe.py", "browser_shutdown.py", "network_probe.py", "clipboard_transfer.py", "terminal_relay.py", "timezone_probe.py"):
+            for name in ("environment_probe.py", "browser_probe.py", "browser_shutdown.py", "network_probe.py", "clipboard_transfer.py", "terminal_relay.py", "timezone_probe.py", "antigravity.py"):
                 assert (PACKAGE_RESOURCES / "checks" / name).is_file()
             codec = CredentialCodec("000000000000")
             fixture = [{"password": "synthetic-self-test-only"}]
@@ -264,15 +265,18 @@ def main():
             settings = store.settings()
             engine.save_settings(nodes[args.index - 1]["id"], settings["timezone"], settings["context"])
             result = {"selected": nodes[args.index - 1]["label"]}
-        elif args.action in ("claude", "codex", "exec", "shell"):
+        elif args.action in (*tool_actions, "exec", "shell"):
             tail = [*forwarded, *getattr(args, "arguments", [])]
             if tail[:1] == ["--"]:
                 tail = tail[1:]
-            command = [args.action, *tail] if args.action in ("claude", "codex") else ["bash", "-l"] if args.action == "shell" else tail
+            command = [*TOOLS[args.action], *tail] if args.action in tool_actions else TOOLS['shell'] if args.action == 'shell' else tail
             if not command:
                 raise SPXError("请在 exec 后填写 Linux 命令。")
             attached = bool(sys.stdin and sys.stdin.isatty())
-            cmd = engine.tool_command(args.project, command, interactive=attached, browser=False if args.without_browser else None)
+            browser = False if args.without_browser else None
+            if browser is None and args.action == 'antigravity':
+                browser = attached and tail != ['--spx-update']
+            cmd = engine.tool_command(args.project, command, interactive=attached, browser=browser)
             return subprocess.call(cmd, env=engine.docker.environment())
         else:
             result = getattr(engine, args.action)()

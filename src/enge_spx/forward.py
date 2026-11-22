@@ -11,6 +11,20 @@ from .engine import Engine, HIDDEN, RESOURCES
 from .state import Store, fingerprint
 
 
+def binding(state):
+    # A connection owns a tunnel for its entire checking → review → ready
+    # lifetime. Derived timezone/language may change the global policy mid-check.
+    if "forward_id" in state:
+        return {"gateway": state.get("gateway"), "forward_id": state["forward_id"],
+                "config_hash": state.get("config_hash"), "target_hash": fingerprint(state.get("forward_target"))}
+    return {"gateway": state.get("gateway"), "policy": state.get("policy")}
+
+
+def current_heartbeat(state, record, max_age):
+    return (all(record.get(key) == value for key, value in binding(state).items())
+            and 0 <= time.time() - record.get("heartbeat", 0) <= max_age)
+
+
 def tunnel_type():
     spec = importlib.util.spec_from_file_location("spx_tunnel", RESOURCES / "tunnel.py")
     module = importlib.util.module_from_spec(spec)
@@ -34,12 +48,14 @@ async def run(store):
     process = await asyncio.create_subprocess_exec(*engine.docker.command("exec", "-i", gateway["Id"], "python3", engine.runtime_path("gateway", "tunnel.py")), stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=guest_log, env=engine.docker.environment(), creationflags=HIDDEN)
     tunnel = tunnel_type()(process.stdout, process.stdin, (target["host"], target["port"]), flow_control=engine._image_abis["gateway"] != "legacy")
     transfer = asyncio.create_task(tunnel.run())
+    owner = binding(state)
     try:
         while not transfer.done():
             current = store.read("runtime.json", {})
-            if current.get("phase") not in ("checking", "review", "ready") or current.get("gateway") != gateway["Id"] or current.get("policy") != state.get("policy"):
+            if (current.get("phase") not in ("checking", "review", "ready")
+                    or binding(current) != owner or current.get("forward_target") != target):
                 break
-            store.write("forward.json", {"gateway": gateway["Id"], "policy": state["policy"], "heartbeat": time.time(), "pid": os.getpid()})
+            store.write("forward.json", {**owner, "heartbeat": time.time(), "pid": os.getpid()})
             await asyncio.sleep(1)
     finally:
         transfer.cancel()

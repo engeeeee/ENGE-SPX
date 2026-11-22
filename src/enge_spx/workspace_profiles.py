@@ -1,6 +1,7 @@
 """Versioned identity selection and exact data mounts; no account copying."""
 from copy import deepcopy
 import ntpath
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -111,6 +112,19 @@ def project_plan(engine, path, config=None):
     if binding["profile"] != config["selected"]:
         raise SPXError("此项目绑定了另一身份，请先切换并重新检查、确认连接。")
     return {"directory": directory, "key": key, **binding, "name": project_name(engine, binding["profile"], key, binding["access"])}
+
+
+def recent_projects(config, history):
+    """List already-authorized canonical paths without touching the filesystem."""
+    if not config:
+        return []
+    permitted = []
+    for path in history[-40:]:
+        key = hashlib.sha256(os.path.normcase(path).encode()).hexdigest()[:16]
+        binding = config['projects'].get(key)
+        if (binding and binding['profile'] == config['selected']) or (not binding and config['selected'] == SHARED):
+            permitted.append(path)
+    return permitted
 
 
 def project_arguments(plan):

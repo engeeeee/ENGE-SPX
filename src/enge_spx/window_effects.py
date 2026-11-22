@@ -50,6 +50,13 @@ def moving_or_sizing():
 
 
 def apply_acrylic(window, color, enabled=True):
+    return apply_backdrop(window, color, 'acrylic' if enabled else 'solid')
+
+
+GLASS_BACKENDS = frozenset(('system-acrylic', 'accent-acrylic', 'accent-blur', 'system-mica', 'system-mica-alt', 'transparent'))
+
+
+def apply_backdrop(window, color, material):
     """Return the actual accepted backend, or an explicit opaque fallback."""
     if os.name != "nt":
         return "unsupported"
@@ -59,7 +66,7 @@ def apply_acrylic(window, color, enabled=True):
         user.IsWindow.argtypes, user.IsWindow.restype = [wintypes.HWND], wintypes.BOOL
         if not user.IsWindow(hwnd):
             return "unsupported"
-        if enabled:
+        if material != 'solid':
             import winreg
             try:
                 with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize") as key:
@@ -80,22 +87,39 @@ def apply_acrylic(window, color, enabled=True):
         dwm.DwmSetWindowAttribute.restype = ctypes.c_long
         dark = ctypes.c_int(1)
         dwm.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(dark), ctypes.sizeof(dark))
-        value = ctypes.c_int(3 if enabled else 1)  # DWMSBT_TRANSIENTWINDOW / NONE
-        if sys.getwindowsversion().build >= 22621 and dwm.DwmSetWindowAttribute(hwnd, 38, ctypes.byref(value), ctypes.sizeof(value)) >= 0:
-            return "system-acrylic" if enabled else "solid"
+        build = sys.getwindowsversion().build
         # Older Windows exposes AccentPolicy through this optional entry point.
         # Guard the ABI and BOOL result; unavailable policies stay opaque.
         function = getattr(user, "SetWindowCompositionAttribute", None)
-        if function is None or sys.getwindowsversion().build < 17763:
-            return "unsupported"
-        function.argtypes, function.restype = [wintypes.HWND, ctypes.POINTER(Composition)], wintypes.BOOL
-        # The client already supplies the user's tint/opacity. A second 80%
-        # native tint made the old material almost opaque and muddy.
-        tint = color.red() | color.green() << 8 | color.blue() << 16 | 0x01000000
-        accent = Accent(4 if enabled else 0, 2, tint, 0)
-        composition = Composition(19, ctypes.cast(ctypes.byref(accent), ctypes.c_void_p), ctypes.sizeof(accent))
-        if function(hwnd, ctypes.byref(composition)):
-            return "accent-acrylic" if enabled else "solid"
+        def accent(state):
+            if function is None or build < 17763:
+                return False
+            function.argtypes, function.restype = [wintypes.HWND, ctypes.POINTER(Composition)], wintypes.BOOL
+            # Qt supplies the user's tint. Avoid layering a second opaque tint.
+            tint = color.red() | color.green() << 8 | color.blue() << 16 | 0x01000000
+            policy = Accent(state, 2 if state else 0, tint, 0)
+            data = Composition(19, ctypes.cast(ctypes.byref(policy), ctypes.c_void_p), ctypes.sizeof(policy))
+            return bool(function(hwnd, ctypes.byref(data)))
+
+        system = {'solid': (1, 'solid'), 'mica': (2, 'system-mica'),
+                  'acrylic': (3, 'system-acrylic'), 'mica-alt': (4, 'system-mica-alt')}
+        if build >= 22621:
+            style, backend = system.get(material, system['solid'])
+            value = ctypes.c_int(style)
+            accent(0)
+            if dwm.DwmSetWindowAttribute(hwnd, 38, ctypes.byref(value), ctypes.sizeof(value)) >= 0 and material in system:
+                return backend
+        if material in ('mica', 'mica-alt'):
+            return 'accent-blur' if accent(3) else 'transparent'
+        if material == 'blur':
+            if accent(3):
+                return 'accent-blur'
+            accent(0)
+            return 'transparent'
+        if material == 'acrylic' and accent(4):
+            return 'accent-acrylic'
+        if material == 'solid' and accent(0):
+            return 'solid'
     except (AttributeError, OSError, ValueError):
         pass
     return "unsupported"
