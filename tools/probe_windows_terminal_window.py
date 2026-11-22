@@ -193,4 +193,8 @@ with tempfile.TemporaryDirectory(prefix='spx-owned-window-') as folder, context:
         print(json.dumps(report))
     finally:
         window.close()
+        writer = window.preferences.worker
+        if writer is not None:
+            writer.join(5)
+            assert not writer.is_alive(), 'Preference write did not finish'
         window.view.reader.join(2)
