@@ -29,6 +29,7 @@ from ..workspace_profiles import load as load_workspace_profiles, display_name a
 from ..startup import DOCKER_INSTALL_URL, StartupIssue, diagnostics, prepare_workspace
 from ..state import SPXError, Store, atomic_json, status_snapshot
 from ..storage import desktop_storage, plan_migration, prepare_docker_move, verify_docker_move
+from .style import read_theme
 
 
 def size_text(value):
@@ -66,6 +67,7 @@ class Controller(QObject):
     def __init__(self, store, report=None, on_relocated=None):
         super().__init__()
         self.store, self.report, self.on_relocated = store, report, on_relocated
+        self.theme = read_theme(store)
         self.ask = lambda title, text: False
         self.busy = self.cancelable = self.close_pending = False
         self.exit_mode = None
@@ -1231,7 +1233,7 @@ class Controller(QObject):
             # A broken setting must not turn Copy diagnostics into another
             # error popup. This path never calls Docker or reads raw log text.
             result = {"app": "ENGE SPX", "version": __version__, "summary": "unavailable"}
-        result.update(theme="warm-clay", window_frame="qt-native")
+        result.update(theme=self.theme, window_frame="qt-native")
         if self.exit_diagnostics is not None:
             result["last_exit"] = self.exit_diagnostics
         return json.dumps(result, ensure_ascii=False, indent=2)

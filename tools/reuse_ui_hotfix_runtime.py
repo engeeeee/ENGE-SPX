@@ -1,4 +1,4 @@
-"""Reuse the immutable 0.15.3 runtime only for a verified UI-only hotfix."""
+"""Reuse the immutable 0.15.4 runtime only for a verified UI-only hotfix."""
 import argparse
 import hashlib
 import json
@@ -10,17 +10,16 @@ import sys
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE = '0a7927013ba5cce828372dac010d98947699fe88'
+BASE = '7b1ca389c0adf08c8948f4a94206c1cc64aef473'
 PROJECT = 'https://github.com/engeeeee/ENGE-SPX'
-PREVIOUS = '0.15.3'
+PREVIOUS = '0.15.4'
 
 
 def check_scope():
     files = subprocess.check_output(['git', 'diff', '--name-only', BASE, 'HEAD', '--', 'src', 'requirements.txt', 'requirements-build.txt', 'pyproject.toml', 'packaging'], cwd=ROOT, text=True).splitlines()
     allowed = {
-        'src/enge_spx/__init__.py', 'src/enge_spx/brand.py', 'src/enge_spx/platform_ui.py',
-        'src/enge_spx/smart_terminal.py', 'src/enge_spx/terminal_appearance.py',
-        'src/enge_spx/terminal_preferences.py', 'src/enge_spx/window_effects.py',
+        'src/enge_spx/__init__.py', 'src/enge_spx/gui.py', 'src/enge_spx/ui/controller.py',
+        'src/enge_spx/ui/style.py', 'src/enge_spx/ui/window.py',
         'packaging/windows/Installer.iss', 'packaging/windows/version-info.txt',
         'packaging/windows/cli-version-info.txt',
     }
@@ -91,7 +90,7 @@ def main(destination):
     check_scope()
     sys.path.insert(0, str(ROOT / 'src'))
     from enge_spx import __version__
-    assert __version__ == '0.15.4', 'This reuse gate is limited to the reviewed 0.15.4 hotfix'
+    assert __version__ == '0.15.5', 'This reuse gate is limited to the reviewed 0.15.5 hotfix'
     copy_runtime(destination, PREVIOUS, BASE, __version__, {'gateway': '9aa8a7818569', 'work': '6e3fcfa5633c', 'browser': '1bca0984bc51'})
 
 

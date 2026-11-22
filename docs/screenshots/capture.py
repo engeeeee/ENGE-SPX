@@ -32,13 +32,16 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--profile", choices=("readme", "website"), default="readme",
                         help="Use the real responsive window at the website's display sizes")
+    parser.add_argument("--theme", choices=("dark", "light"), default="dark")
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     app = QApplication([])
     style.apply(app)
     captures = []
     with tempfile.TemporaryDirectory(prefix="spx-readme-") as directory:
-        controller = Controller(Store(Path(directory) / "data"))
+        store = Store(Path(directory) / "data")
+        store.write(style.THEME_FILE, {"schema": 1, "theme": args.theme})
+        controller = Controller(store)
         window = Window(controller)
         window.show()
         try:
@@ -69,7 +72,7 @@ def main():
                 captures.append({"file": target.name, "page": page, "width": picture.width(), "height": picture.height(), "logical_width": window.width(), "logical_height": window.height(), "device_pixel_ratio": window.devicePixelRatioF(), "bytes": target.stat().st_size, "sha256": hashlib.sha256(target.read_bytes()).hexdigest()})
         finally:
             window.finish_close()
-    report = {"version": __version__, "profile": args.profile, "source_commit": os.environ.get("GITHUB_SHA"), "platform": platform.system(), "python": platform.python_version(), "qt": PySide6.__version__, "captured_utc": datetime.now(timezone.utc).isoformat(), "state": "unconfigured temporary data; no accounts, proxies or Docker workspace started", "captures": captures}
+    report = {"version": __version__, "theme": args.theme, "profile": args.profile, "source_commit": os.environ.get("GITHUB_SHA"), "platform": platform.system(), "python": platform.python_version(), "qt": PySide6.__version__, "captured_utc": datetime.now(timezone.utc).isoformat(), "state": "unconfigured temporary data; no accounts, proxies or Docker workspace started", "captures": captures}
     (args.output / "capture.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False), flush=True)
 

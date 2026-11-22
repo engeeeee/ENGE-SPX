@@ -1,5 +1,11 @@
 # Changes
 
+## 0.15.5 workbench themes and Show Desktop — 2026-11-22
+
+- Let Windows fully minimize the frameless workbench on Show Desktop so restoring the terminal keeps the workbench minimized.
+- Keep a hidden or minimized workbench in the background when Docker reports readiness.
+- Add a warm light and dark appearance with a persistent title-bar switch.
+
 ## 0.15.4 terminal appearance and taskbar — 2026-11-22
 
 - Give the smart terminal its own Windows taskbar group.

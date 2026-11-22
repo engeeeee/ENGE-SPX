@@ -10,7 +10,6 @@ from . import __version__
 from .gui_diagnostics import GuiDiagnostics, log
 from .platform_ui import WindowInstance, prepare_windows
 from .state import SPXError
-from .ui import style
 from .ui.controller import Controller, size_text
 from .ui.window import Window as App
 
@@ -38,7 +37,6 @@ def _launch(store, report, smoke):
         app = QApplication.instance() or QApplication(["ENGE SPX"])
         app.setApplicationName("ENGE SPX")
         app.setOrganizationName("engeeeee")
-        style.apply(app)
         def relocated(new_store):
             nonlocal instance
             replacement = WindowInstance(new_store.home, legacy=new_store.legacy)

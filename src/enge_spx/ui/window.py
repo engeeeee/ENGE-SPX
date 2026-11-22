@@ -42,8 +42,12 @@ class Window(QMainWindow):
     closed = Signal()
 
     def __init__(self, controller):
-        super().__init__(None, Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
+        # Windows Show Desktop minimizes only windows with WS_MINIMIZEBOX.
+        # Qt maps this hint to that style even with our client-side title bar.
+        super().__init__(None, Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint
+                         | Qt.WindowType.WindowMinimizeButtonHint)
         self.c = controller
+        style.apply(QApplication.instance(), self.c.theme)
         self.setWindowTitle(APP_NAME)
         self.setWindowIcon(QIcon(str(ICONS / "app.ico")))
         self.setMinimumSize(700, 480)
@@ -65,7 +69,6 @@ class Window(QMainWindow):
         self.exit_action.triggered.connect(self.stop_and_exit)
         self.addAction(self.exit_action)
         self.compact = None
-        self.minimized_by_user = False
         self.resize_edges = []
         shell = QFrame()
         shell.setObjectName("Shell")
@@ -74,6 +77,11 @@ class Window(QMainWindow):
         outer.setContentsMargins(1, 1, 1, 1)
         outer.setSpacing(0)
         self.titlebar = TitleBar(self)
+        self.theme_button = button("", self.toggle_theme)
+        self.theme_button.setObjectName("WindowTheme")
+        self.theme_button.setFixedSize(42, 30)
+        self.titlebar.layout().insertWidget(2, self.theme_button)
+        self.update_theme_button()
         self.titlebar.controls["minimize"].clicked.disconnect()
         self.titlebar.controls["minimize"].clicked.connect(self.minimize)
         outer.addWidget(self.titlebar)
@@ -118,7 +126,6 @@ class Window(QMainWindow):
             nav = button("  " + name, lambda page=key: self.show_page(page))
             nav.setObjectName("Nav")
             nav.setCheckable(True)
-            nav.setIcon(style.icon(key))
             nav.setIconSize(QSize(18, 18))
             nav.setToolTip(name)
             nav.setAccessibleName(name)
@@ -180,15 +187,40 @@ class Window(QMainWindow):
             self.pages[name] = builder()
             self.stack.addWidget(self.pages[name])
         self.stack.setCurrentWidget(self.pages[name])
-        for key, widget in self.nav.items():
-            widget.setChecked(key == name)
         self.current_page = name
+        self.update_nav_selection()
         self.update_resource_activity()
         self.titlebar.caption.setText((APP_NAME if self.compact else "本机工作空间") + "  /  " + NAMES[name])
         self.render(self.c.view, force=True)
 
+    def update_nav_selection(self):
+        colors = style.THEMES[self.c.theme]
+        for key, widget in self.nav.items():
+            selected = key == self.current_page
+            widget.setChecked(selected)
+            widget.setIcon(style.icon(key, colors["clay"] if selected else colors["muted"]))
+
+    def update_theme_button(self):
+        dark = self.c.theme == "dark"
+        text = "切换到浅色主题" if dark else "切换到深色主题"
+        self.theme_button.setIcon(style.icon("sun" if dark else "moon", style.THEMES[self.c.theme]["muted"], 18))
+        self.theme_button.setToolTip(text)
+        self.theme_button.setAccessibleName(text)
+
+    def toggle_theme(self):
+        theme = "light" if self.c.theme == "dark" else "dark"
+        self.c.theme = theme
+        style.apply(QApplication.instance(), theme)
+        self.update_theme_button()
+        self.update_nav_selection()
+        self.next_button.setIcon(style.icon("arrow", style.THEMES[theme]["on_primary"], 17))
+        try:
+            self.c.store.write(style.THEME_FILE, {"schema": 1, "theme": theme})
+        except (SPXError, OSError):
+            self.c.operation.set("主题已切换。保存失败，请检查数据目录权限。")
+
     def build_overview(self):
-        page = Page("工作台", "准备工作环境，核对代理出口，继续你的项目。")
+        page = Page("工作台", "准备容器、核对出口，然后打开项目。")
         hero = page.panel(hero=True)
         row = hero.row()
         hero_row = row
@@ -205,7 +237,7 @@ class Window(QMainWindow):
         actions.setSpacing(8)
         self.next_button = self.action("一键准备环境", self.c.next_step, True)
         self.next_button.setMinimumWidth(140)
-        self.next_button.setIcon(style.icon("arrow", "#241A15", 17))
+        self.next_button.setIcon(style.icon("arrow", style.THEMES[self.c.theme]["on_primary"], 17))
         actions.addWidget(self.next_button)
         self.startup_cancel = button("取消准备", self.c.pause, ghost=True)
         actions.addWidget(self.startup_cancel)
@@ -1053,7 +1085,6 @@ class Window(QMainWindow):
         dialog.exec()
 
     def minimize(self):
-        self.minimized_by_user = True
         self.showMinimized()
 
     def fit_to_screen(self):
@@ -1063,7 +1094,6 @@ class Window(QMainWindow):
         self.move(area.center() - self.rect().center())
 
     def reveal(self):
-        self.minimized_by_user = False
         if self.isMinimized():
             self.showNormal()
         self.show()
@@ -1082,7 +1112,7 @@ class Window(QMainWindow):
         return super().nativeEvent(event_type, message)
 
     def return_from_desktop(self):
-        if not self.minimized_by_user:
+        if self.isVisible() and not self.isMinimized():
             self.reveal()
 
     def finish_close(self):
@@ -1202,7 +1232,6 @@ class Window(QMainWindow):
 
     def closeEvent(self, event):
         if not self._force_close and self.tray is not None and self.tray.isVisible() and QSystemTrayIcon.isSystemTrayAvailable():
-            self.minimized_by_user = True
             self.hide()
             if not self.tray_hint_shown and QSystemTrayIcon.supportsMessages():
                 self.tray_hint_shown = True

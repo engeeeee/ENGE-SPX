@@ -58,17 +58,27 @@ class NativeWindowTests(unittest.TestCase):
         QTest.qWait(30)
         self.assertFalse(self.window.isMinimized())
 
-    def test_desktop_readiness_reveals_only_when_not_minimized_by_user(self):
+    def test_docker_readiness_preserves_hidden_and_native_minimized_windows(self):
         self.window.hide()
         self.controller.update_stage({"stage": "docker_start"})
         self.controller.update_stage({"stage": "docker_ready"})
         QTest.qWait(30)
-        self.assertTrue(self.window.isVisible())
-        self.window.minimize()
+        self.assertFalse(self.window.isVisible())
+        self.window.reveal()
+        self.window.showMinimized()
         self.controller.update_stage({"stage": "docker_start"})
         self.controller.update_stage({"stage": "docker_ready"})
         QTest.qWait(30)
         self.assertTrue(self.window.isMinimized())
+
+    def test_titlebar_theme_switch_updates_palette_and_persists(self):
+        self.assertEqual(self.controller.theme, "dark")
+        self.window.theme_button.click()
+        self.assertEqual(self.app.property("spxTheme"), "light")
+        self.assertEqual(style.read_theme(self.controller.store), "light")
+        self.window.theme_button.click()
+        self.assertEqual(self.app.property("spxTheme"), "dark")
+        self.assertEqual(style.read_theme(self.controller.store), "dark")
 
     def test_idle_state_does_not_rewrite_widgets(self):
         count = self.window.render_count
