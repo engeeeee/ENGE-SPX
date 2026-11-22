@@ -104,15 +104,32 @@ class NativeWindowTests(unittest.TestCase):
         self.window.nav["workspace"].click()
         self.assertEqual(self.window.current_page, "workspace")
         self.assertTrue(self.window.workspace_apply_button.isVisible())
-        self.window.nav["settings"].trigger()
+        settings = self.window.nav["settings"]
+        self.assertGreaterEqual(self.window.nav_layout.indexOf(settings), 0)
+        self.assertNotIn("偏好设置", [action.text() for action in self.window.management_menu.actions()])
+        settings.click()
         self.assertTrue(self.window.settings_tabs["general"].isChecked())
         self.window.settings_tabs["terminal"].click()
         self.assertTrue(self.window.terminal_path.isVisible())
         self.assertFalse(self.window.close_desktop_check.isVisible())
         self.window.settings_tabs["exit"].click()
         self.assertTrue(self.window.close_desktop_check.isVisible())
-        self.window.nav["settings"].trigger()
+        settings.click()
         self.assertTrue(self.window.settings_tabs["general"].isChecked())
+
+    def test_update_indicator_fits_narrow_top_navigation(self):
+        self.window.setMinimumSize(400, 320)
+        self.controller.update_available.set(True)
+        settings = self.window.nav["settings"]
+        for width, title in ((400, "设置·"), (840, "偏好设置 · 有更新")):
+            with self.subTest(width=width):
+                self.window.resize(width, 520)
+                QTest.qWait(40)
+                self.assertEqual(self.window.width(), width)
+                self.assertEqual(settings.text(), title)
+                self.assertGreaterEqual(settings.width(), settings.minimumSizeHint().width())
+                manage = self.window.management_button
+                self.assertLessEqual(manage.geometry().right(), manage.parentWidget().rect().right())
 
     def test_long_project_name_does_not_push_workbench_controls_out_of_view(self):
         self.window.resize(810, 620)

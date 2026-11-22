@@ -1,5 +1,10 @@
 # Changes
 
+## 0.15.8 settings and startup update checks — 2026-11-22
+
+- Put Preferences alongside the primary workbench tabs and show new releases there.
+- Check the official release on launch in the background, independently of Docker readiness. Keep the saved opt-out and installation confirmation.
+
 ## 0.15.7 workbench regression fixes — 2026-11-22
 
 - Keep dashboard controls and resource inputs visible with long project paths.

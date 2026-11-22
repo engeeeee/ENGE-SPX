@@ -98,20 +98,23 @@ def _read(session, url, maximum):
         return bytes(result)
 
 
-def check(store, force=False, transport=None, current=__version__):
-    try:
-        cached = store.read('update-check.json', {}) if not force and (not (store.home / 'update-check.json').exists() or (store.home / 'update-check.json').stat().st_size <= 512 * 1024) else {}
-    except (OSError, SPXError):
-        cached = {}
-    if not force and isinstance(cached, dict) and type(cached.get('checked')) in (int, float) and 0 <= time.time() - cached['checked'] < 86400:
-        return parse_release(cached.get('release'), current)
+def check(store, force=False, transport=None, current=__version__, *, cache=True):
+    if cache and not force:
+        path = store.home / 'update-check.json'
+        try:
+            cached = store.read(path.name, {}) if not path.exists() or path.stat().st_size <= 512 * 1024 else {}
+        except (OSError, SPXError):
+            cached = {}
+        if isinstance(cached, dict) and type(cached.get('checked')) in (int, float) and 0 <= time.time() - cached['checked'] < 86400:
+            return parse_release(cached.get('release'), current)
     via, _ = download_proxy(store.settings()['relay'])
     try:
         with client(via, transport) as session:
             session.timeout = httpx.Timeout(8)
             raw = json.loads(_read(session, API, 256 * 1024))
         release = parse_release(raw, current)
-        store.write('update-check.json', {'schema': 1, 'checked': time.time(), 'release': raw})
+        if cache:
+            store.write('update-check.json', {'schema': 1, 'checked': time.time(), 'release': raw})
         return release
     except (httpx.RequestError, httpx.HTTPStatusError) as error:
         raise network_error(error, '检查软件更新') from error

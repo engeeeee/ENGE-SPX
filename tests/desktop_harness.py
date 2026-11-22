@@ -187,6 +187,7 @@ def quit_shortcut(user, hwnd):
 def exercise_entry_point(command, base, cli, mode):
     data = base / ("entry-" + mode)
     data.mkdir(exist_ok=True)
+    (data / "update-preferences.json").write_text('{"schema": 1, "auto_check": false}', encoding="utf-8")
     if mode == "legacy":
         (data / "settings.json").write_text(json.dumps({"auto_start_docker": True}), encoding="utf-8")
     process = subprocess.Popen([*command, "--data", str(data), "gui"], env=environment(base, cli, mode), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", creationflags=subprocess.CREATE_NO_WINDOW)
@@ -253,6 +254,7 @@ def exercise_desktop_exit(command, base, cli, enabled, closed_first=False):
     """Actual Windows GUI/process shutdown against our owned Desktop fixture."""
     data = base / (("closed-first-" if closed_first else "joint-exit-") + ("on" if enabled else "off"))
     data.mkdir()
+    (data / "update-preferences.json").write_text('{"schema": 1, "auto_check": false}', encoding="utf-8")
     if enabled:
         (data / "exit-preferences.json").write_text(json.dumps({"schema": 1, "close_docker_desktop": True}), encoding="utf-8")
     (data / "account-sentinel").write_text("preserved", encoding="utf-8")

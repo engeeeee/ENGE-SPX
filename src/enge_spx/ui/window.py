@@ -32,8 +32,9 @@ NAVIGATION = (
     ("connection", "连接与代理", "代理"),
     ("network", "网络检查", "检测"),
     ("resources", "资源管理", "资源"),
+    ("settings", "偏好设置", "设置"),
 )
-MANAGEMENT = ("downloads", "logs", "settings")
+MANAGEMENT = ("downloads", "logs")
 
 
 class ResizeEdge(QWidget):
@@ -108,7 +109,7 @@ class Window(QMainWindow):
         self.nav_layout.setContentsMargins(26, 4, 20, 4)
         self.nav_layout.setSpacing(6)
         for key, title, _short in NAVIGATION:
-            nav = button(title, lambda page=key: self.show_page(page))
+            nav = button(title, lambda page=key: self.navigate(page))
             nav.setObjectName("Nav")
             nav.setCheckable(True)
             nav.setIconSize(QSize(17, 17))
@@ -120,6 +121,7 @@ class Window(QMainWindow):
         self.management_button = QPushButton("管理")
         self.management_button.setObjectName("Manage")
         self.management_button.setAccessibleName("管理菜单")
+        self.management_button.setToolTip("下载和日志")
         self.management_menu = QMenu(self)
         for key in MANAGEMENT:
             item = self.management_menu.addAction(NAMES[key])
@@ -148,7 +150,7 @@ class Window(QMainWindow):
         self.c.changed.connect(self.update_exit_actions)
         self.c.exit_failed.connect(self.show_exit_error)
         self.c.nodes_changed.connect(self.refresh_node_boxes)
-        self.c.update_available.changed.connect(self.update_management_label)
+        self.c.update_available.changed.connect(self.update_settings_label)
         self.c.workspace_changed.connect(self.refresh_workspace_profiles)
         self.c.logs_added.connect(self.append_logs)
         self.c.page_requested.connect(self.navigate)
@@ -188,13 +190,19 @@ class Window(QMainWindow):
             if key not in MANAGEMENT:
                 color = colors["clay"] if selected else colors["muted"]
                 widget.setIcon(QIcon() if self.compact else style.icon(key, color, 17))
-        self.update_management_label(self.c.update_available.get())
-
-    def update_management_label(self, available):
-        self.nav["settings"].setText("偏好设置 · 有更新" if available else "偏好设置")
         title = NAMES[self.current_page] if self.current_page in MANAGEMENT else "管理"
-        self.management_button.setText("管理" if self.compact else "管理 · 有更新" if available else title)
-        self.management_button.setToolTip("有可用更新" if available else "下载、日志和偏好设置")
+        self.management_button.setText("管理" if self.compact else title)
+        self.update_settings_label(self.c.update_available.get())
+
+    def update_settings_label(self, available):
+        settings = self.nav["settings"]
+        title = "设置" if self.compact else NAMES["settings"]
+        if available:
+            title += "·" if self.compact else " · 有更新"
+        settings.setText(title)
+        description = "偏好设置（有可用更新）" if available else NAMES["settings"]
+        settings.setAccessibleName(description)
+        settings.setToolTip(description)
 
     def navigate(self, page):
         if page == "settings":
@@ -944,17 +952,21 @@ class Window(QMainWindow):
         panel.layout.addWidget(self.action("保存环境设置", self.c.save_settings, True), alignment=Qt.AlignmentFlag.AlignLeft)
         panel = section('general', '软件更新', '从 ENGE SPX 官方 GitHub Releases 下载正式版，校验后更新并重新打开。')
         panel.layout.addWidget(check('启动时自动检查更新', self.c.auto_check_updates))
-        panel.layout.addWidget(label('每天最多检查一次；安装前由你确认。', 'Caption', True))
+        panel.layout.addWidget(label('打开软件时检查正式版。安装前由你确认。', 'Caption', True))
         panel.layout.addWidget(bind_text(label('', 'Muted', True), self.c.update_status))
         panel.layout.addWidget(progress(self.c.update_progress))
         update_row = panel.row()
         responsive_rows.append(update_row)
-        update_row.addWidget(self.action('检查更新', self.c.check_updates, ghost=True))
+        check_button = button('检查更新', self.c.check_updates, ghost=True)
+        update_row.addWidget(check_button)
         update_button = button('下载更新并重启…', self.c.install_update, primary=True)
         update_row.addWidget(update_button)
         update_row.addWidget(self.action('保存更新偏好', self.c.save_update_preferences, ghost=True))
         def update_enabled(unused=None):
-            update_button.setEnabled(self.c.update_available.get() and not self.c.busy and self.c.exit_mode is None)
+            idle = not self.c.busy and not self.c.update_checking.get() and self.c.exit_mode is None
+            check_button.setEnabled(idle)
+            update_button.setEnabled(idle and self.c.update_available.get())
+        self.c.update_checking.changed.connect(update_enabled)
         self.c.update_available.changed.connect(update_enabled)
         self.c.changed.connect(update_enabled)
         update_enabled()
@@ -1335,7 +1347,7 @@ class Window(QMainWindow):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if "settings" in getattr(self, "nav", {}):
+        if "logs" in getattr(self, "nav", {}):
             self.update_compact()
         if not self.resize_edges:
             return
@@ -1353,5 +1365,12 @@ class Window(QMainWindow):
         self.compact = compact
         self.nav_layout.setContentsMargins(10 if compact else 26, 4, 10 if compact else 20, 4)
         for key, title, short in NAVIGATION:
-            self.nav[key].setText(short if compact else title)
+            if key != "settings":
+                self.nav[key].setText(short if compact else title)
+        for widget in (self.management_button, *(self.nav[key] for key, _, _ in NAVIGATION)):
+            widget.setProperty("compact", compact)
+            painter = widget.style()
+            painter.unpolish(widget)
+            painter.polish(widget)
+            widget.updateGeometry()
         self.update_nav_selection()

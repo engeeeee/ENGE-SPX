@@ -63,6 +63,7 @@ class Controller(QObject):
     activation_requested = Signal()
     exit_failed = Signal(str)
     workspace_changed = Signal()
+    update_checked = Signal(object, bool, object, str)
 
     def __init__(self, store, report=None, on_relocated=None):
         super().__init__()
@@ -83,7 +84,7 @@ class Controller(QObject):
         from ..app_updates import preferences as update_preferences
         try:
             self.update_preferences = update_preferences(store)
-            update_message = '自动检查正式版；安装前由你确认，保留原配置和数据。'
+            update_message = '等待检查更新。' if self.update_preferences['auto_check'] else '已关闭启动时自动检查更新。'
         except SPXError as error:
             self.update_preferences = {'schema': 1, 'auto_check': False}
             update_message = str(error)
@@ -139,6 +140,7 @@ class Controller(QObject):
             "language_mode": settings.get("language_mode", "unchanged"),
             "auto_check_updates": self.update_preferences['auto_check'],
             "update_status": update_message, "update_progress": 0, "update_available": False,
+            "update_checking": False,
             "project": (recent_projects(self.workspace_config, settings['projects']) or [''])[-1], "relay_enabled": relay.get("enabled", False),
             "relay_url": proxy_url(relay) or "", "relay_downloads": relay.get("downloads", True),
             "line_mode": relay.get("mode", "local" if relay.get("enabled") else "managed"),
@@ -174,6 +176,7 @@ class Controller(QObject):
         self.values = {name: Value(value, self) for name, value in defaults.items()}
         for name, value in self.values.items():
             setattr(self, name, value)
+        self.update_checked.connect(self.update_check_finished)
         self.steps = ["等待检测", "等待核验", "等待配置", "由你确认"]
         self.line_context = (self.line_mode.get(), self.line_selected.get())
         self.line_presets = {}
@@ -700,31 +703,43 @@ class Controller(QObject):
         self.run(save, lambda saved: (setattr(self, 'update_preferences', saved), self.update_status.set('更新偏好已保存。')))
 
     def check_updates(self, automatic=False):
-        if automatic and (not self.update_preferences['auto_check'] or os.name != 'nt' or not getattr(__import__('sys'), 'frozen', False)):
+        if automatic and not self.update_preferences['auto_check']:
             return
-        if self.busy or self.exit_mode is not None:
-            if automatic and self.exit_mode is None:
-                QTimer.singleShot(15000, lambda: self.check_updates(True))
+        if self.update_checking.get() or self.exit_mode is not None or (self.busy and not automatic):
             return
+        store = self.store
+        self.update_checking.set(True)
         self.update_status.set('正在检查官方正式版本…')
-        def action(engine):
+
+        def worker():
             from ..app_updates import check
             try:
-                return {'release': check(engine.store, force=not automatic)}
-            except SPXError as error:
-                return {'error': self.clean_message(error)}
-        def done(result):
-            if 'error' in result:
-                self.update_status.set(result['error'])
-                return
-            self.update_release = result['release']
-            self.update_available.set(self.update_release is not None)
-            self.update_status.set('发现正式版 ' + self.update_release['version'] + '，可下载并重启更新。' if self.update_release else '当前已是最新正式版 ' + __version__ + '。')
-            if self.update_release:
-                self.operation.set('发现新版本 ' + self.update_release['version'] + '，可在偏好设置中更新。')
-            if self.update_release and not automatic:
-                self.page_requested.emit('settings')
-        self.run(action, done, True, '检查软件更新…')
+                release = check(store, cache=False)
+            except (OSError, SPXError) as error:
+                self.update_checked.emit(store, automatic, None, str(error))
+            except Exception as error:
+                log.warning('update-check-failed error=%s', type(error).__name__)
+                self.update_checked.emit(store, automatic, None, '检查更新失败，请稍后重试。')
+            else:
+                self.update_checked.emit(store, automatic, release, '')
+
+        threading.Thread(target=worker, name='spx-update-check', daemon=True).start()
+
+    def update_check_finished(self, store, automatic, release, error):
+        self.update_checking.set(False)
+        if self.exit_mode is not None:
+            return
+        if store is not self.store:
+            self.update_status.set('数据目录已更改，可重新检查更新。')
+            return
+        if error:
+            self.update_status.set(self.clean_message(error))
+            return
+        self.update_release = release
+        self.update_available.set(release is not None)
+        self.update_status.set('发现正式版 ' + release['version'] + '，可下载并重启更新。' if release else '当前已是最新正式版 ' + __version__ + '。')
+        if release and not automatic:
+            self.page_requested.emit('settings')
 
     def install_update(self):
         if self.busy or self.exit_mode is not None or not self.update_release:

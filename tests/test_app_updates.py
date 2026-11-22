@@ -66,10 +66,14 @@ class AppUpdateTests(unittest.TestCase):
         self.assertEqual(len(requests), 1)
         check(store, force=True, transport=mock)
         self.assertEqual(len(requests), 2)
+        cached = store.read('update-check.json')
+        self.assertEqual(check(store, cache=False, transport=mock)['version'], '1.2.3')
+        self.assertEqual(len(requests), 3)
+        self.assertEqual(store.read('update-check.json'), cached)
         with patch('enge_spx.app_updates.download_proxy', side_effect=SPXError('proxy unavailable')):
             with self.assertRaises(SPXError):
                 check(store, force=True, transport=mock)
-        self.assertEqual(len(requests), 2)
+        self.assertEqual(len(requests), 3)
         self.assertTrue(preferences(store)['auto_check'])
 
     def test_oversized_or_invalid_metadata_is_rejected(self):

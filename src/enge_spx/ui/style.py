@@ -147,6 +147,7 @@ QPushButton#Ghost:hover, QPushButton#Nav:hover, QPushButton#SectionTab:hover { b
 QPushButton#Nav, QPushButton#SectionTab, QPushButton#Manage {
     background: transparent; border: 1px solid transparent; padding: 9px 11px; color: @muted@; font-weight: 600;
 }
+QPushButton#Nav[compact="true"], QPushButton#Manage[compact="true"] { padding-left: 5px; padding-right: 5px; }
 QPushButton#Nav:checked, QPushButton#SectionTab:checked { background: @wash@; color: @clay@; }
 QPushButton#Manage:hover { background: @hover@; }
 QPushButton#LaunchTile { text-align: left; padding: 15px 13px; background: @paper@; border: 1px solid @line@; font-weight: 600; }

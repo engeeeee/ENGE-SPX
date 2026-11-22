@@ -56,6 +56,7 @@ def exercise(bundle, setup, installed):
         (root / 'my-project.txt').write_text('preserve this extra user file', encoding='utf-8')
         store = Store(root / 'data')
         store.write('runtime.json', {'phase': 'stopped'})
+        store.write('update-preferences.json', {'schema': 1, 'auto_check': False})
         (store.home / 'account-fixture.txt').write_bytes(b'synthetic-account-marker')
         old_id = store.instance
         payload = stage / 'payload'

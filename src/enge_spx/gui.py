@@ -69,8 +69,8 @@ def _launch(store, report, smoke):
                 QTimer.singleShot(400, window.finish_close)
             QTimer.singleShot(100, painted)
         else:
+            QTimer.singleShot(250, lambda: controller.check_updates(True))
             QTimer.singleShot(500, lambda: controller.check_docker(False))
-            QTimer.singleShot(6000, lambda: controller.check_updates(True))
         app.exec()
         log.info("gui-event-loop-return")
     finally:

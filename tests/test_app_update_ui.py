@@ -42,16 +42,39 @@ class UpdateUITests(unittest.TestCase):
         install = next(item for item in self.w.pages['settings'].findChildren(QPushButton)
                        if item.text() == '下载更新并重启…')
         self.assertFalse(install.isEnabled())
-        with patch('enge_spx.app_updates.check', return_value={'version': '1.2.3'}), patch('enge_spx.engine.Engine.doctor') as doctor:
+        with patch('enge_spx.app_updates.check', return_value={'version': '1.2.3'}) as check, patch('enge_spx.ui.controller.Engine') as engine:
             self.c.check_updates()
             self.w.select_settings_view('environment')
-            self.spin(lambda: not self.c.busy)
+            self.spin(lambda: not self.c.update_checking.get())
         self.assertTrue(self.c.update_available.get())
         self.assertIn('1.2.3', self.c.update_status.get())
         self.assertTrue(self.w.settings_tabs['general'].isChecked())
         self.assertTrue(install.isEnabled())
-        doctor.assert_not_called()
+        check.assert_called_once_with(self.store, cache=False)
+        engine.assert_not_called()
         self.assertEqual(self.c.timezone_mode.get(), 'exit')
+
+    def test_startup_checks_official_version_while_docker_detection_is_busy(self):
+        self.w.show_page('workspace')
+        self.c.busy = True
+        self.c.operation.set('检查 Docker…')
+        with patch('enge_spx.app_updates.check', return_value={'version': '1.2.3'}) as check:
+            self.c.check_updates(True)
+            self.c.check_updates(True)
+            self.spin(lambda: not self.c.update_checking.get())
+        check.assert_called_once_with(self.store, cache=False)
+        self.assertTrue(self.c.busy)
+        self.assertEqual(self.c.operation.get(), '检查 Docker…')
+        self.assertEqual(self.w.current_page, 'workspace')
+        self.assertIn('有可用更新', self.w.nav['settings'].toolTip())
+
+    def test_startup_respects_saved_update_opt_out(self):
+        self.store.write('update-preferences.json', {'schema': 1, 'auto_check': False})
+        controller = Controller(self.store)
+        with patch('enge_spx.app_updates.check') as check:
+            controller.check_updates(True)
+            self.assertFalse(controller.update_checking.get())
+            check.assert_not_called()
 
     def test_update_waits_for_verified_workspace_stop_before_helper_and_close(self):
         order = []
