@@ -9,7 +9,7 @@ if os.name != 'nt':
     os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
 from PySide6.QtTest import QTest, QSignalSpy
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QPushButton
 from enge_spx.state import Store
 from enge_spx.ui.controller import Controller
 from enge_spx.ui.window import Window
@@ -39,6 +39,9 @@ class UpdateUITests(unittest.TestCase):
         self.assertTrue(condition())
 
     def test_manual_check_updates_page_without_starting_docker(self):
+        install = next(item for item in self.w.pages['settings'].findChildren(QPushButton)
+                       if item.text() == '下载更新并重启…')
+        self.assertFalse(install.isEnabled())
         with patch('enge_spx.app_updates.check', return_value={'version': '1.2.3'}), patch('enge_spx.engine.Engine.doctor') as doctor:
             self.c.check_updates()
             self.w.select_settings_view('environment')
@@ -46,6 +49,7 @@ class UpdateUITests(unittest.TestCase):
         self.assertTrue(self.c.update_available.get())
         self.assertIn('1.2.3', self.c.update_status.get())
         self.assertTrue(self.w.settings_tabs['general'].isChecked())
+        self.assertTrue(install.isEnabled())
         doctor.assert_not_called()
         self.assertEqual(self.c.timezone_mode.get(), 'exit')
 

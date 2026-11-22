@@ -950,7 +950,7 @@ class Window(QMainWindow):
         update_row = panel.row()
         responsive_rows.append(update_row)
         update_row.addWidget(self.action('检查更新', self.c.check_updates, ghost=True))
-        update_button = self.action('下载更新并重启…', self.c.install_update, True)
+        update_button = button('下载更新并重启…', self.c.install_update, primary=True)
         update_row.addWidget(update_button)
         update_row.addWidget(self.action('保存更新偏好', self.c.save_update_preferences, ghost=True))
         def update_enabled(unused=None):
