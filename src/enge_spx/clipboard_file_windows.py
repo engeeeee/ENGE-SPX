@@ -8,8 +8,20 @@ import ctypes
 from ctypes import wintypes as w
 import os
 import re
+from time import sleep
 
 from .state import SPXError
+
+
+_BUSY_ERRORS = (32, 33)
+_STATUS_REPARSE_POINT_ENCOUNTERED = 0xC000050B
+_OPEN_ERRORS = {
+    2: "源文件已不存在，请重新复制文件",
+    3: "源目录已不存在，请重新复制文件",
+    5: "当前用户无权读取源文件，请检查文件权限",
+    32: "源文件仍被占用，请关闭使用该文件的程序后重试",
+    33: "源文件仍被锁定，请关闭使用该文件的程序后重试",
+}
 
 
 class UnicodeString(ctypes.Structure):
@@ -42,6 +54,8 @@ def open_read(value):
     native.NtCreateFile.argtypes = [ctypes.POINTER(w.HANDLE), w.ULONG, ctypes.POINTER(ObjectAttributes), ctypes.POINTER(IoStatus), ctypes.c_void_p,
                                    w.ULONG, w.ULONG, w.ULONG, w.ULONG, ctypes.c_void_p, w.ULONG]
     native.NtCreateFile.restype = ctypes.c_int32
+    native.RtlNtStatusToDosError.argtypes = [ctypes.c_int32]
+    native.RtlNtStatusToDosError.restype = w.ULONG
     if api.GetDriveTypeW(value[:3]) not in (2, 3):  # removable/fixed; never SMB
         raise SPXError("剪贴板文件必须位于本机磁盘。")
     root = api.CreateFileW(value[:3], 0x00100001, 7, None, 3, 0x02000000 | 0x00200000, None)
@@ -54,9 +68,20 @@ def open_read(value):
         name = UnicodeString(size, size + 2, ctypes.cast(buffer, w.LPWSTR))
         attributes = ObjectAttributes(ctypes.sizeof(ObjectAttributes), root, ctypes.pointer(name), 0x1040, None, None)
         status = IoStatus()
-        result = native.NtCreateFile(ctypes.byref(handle), 0x00120089, ctypes.byref(attributes), ctypes.byref(status), None, 0, 1, 1, 0x64, None, 0)
-        if result < 0:
-            raise SPXError("无法读取所复制文件：权限不足、文件占用或路径包含链接/云占位符。")
+        for attempt in range(5):
+            result = native.NtCreateFile(
+                ctypes.byref(handle), 0x00120089, ctypes.byref(attributes), ctypes.byref(status),
+                None, 0, 1, 1, 0x64, None, 0,
+            )
+            if result >= 0:
+                break
+            if (result & 0xFFFFFFFF) == _STATUS_REPARSE_POINT_ENCOUNTERED:
+                raise SPXError("源路径包含链接、目录联接或云占位符。请先将文件复制到本机普通目录，再重新粘贴。")
+            code = native.RtlNtStatusToDosError(result)
+            if code not in _BUSY_ERRORS or attempt == 4:
+                message = _OPEN_ERRORS.get(code, "无法读取所复制文件")
+                raise SPXError(f"{message}（Windows 错误 {code}）。")
+            sleep(.05 * 2 ** attempt)
         try:
             return msvcrt.open_osfhandle(handle.value, os.O_RDONLY | os.O_BINARY)
         except BaseException:

@@ -1,4 +1,6 @@
+import asyncio
 import ctypes
+from contextlib import ExitStack, nullcontext, redirect_stderr
 import importlib.util
 import io
 import json
@@ -8,8 +10,9 @@ import tempfile
 import threading
 import time
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
+from enge_spx import forward
 from enge_spx.brand import PACKAGE_RESOURCES
 from enge_spx.engine import Engine
 from enge_spx.lease import write_lease
@@ -107,6 +110,17 @@ class MonitorReliabilityTests(unittest.TestCase):
         engine.take_over_legacy_guard()
         self.assertFalse((self.store.home / "guard-stop.json").exists())
 
+    def test_guard_retries_a_busy_operation_lock_before_the_next_normal_interval(self):
+        self.store.write("runtime.json", {"phase": "ready"})
+        engine = Engine(self.store)
+        engine.ready = Mock(side_effect=lambda: self.store.write("guard-stop.json", {"requested": True}))
+        with ExitStack() as foreground:
+            foreground.enter_context(self.store.lock())
+            with patch("enge_spx.engine.time.sleep", side_effect=lambda _: foreground.close()) as sleep:
+                engine.guard()
+        engine.ready.assert_called_once_with()
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [1, 1, 1])
+
     def test_stop_signal_write_denial_does_not_prevent_container_shutdown(self):
         self.store.write("images.json", {"gateway": "image"})
         engine = Engine(self.store)
@@ -167,6 +181,99 @@ class MonitorReliabilityTests(unittest.TestCase):
             engine.stop()
         engine.docker.run.assert_called_once_with("stop", "--time", "8", "gateway-container", timeout=25)
         self.assertEqual(self.store.read("runtime.json")["phase"], "stopped")
+
+    def test_stop_retries_the_legacy_lease_after_the_gateway_releases_it(self):
+        self.store.write("runtime.json", {"phase": "ready"})
+        self.store.write("images.json", {"gateway": "image"})
+        engine = Engine(self.store)
+        engine.docker = Mock(executable="docker.exe")
+        engine.managed = Mock(return_value=["gateway-container"])
+        engine.docker.inspect.return_value = {
+            "Id": "gateway-container", "State": {"Running": True},
+            "Config": {"Labels": {engine.owner: self.store.instance, engine.role: "gateway"}},
+        }
+        write = self.store.write
+
+        def deny_before_stop(name, value):
+            if name == "gateway/lease.json" and not engine.docker.run.called:
+                raise windows_denied()
+            write(name, value)
+
+        with patch.object(self.store, "write", side_effect=deny_before_stop):
+            engine.stop()
+        engine.docker.run.assert_called_once_with("stop", "--time", "8", "gateway-container", timeout=25)
+        self.assertEqual(self.store.read("runtime.json")["phase"], "stopped")
+        self.assertEqual(self.store.read("gateway/lease.json"), {"expires": 0})
+
+    def test_repeated_stop_preserves_the_append_only_lease_format(self):
+        self.store.write("runtime.json", {"phase": "ready", "lease_journal": True})
+        engine = Engine(self.store)
+        engine.stop()
+        engine.stop()
+        self.assertTrue(self.store.read("runtime.json")["lease_journal"])
+        self.assertFalse((self.store.home / "gateway/lease.json").exists())
+        records = (self.store.home / "gateway/lease.jsonl").read_text().splitlines()
+        self.assertEqual([json.loads(line) for line in records if line], [{"expires": 0}, {"expires": 0}])
+
+    def test_forward_start_waits_for_old_lock_and_keeps_one_pending_worker(self):
+        engine = Engine(self.store)
+        engine.docker = Mock()
+        engine.background = Mock(return_value=Mock(poll=Mock(return_value=None)))
+        state = {"gateway": "gateway", "forward_id": "new", "forward_target": {"host": "127.0.0.1", "port": 1080}}
+        ticks = []
+        with ExitStack() as old_worker:
+            old_worker.enter_context(self.store.lock("forward"))
+
+            def tick(delay):
+                ticks.append(delay)
+                if len(ticks) == 4:
+                    old_worker.close()
+                if len(ticks) == 12:
+                    self.store.write("forward.json", {**forward.binding(state), "heartbeat": time.time()})
+
+            with patch("enge_spx.engine.time.sleep", side_effect=tick):
+                engine.ensure_forward(state)
+        engine.background.assert_called_once_with("forward")
+        engine.docker.run.assert_called_once()
+
+    def test_duplicate_forward_process_exits_when_another_worker_holds_the_lock(self):
+        with self.store.lock("forward"), patch.object(forward, "run") as run:
+            forward.main(self.store)
+        run.assert_not_called()
+
+    def test_forward_heartbeat_recovers_from_windows_file_sharing_conflict(self):
+        state = {"phase": "ready", "gateway": "gateway", "forward_target": {"host": "127.0.0.1", "port": 1080}}
+        store = Mock(home=self.store.home)
+        store.read.return_value = state
+        store.write.side_effect = [windows_denied(), None]
+        engine = Mock()
+        engine.inspect.return_value = {"Id": "gateway", "State": {"Running": True}}
+        engine._image_abis = {"gateway": "spx"}
+        engine.docker.command.return_value = ["docker", "exec"]
+        process = Mock(returncode=0)
+        sleep = asyncio.sleep
+
+        async def relay_until_closed():
+            await asyncio.Event().wait()
+
+        async def tick(delay):
+            if store.write.call_count == 2:
+                state["phase"] = "stopped"
+            await sleep(0)
+
+        tunnel = Mock(run=AsyncMock(side_effect=relay_until_closed))
+        with (
+            patch.object(forward, "Engine", return_value=engine),
+            patch.object(forward.socket, "create_connection", return_value=nullcontext()) as probe,
+            patch.object(forward.asyncio, "create_subprocess_exec", new=AsyncMock(return_value=process)),
+            patch.object(forward, "tunnel_type", return_value=Mock(return_value=tunnel)),
+            patch.object(forward.asyncio, "sleep", side_effect=tick),
+            redirect_stderr(io.StringIO()),
+        ):
+            asyncio.run(forward.run(store))
+        probe.assert_called_once_with(("127.0.0.1", 1080), timeout=5)
+        tunnel.run.assert_awaited_once()
+        self.assertEqual([call.args[0] for call in store.write.call_args_list], ["forward.json", "forward.json"])
 
     def test_journal_partial_tail_and_revocation_keep_original_expiry(self):
         spec = importlib.util.spec_from_file_location("spx_gateway", PACKAGE_RESOURCES / "containers/gateway.py")

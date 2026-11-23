@@ -3,12 +3,12 @@ import asyncio
 import contextlib
 import importlib.util
 import os
-import struct
+import socket
 import sys
 import time
 
 from .engine import Engine, HIDDEN, RESOURCES
-from .state import Store, fingerprint
+from .state import LockBusyError, fingerprint, windows_sharing_conflict
 
 
 def binding(state):
@@ -41,9 +41,9 @@ async def run(store):
     gateway = engine.inspect("gateway")
     if not gateway or gateway["Id"] != state.get("gateway") or not gateway["State"]["Running"]:
         return
-    reader, writer = await asyncio.wait_for(asyncio.open_connection(target["host"], target["port"]), 5)
-    writer.close()
-    await writer.wait_closed()
+    # Startup uses a short-lived socket for the reachability check.
+    with socket.create_connection((target["host"], target["port"]), timeout=5):
+        pass
     guest_log = (store.home / "forward-guest.log").open("ab")
     process = await asyncio.create_subprocess_exec(*engine.docker.command("exec", "-i", gateway["Id"], "python3", engine.runtime_path("gateway", "tunnel.py")), stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=guest_log, env=engine.docker.environment(), creationflags=HIDDEN)
     tunnel = tunnel_type()(process.stdout, process.stdin, (target["host"], target["port"]), flow_control=engine._image_abis["gateway"] != "legacy")
@@ -55,7 +55,12 @@ async def run(store):
             if (current.get("phase") not in ("checking", "review", "ready")
                     or binding(current) != owner or current.get("forward_target") != target):
                 break
-            store.write("forward.json", {**owner, "heartbeat": time.time(), "pid": os.getpid()})
+            try:
+                await asyncio.to_thread(store.write, "forward.json", {**owner, "heartbeat": time.time(), "pid": os.getpid()})
+            except PermissionError as error:
+                if not windows_sharing_conflict(error):
+                    raise
+                print("本机中转心跳暂时无法写入，将重试。", file=sys.stderr, flush=True)
             await asyncio.sleep(1)
     finally:
         transfer.cancel()
@@ -72,5 +77,10 @@ async def run(store):
 
 def main(store):
     from .process_metrics import tracked
-    with store.lock("forward"), tracked(store, "forward"):
+    with contextlib.ExitStack() as stack:
+        try:
+            stack.enter_context(store.lock("forward"))
+        except LockBusyError:
+            return
+        stack.enter_context(tracked(store, "forward"))
         asyncio.run(run(store))

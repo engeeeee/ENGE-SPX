@@ -1,5 +1,13 @@
 # Changes
 
+## 0.15.9 workspace recovery and lower idle memory — 2026-11-24
+
+- Recheck unavailable workspaces and migrate legacy lease sessions during preparation. Retry lease revocation after the stopped gateway releases a shared file.
+- Wait for the existing loopback forwarder before starting another process. Retry a temporary Windows sharing conflict when writing a heartbeat.
+- Start Chromium on demand for ordinary tools with default resource settings. Keep browser startup available for explicit login and saved preferences.
+- Retry temporarily locked clipboard files and report specific Windows errors. Preserve terminal output after synchronized frames and finish UTF-8 decoding at EOF.
+- Reduce terminal parsing work and clear inherited browser tokens from host terminal launches.
+
 ## 0.15.8 settings and startup update checks — 2026-11-22
 
 - Put Preferences alongside the primary workbench tabs and show new releases there.

@@ -15,6 +15,9 @@ PALETTE = {
 }
 TerminalChar = namedtuple("TerminalChar", [*pyte.screens.Char._fields, "faint"],
                           defaults=[*pyte.screens.Char._field_defaults.values(), False])
+_OSC_END = re.compile(r"\x07|\x1b\\|\x9c")
+_CSI_END = re.compile(r"[@-~]")
+_DEC_MODE = re.compile(r"\x1b\[\?([0-9;]+)([hl])")
 
 
 def sgr_attributes(attrs, faint):
@@ -61,7 +64,7 @@ class TerminalStream:
             state = 1 if self.synchronized_at is not None else 2
             self.screen.respond(f'\x1b[?2026;{state}$y'.encode())
             return ''
-        match = re.fullmatch(r'\x1b\[\?([0-9;]+)([hl])', sequence)
+        match = _DEC_MODE.fullmatch(sequence)
         if match and '2026' in match[1].split(';'):
             if match[2] == 'h':
                 if self.synchronized_at is None:
@@ -120,11 +123,11 @@ class TerminalStream:
         index, plain = 0, []
         while index < len(text):
             if self.discard_osc:
-                end = re.search(r"\x07|\x1b\\|\x9c", text[index:])
+                end = _OSC_END.search(text, index)
                 if end is None:
                     self.pending = "\x1b" if text.endswith("\x1b") else ""
                     break
-                index += end.end()
+                index = end.end()
                 self.discard_osc = False
                 continue
             start = text.find("\x1b", index)
@@ -137,7 +140,8 @@ class TerminalStream:
                 break
             kind = text[start + 1]
             if kind == "]":
-                end = re.search(r"\x07|\x1b\\|\x9c", text[start + 2:])
+                payload_start = start + 2
+                end = _OSC_END.search(text, payload_start)
                 if end is None:
                     if len(text) - start <= 4096:
                         self.pending = text[start:]
@@ -148,17 +152,17 @@ class TerminalStream:
                 if plain:
                     self.stream.feed("".join(plain))
                     plain = []
-                if end.start() <= 4096:
-                    self._osc(text[start + 2:start + 2 + end.start()])
-                index = start + 2 + end.end()
+                if end.start() - payload_start <= 4096:
+                    self._osc(text[payload_start:end.start()])
+                index = end.end()
             elif kind == "[":
-                end = re.search(r"[@-~]", text[start + 2:])
+                end = _CSI_END.search(text, start + 2)
                 if end is None:
                     self.pending = text[start:] if len(text) - start <= 256 else ""
                     break
-                index = start + 2 + end.end()
-                sequence = text[start:index]
-                if len(sequence) <= 256:
+                index = end.end()
+                if index - start <= 256:
+                    sequence = text[start:index]
                     serial = self.frame_serial
                     plain.append(self._csi(sequence))
                     if self.frame_serial != serial and self.frame_complete is not None:

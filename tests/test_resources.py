@@ -21,7 +21,7 @@ class BudgetTests(unittest.TestCase):
         self.assertNotIn("resources", self.store.settings())
         config = validate()
         self.assertEqual(config["budgets"], NORMAL)
-        self.assertTrue(config["auto_browser"])
+        self.assertFalse(config["auto_browser"])
         self.assertEqual(arguments(budget(config, "gateway")), [])
         self.assertIn(str(4 * 1024**3), arguments(budget(config, "project")))
         self.assertFalse((self.store.home / "settings.json").exists())
@@ -60,7 +60,7 @@ class BudgetTests(unittest.TestCase):
         self.assertEqual(self.engine._stop.call_count, 1)
         self.assertEqual(self.store.read("resources-previous.json"), backup)
         self.engine.restore_resources()
-        self.assertEqual(self.store.settings()["resources"], preset())
+        self.assertEqual(self.store.settings()["resources"], validate())
         self.assertEqual(self.store.settings()["projects"], ["saved-project"])
         self.assertEqual(self.store.settings()["selected"], "old-node")
         self.assertEqual(set(json.loads((self.store.home / "resources-previous.json").read_text())), {"schema", "resources"})
@@ -135,9 +135,7 @@ class BudgetTests(unittest.TestCase):
                 self.engine.stop_browser()
         self.engine.docker.run.assert_called_once()
 
-    def test_auto_browser_off_keeps_cli_sandbox_choice_and_explicit_override(self):
-        config = preset("low")
-        self.store.write("settings.json", {**self.store.settings(), "resources": config})
+    def test_default_tool_launch_uses_browser_only_for_login_or_explicit_override(self):
         engine = self.engine
         engine.ready = Mock(return_value={"session": "session", "browser_token": "synthetic"})
         engine._browser = Mock(return_value="http://127.0.0.1/viewer")
@@ -149,10 +147,13 @@ class BudgetTests(unittest.TestCase):
         path.mkdir()
         engine.tool_command(str(path), ["codex"])
         engine._browser.assert_not_called()
+        engine.tool_command(str(path), ["codex", "login"])
+        engine._browser.assert_called_once()
+        engine._browser.reset_mock()
         engine.tool_command(str(path), ["claude"], browser=True)
         engine._browser.assert_called_once()
         engine._browser.reset_mock()
-        engine.tool_command(str(path), ["claude"], browser=False)
+        engine.tool_command(str(path), ["codex", "login"], browser=False)
         engine._browser.assert_not_called()
 
 

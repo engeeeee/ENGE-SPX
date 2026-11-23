@@ -30,7 +30,7 @@ def validate_budget(value, role):
 
 def validate(value=None):
     if value is None:
-        return preset()
+        return {**preset(), "auto_browser": False}
     if not isinstance(value, dict) or set(value) != {"schema", "mode", "budgets", "projects", "auto_browser"} or type(value.get("schema")) is not int or value["schema"] != 1:
         raise SPXError("资源设置版本或字段无效，请使用兼容版本恢复；不会自动覆盖。")
     if value["mode"] not in ("normal", "low", "custom") or type(value["auto_browser"]) is not bool:

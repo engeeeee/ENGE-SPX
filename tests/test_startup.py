@@ -187,7 +187,7 @@ class StartupTests(StartupCase):
 
     def test_existing_ready_environment_is_revalidated(self):
         self.store.write("settings.json", {"selected": "landing"})
-        self.store.write("runtime.json", {"phase": "ready"})
+        self.store.write("runtime.json", {"phase": "ready", "lease_journal": True})
         self.engine.ready.return_value = {"phase": "ready", "evidence": {"ip": "192.0.2.1"}}
         with patch("enge_spx.startup.ensure_docker", return_value=INFO):
             result = prepare_workspace(self.engine)
@@ -195,6 +195,37 @@ class StartupTests(StartupCase):
         self.assertEqual(result["evidence"], {"ip": "192.0.2.1"})
         self.engine.check.assert_not_called()
         self.engine.confirm.assert_not_called()
+
+    def test_preparation_rechecks_a_saved_session_using_the_legacy_lease(self):
+        self.store.write("settings.json", {"selected": "landing"})
+        self.store.write("runtime.json", {"phase": "ready", "lease_journal": False})
+        self.engine.check.return_value = {"ip": "192.0.2.1"}
+        with patch("enge_spx.startup.ensure_docker", return_value=INFO):
+            result = prepare_workspace(self.engine)
+        self.assertEqual(result["phase"], "review")
+        self.engine.ready.assert_not_called()
+        self.engine.check.assert_called_once_with()
+        self.engine.confirm.assert_not_called()
+
+    def test_preparation_rechecks_when_a_ready_session_container_is_gone(self):
+        self.store.write("settings.json", {"selected": "landing"})
+        self.store.write("runtime.json", {"phase": "ready", "session": "old-session", "gateway": "old-gateway", "lease_journal": True})
+        engine = Engine(self.store)
+        engine.image_ids = Mock()
+        engine.inspect = Mock(return_value=None)
+        engine.confirm = Mock()
+
+        def recheck():
+            with self.store.lock():
+                self.assertEqual(self.store.read("runtime.json")["phase"], "stopped")
+            return {"ip": "192.0.2.1"}
+
+        engine.check = Mock(side_effect=recheck)
+        with patch("enge_spx.startup.ensure_docker", return_value=INFO):
+            result = prepare_workspace(engine)
+        self.assertEqual((result["phase"], result["evidence"]), ("review", {"ip": "192.0.2.1"}))
+        engine.check.assert_called_once_with()
+        engine.confirm.assert_not_called()
 
     def test_installed_context_cannot_change_during_bootstrap(self):
         self.store.write("images.json", {"gateway": "existing"})

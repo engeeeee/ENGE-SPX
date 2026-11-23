@@ -26,6 +26,10 @@ class DockerConfigurationError(SPXError):
     pass
 
 
+class WorkspaceUnavailable(SPXError):
+    """The previously confirmed session can no longer be reused."""
+
+
 class StartupIssue(SPXError):
     def __init__(self, code, message):
         super().__init__(message)
@@ -145,13 +149,20 @@ def prepare_workspace(engine, settings=None, progress=lambda value: None, cancel
         return {"phase": "needs_configuration", "docker": info, "runtime": True}
     progress({"stage": "connection_check", "message": "正在核对线路和落地出口，请等待检查完成…"})
     # A prepared environment never silently accepts an IP change or confirms a route.
-    if engine.store.read("runtime.json", {}).get("phase") == "ready":
-        with engine.store.lock():
-            evidence = engine.ready().get("evidence")
-        phase = "ready"
-    else:
+    phase = "review"
+    with engine.store.lock(timeout=45):
+        cancelled(cancel)
+        state = engine.store.read("runtime.json", {})
+        if state.get("phase") == "ready" and state.get("lease_journal") is True:
+            try:
+                evidence = engine.ready().get("evidence")
+            except WorkspaceUnavailable:
+                progress({"stage": "connection_check", "message": "旧工作区已失效，正在重新核对线路和落地出口…"})
+            else:
+                phase = "ready"
+    if phase == "review":
+        cancelled(cancel)
         evidence = engine.check()
-        phase = "review"
     cancelled(cancel)
     progress({"stage": "review" if phase == "review" else "ready", "message": "请核对线路和落地出口，再确认启用。" if phase == "review" else "工作环境已就绪。"})
     return {"phase": phase, "docker": info, "runtime": True, "evidence": evidence}

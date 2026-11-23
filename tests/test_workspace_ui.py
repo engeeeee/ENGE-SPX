@@ -68,6 +68,39 @@ class WorkspaceUITests(unittest.TestCase):
             run.call_args.args[0](engine)
         engine.terminal.assert_called_once_with(str(self.project.resolve()), "codex", expected_workspace=(self.identity, "ro"))
 
+    def test_expired_review_offers_a_fresh_connection_check(self):
+        c = self.controller
+        c.runtime_ok = c.docker_ready = True
+        c.nodes = [{"id": "landing", "outbound": {"type": "socks", "server": "192.0.2.1", "server_port": 1080}}]
+        c.selected.set("landing")
+        c.settings_match = Mock(return_value=True)
+        c.ask = Mock(return_value=True)
+        self.store.write("runtime.json", {"phase": "review", "checked": time.time() - 301})
+        c.refresh()
+        self.assertFalse(c.view["can_confirm"])
+        self.assertEqual(c.view["next_text"], "启动并检查连接")
+        with patch.object(c, "prepare") as prepare, patch.object(c, "run") as run:
+            c.next_step()
+            c.confirm()
+        prepare.assert_called_once_with()
+        c.ask.assert_not_called()
+        run.assert_not_called()
+
+    def test_review_expiring_while_the_confirmation_dialog_is_open_is_not_submitted(self):
+        c = self.controller
+        c.settings_match = Mock(return_value=True)
+        self.store.write("runtime.json", {"phase": "review", "checked": time.time()})
+
+        def expire_while_open(title, text):
+            self.store.write("runtime.json", {"phase": "review", "checked": time.time() - 301})
+            return True
+
+        c.ask = Mock(side_effect=expire_while_open)
+        with patch.object(c, "run") as run:
+            c.confirm()
+        c.ask.assert_called_once()
+        run.assert_not_called()
+
     def test_another_project_requires_explicit_binding_and_never_inherits_accounts(self):
         c = self.controller
         c.workspace_profile.set(self.identity)

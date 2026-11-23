@@ -79,7 +79,10 @@ class TerminalScreen(pyte.HistoryScreen):
         charset = self.g1_charset if self.charset else self.g0_charset
         if (not data or not data.isprintable() or pyte.modes.IRM in self.mode
                 or charset is not pyte.charsets.LAT1_MAP
-                or any(not char.isascii() and wcwidth(char) <= 0 and not unicodedata.combining(char) for char in data)):
+                or (not data.isascii() and any(
+                    not char.isascii() and wcwidth(char) <= 0 and not unicodedata.combining(char)
+                    for char in data
+                ))):
             return super().draw(data)
         cursor, columns, buffer, dirty = self.cursor, self.columns, self.buffer, self.dirty
         tables = self.ascii_tables
@@ -434,6 +437,7 @@ class TerminalView(QWidget):
         self.output = queue.Queue(maxsize=64)
         self.pending = threading.Event()
         self.output_finished = False
+        self.output_drained = False
         self.line_text = []
         self.surface = QImage()
         self.surface_allocations = 0
@@ -564,7 +568,7 @@ class TerminalView(QWidget):
             self.frame_timer.start(8)
 
     def _drain(self):
-        if self.stopping.is_set():
+        if self.stopping.is_set() or self.output_drained:
             return
         start = time.monotonic()
         changed = False
@@ -579,6 +583,13 @@ class TerminalView(QWidget):
             self.last_output = time.monotonic()
             if self.frame_started is None:
                 self.frame_started = self.last_output
+        eof = self.output_finished and self.output.empty()
+        if eof:
+            self.output_drained = True
+            tail = self.decoder.decode(b"", final=True)
+            if tail:
+                self.stream.feed(tail)
+                changed = True
         was_ready = self.ready.is_set()
         if self.screen.bracketed:
             self.ready.set()
@@ -592,15 +603,16 @@ class TerminalView(QWidget):
             dirty = self.screen.dirty.copy()
             self.screen.dirty.clear()
             self.surface_dirty.update(dirty)
-            if len(self.line_text) != self.screen.lines:
-                self.line_text = [""] * self.screen.lines
-                dirty.update(range(self.screen.lines))
-            blank = self.screen.default_char
-            for y in dirty:
-                if 0 <= y < self.screen.lines:
-                    row = self.screen.buffer[y]
-                    self.line_text[y] = "".join(row.get(x, blank).data for x in range(self.screen.columns))
-            self.images.observe("".join(self.line_text))
+            if self.tool in ("claude", "codex") or self.sender.transfer is not None:
+                if len(self.line_text) != self.screen.lines:
+                    self.line_text = [""] * self.screen.lines
+                    dirty.update(range(self.screen.lines))
+                blank = self.screen.default_char
+                for y in dirty:
+                    if 0 <= y < self.screen.lines:
+                        row = self.screen.buffer[y]
+                        self.line_text[y] = "".join(row.get(x, blank).data for x in range(self.screen.columns))
+                self.images.observe("".join(self.line_text))
             region = QRegion()
             if self.offset or self.selection_lines is not None:
                 region = QRegion(self.rect())
@@ -625,7 +637,11 @@ class TerminalView(QWidget):
         if changed:
             if self.preedit or before != (self.screen.cursor.x, self.screen.cursor.y):
                 self.update_input_method()
-        if not self.output.empty():
+        if eof:
+            self.pending.clear()
+            self.flush_frame()
+            self.ended.emit()
+        elif not self.output.empty():
             QTimer.singleShot(1, self._drain)
         else:
             self.pending.clear()
@@ -633,9 +649,6 @@ class TerminalView(QWidget):
             if not self.output.empty() and not self.pending.is_set():
                 self.pending.set()
                 self.wake.emit()
-            elif self.output_finished:
-                self.flush_frame()
-                self.ended.emit()
 
     def _blink(self):
         if self.hasFocus() and self.isVisible():
@@ -861,9 +874,9 @@ class TerminalView(QWidget):
             self.frame_region |= QRegion(self.rect())
             self.frame_timer.start(8)
             return
-        self.surface_dirty.clear()
         self.presented_blank = blank
         if completed:
+            # Keep dirty rows for the next paint of the live buffer.
             self.presented_cursor = self.completed_frame[1]
             self.presented_generation = self.completed_generation
             if self.stream.synchronized_at is None:
@@ -871,6 +884,7 @@ class TerminalView(QWidget):
                 self.frame_region |= QRegion(self.rect())
                 self.frame_timer.start(8)
         else:
+            self.surface_dirty.clear()
             self.screen.dirty.clear()
             self.frame_started = None
             self.presented_cursor = self.screen.cursor.x, self.screen.cursor.y, self.screen.cursor.hidden

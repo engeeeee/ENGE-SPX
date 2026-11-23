@@ -18,12 +18,12 @@ import queue
 import threading
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from .state import Store, SPXError, fingerprint, status_snapshot
+from .state import LockBusyError, SPXError, Store, fingerprint, review_is_current, status_snapshot, windows_sharing_conflict
 from .brand import CONTAINERS, LEGACY_LABEL_ROOT, PACKAGE_RESOURCES
 from .compat import LEGACY_RECIPES, LEGACY_RUNTIME_DIRECTORY, LEGACY_BROWSER_TOKEN
 from .docker_env import environment as docker_environment
 from .line_security import LineSecurityError
-from .startup import DockerUnavailable, DockerContextUnavailable, DockerConfigurationError
+from .startup import DockerUnavailable, DockerContextUnavailable, DockerConfigurationError, WorkspaceUnavailable
 from .backends import DEFAULT_BACKEND, get_backend
 
 OWNER = "io.enge.spx.instance"
@@ -472,6 +472,7 @@ class Engine:
         if not state.get("forward_target"):
             return
         from .forward import current_heartbeat
+        worker = None
         for attempt in range(40):
             current = self.store.read("forward.json", {})
             if current_heartbeat(state, current, 5):
@@ -482,8 +483,14 @@ class Engine:
                     return
                 except SPXError:
                     pass
-            if attempt % 4 == 0:
-                self.background("forward")
+            if attempt % 4 == 0 and (worker is None or worker.poll() is not None):
+                try:
+                    with self.store.lock("forward"):
+                        pass
+                except LockBusyError:
+                    pass
+                else:
+                    worker = self.background("forward")
             time.sleep(.25)
         raise SPXError("无法连接本机线路代理。请先启动线路客户端并核对监听地址、端口和认证信息。")
 
@@ -611,8 +618,8 @@ class Engine:
 
     def audit_topology(self, state):
         session, gateway = self.inspect("session"), self.inspect("gateway")
-        if not session or not gateway or session["Id"] != state["session"] or gateway["Id"] != state["gateway"] or not session["State"]["Running"] or not gateway["State"]["Running"]:
-            raise SPXError("容器已停止或重新创建，请重新检查和确认连接。")
+        if not session or not gateway or session["Id"] != state.get("session") or gateway["Id"] != state.get("gateway") or not session["State"]["Running"] or not gateway["State"]["Running"]:
+            raise WorkspaceUnavailable("容器已停止或重新创建，请重新检查和确认连接。")
         if set(session["NetworkSettings"]["Networks"]) != {self.internal} or set(gateway["NetworkSettings"]["Networks"]) != {self.internal, self.external}:
             raise SPXError("检测到容器网络发生变化。")
         if session.get("HostConfig", {}).get("Dns") != ["127.0.0.1"]:
@@ -647,7 +654,7 @@ class Engine:
         with self.store.lock():
             state = self.store.read("runtime.json", {})
             try:
-                if state.get("phase") != "review" or time.time() - state["checked"] > 300:
+                if not review_is_current(state):
                     raise SPXError("检查结果已过期，请重新检查节点。")
                 self.audit_topology(state)
                 evidence = self.probe_chain(state)
@@ -671,7 +678,7 @@ class Engine:
         args = ([sys.executable] if getattr(sys, "frozen", False) else [sys.executable, "-m", "enge_spx"])
         flags = subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS if os.name == "nt" else 0
         with (self.store.home / (action + ".log")).open("a", encoding="utf-8") as log:
-            subprocess.Popen([*args, "--data", str(self.store.home), action], stdin=subprocess.DEVNULL, stdout=log, stderr=log, env=os.environ.copy(), cwd=str(Path(__file__).resolve().parent.parent), creationflags=flags, start_new_session=os.name != "nt")
+            return subprocess.Popen([*args, "--data", str(self.store.home), action], stdin=subprocess.DEVNULL, stdout=log, stderr=log, env=os.environ.copy(), cwd=str(Path(__file__).resolve().parent.parent), creationflags=flags, start_new_session=os.name != "nt")
 
     def start_guard(self):
         self.background("guard")
@@ -680,15 +687,19 @@ class Engine:
         state = self.store.read("runtime.json", {})
         if state.get("phase") != "ready":
             raise SPXError("请先检查节点、核对出口 IP 并确认连接。")
+        stage = "容器和网络拓扑"
         try:
             self.audit_topology(state)
+            stage = "监测心跳"
             if time.time() - state.get("heartbeat", 0) > 100:
-                raise SPXError("连接监测进程已失联，请重新检查连接。")
+                raise WorkspaceUnavailable("连接监测进程已失联，请重新检查连接。")
+            stage = "线路和出口"
             result = self.probe_chain(state, detailed=False) if timings is None else self.probe_chain(state, detailed=False, timings=timings)
             if result["ip"] != state["evidence"]["ip"]:
                 if timings:
                     timings[-1].update(result="unexpected_exit", error_code="unexpected_exit")
                 raise SPXError("检测到出口 IP 改变，环境已停止。")
+            stage = "网关授权续期"
             state["heartbeat"] = time.time()
             self.set_lease(time.time() + 180, state)
             self.store.write("runtime.json", state)
@@ -698,7 +709,8 @@ class Engine:
             # retries without extending it; a persistent failure still expires.
             raise
         except Exception as error:
-            self._stop(str(error) if isinstance(error, LineSecurityError) else "连接监测未通过，请重新检查节点。")
+            self.log(f"连接监测失败（{stage}，{type(error).__name__}）。")
+            self._stop(str(error) if isinstance(error, (LineSecurityError, WorkspaceUnavailable)) else "连接监测未通过，请重新检查节点。")
             raise
 
     def guard(self):
@@ -707,6 +719,7 @@ class Engine:
             with self.store.lock("guard"), tracked(self.store, "guard"):
                 stop_signal = self.store.home / "guard-stop.json"
                 while not stop_signal.is_file() and self.store.read("runtime.json", {}).get("phase") == "ready":
+                    interval = 30
                     try:
                         with self.store.lock():
                             self.ready()
@@ -720,10 +733,9 @@ class Engine:
                     except SPXError:
                         if self.store.read("runtime.json", {}).get("phase") != "ready":
                             break
-                    # Keep the same network-check cadence. Only poll a cheap,
-                    # non-secret stop signal during sleep, so stop/recheck does
-                    # not wait a whole monitor interval or reuse older code.
-                    for _ in range(30):
+                        # Retry promptly after a foreground operation holds the lock.
+                        interval = 3
+                    for _ in range(interval):
                         if stop_signal.is_file():
                             return
                         time.sleep(1)
@@ -745,23 +757,26 @@ class Engine:
             state = self.store.read("runtime.json", {})
         except SPXError:
             state = {"lease_journal": (self.store.home / "gateway/lease.jsonl").is_file()}
-        write_error = None
+        write_error = lease_error = None
         try:
             self.store.write("guard-stop.json", {"schema": 1, "requested": True})
         except (OSError, SPXError) as error:
             write_error = error
         try:
-            self.store.write("runtime.json", {"phase": "stopped", "reason": reason})
+            stopped = {"phase": "stopped", "reason": reason}
+            if state.get("lease_journal") is True:
+                stopped["lease_journal"] = True
+            self.store.write("runtime.json", stopped)
         except (OSError, SPXError) as error:
             write_error = error
         try:
             self.set_lease(0, state)
         except (OSError, SPXError) as error:
-            write_error = error
+            lease_error = error
         if _desktop_stopped or not self.docker.executable or not self.store.read("images.json"):
             self.clear_runtime_references()
-            if write_error:
-                raise write_error
+            if error := write_error or lease_error:
+                raise error
             return
         # Stop the gateway first: an unconfirmed state must not leave an outbound route.
         objects = [self.owned(self.docker.inspect("container", name)) for name in self.managed()]
@@ -780,8 +795,12 @@ class Engine:
             for identifier in failures:
                 self.docker.run("kill", identifier, timeout=15)
         self.clear_runtime_references()
-        if write_error:
-            raise write_error
+        if windows_sharing_conflict(lease_error):
+            # Stopping the gateway releases its reader of the old lease file.
+            self.set_lease(0, state)
+            lease_error = None
+        if error := write_error or lease_error:
+            raise error
 
     def clear_runtime_references(self):
         for name in ("gateway/config.json", "relay.json", "browser-token.json"):
@@ -1176,7 +1195,8 @@ class Engine:
             state = self.ready()
             if browser is None:
                 from .resource_limits import validate
-                browser = validate(self.store.settings().get("resources"))["auto_browser"]
+                login = command[:3] == TOOLS["login-claude"] or command[:2] == TOOLS["login-codex"]
+                browser = login or validate(self.store.settings().get("resources"))["auto_browser"]
             url = self._browser(state) if browser else None
             obj, key = self._project(path, state)
             self.prepared_session, self.prepared_container = state["session"], obj["Id"]

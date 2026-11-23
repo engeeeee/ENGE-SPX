@@ -17,6 +17,16 @@ class SPXError(RuntimeError):
     pass
 
 
+class LockBusyError(SPXError):
+    pass
+
+
+def windows_sharing_conflict(error):
+    return isinstance(error, PermissionError) and (
+        getattr(error, "winerror", None) in (5, 32, 33) or os.name == "nt" and error.errno == errno.EACCES
+    )
+
+
 def default_home() -> Path:
     base = Path(os.environ.get("LOCALAPPDATA", Path.home() / ".local/share"))
     pointer = location_file()
@@ -95,9 +105,8 @@ def atomic_json(path: Path, value) -> None:
                 os.replace(temporary, path)
                 break
             except PermissionError as error:
-                windows_sharing = getattr(error, "winerror", None) in (5, 32, 33) or os.name == "nt" and error.errno == errno.EACCES
                 remaining = deadline - time.monotonic()
-                if not windows_sharing or remaining <= 0:
+                if not windows_sharing_conflict(error) or remaining <= 0:
                     raise
                 time.sleep(min(delay, remaining))
                 delay = min(delay * 2, .2)
@@ -251,7 +260,7 @@ class Store:
                         raise
                     remaining = deadline - time.monotonic()
                     if remaining <= 0:
-                        raise SPXError("环境正在执行其他操作，请稍后重试。") from error
+                        raise LockBusyError("环境正在执行其他操作，请稍后重试。") from error
                     if not waiting and on_wait:
                         on_wait()
                     waiting = True
@@ -276,6 +285,11 @@ class Store:
             raise SPXError("此版本不支持路径中包含逗号或换行的项目。")
         identity = hashlib.sha256(os.path.normcase(str(directory)).encode()).hexdigest()[:16]
         return directory, identity
+
+
+def review_is_current(state):
+    checked = state.get("checked")
+    return state.get("phase") == "review" and isinstance(checked, (int, float)) and time.time() - checked <= 300
 
 
 def status_snapshot(store):

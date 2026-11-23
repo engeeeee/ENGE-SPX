@@ -2,6 +2,7 @@
 from pathlib import Path
 import sys
 
+from .compat import LEGACY_BROWSER_TOKEN
 from .state import SPXError
 
 
@@ -20,6 +21,8 @@ def console_entry():
 def console_environment(docker_executable=None):
     from .docker_env import environment
     result = environment(docker_executable)
+    for key in ("SPX_BROWSER_TOKEN", LEGACY_BROWSER_TOKEN):
+        result.pop(key, None)
     # Source-mode attach starts with cwd=the authorized project. Never import
     # host modules from that untrusted cwd or a relative inherited PYTHONPATH.
     result["PYTHONSAFEPATH"] = "1"

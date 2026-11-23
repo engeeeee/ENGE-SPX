@@ -8,11 +8,52 @@ from ctypes import wintypes as w
 import os
 from pathlib import Path
 import struct
+import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import Mock, call, patch
 
 from enge_spx.clipboard import WindowsClipboard
+from enge_spx.clipboard_file_windows import open_read
+from enge_spx.state import SPXError
+
+
+class ClipboardFileOpenTests(unittest.TestCase):
+    def setUp(self):
+        self.kernel, self.native, self.crt = Mock(), Mock(), Mock()
+        self.kernel.GetDriveTypeW.return_value = 3
+        self.kernel.CreateFileW.return_value = 123
+        self.crt.open_osfhandle.return_value = 7
+        self.enterContext(patch("enge_spx.clipboard_file_windows.ctypes.WinDLL", side_effect=[self.kernel, self.native], create=True))
+        self.enterContext(patch("enge_spx.clipboard_file_windows.os.O_BINARY", 0x8000, create=True))
+        self.enterContext(patch.dict(sys.modules, {"msvcrt": self.crt}))
+        self.sleep = self.enterContext(patch("enge_spx.clipboard_file_windows.sleep"))
+
+    def test_retries_transient_sharing_violation_without_changing_open_flags(self):
+        def open_after_release(handle, *args):
+            if self.native.NtCreateFile.call_count < 3:
+                return ctypes.c_int32(0xC0000043).value
+            ctypes.cast(handle, ctypes.POINTER(w.HANDLE))[0] = 456
+            return 0
+
+        self.native.NtCreateFile.side_effect = open_after_release
+        self.native.RtlNtStatusToDosError.return_value = 32
+        self.assertEqual(open_read(r"C:\fixture\file.txt"), 7)
+        self.assertEqual(self.sleep.call_args_list, [call(.05), call(.1)])
+        for attempt in self.native.NtCreateFile.call_args_list:
+            self.assertEqual(attempt.args[6], 1)
+        self.crt.open_osfhandle.assert_called_once_with(456, os.O_RDONLY | os.O_BINARY)
+        self.kernel.CloseHandle.assert_called_once_with(123)
+
+    def test_access_denial_reports_windows_code_without_retry(self):
+        self.native.NtCreateFile.return_value = ctypes.c_int32(0xC0000022).value
+        self.native.RtlNtStatusToDosError.return_value = 5
+        with self.assertRaisesRegex(SPXError, "无权读取.*Windows 错误 5"):
+            open_read(r"C:\fixture\file.txt")
+        self.native.NtCreateFile.assert_called_once()
+        self.sleep.assert_not_called()
+        self.kernel.CloseHandle.assert_called_once_with(123)
 
 
 @unittest.skipUnless(os.name == "nt", "real Windows clipboard APIs")
@@ -153,6 +194,38 @@ class WindowsClipboardTests(unittest.TestCase):
             self.user.CloseClipboard()
         self.set_data([(13, "recovered\0".encode("utf-16-le"))])
         self.assertEqual(self.clipboard.read().value, "recovered")
+
+
+@unittest.skipUnless(os.name == "nt", "native Windows file sharing")
+class WindowsClipboardFileTests(unittest.TestCase):
+    def test_real_writer_releases_file_during_clipboard_open_retry(self):
+        from enge_spx.clipboard_transfer import open_source
+
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.CreateFileW.argtypes = [w.LPCWSTR, w.DWORD, w.DWORD, ctypes.c_void_p, w.DWORD, w.DWORD, w.HANDLE]
+        kernel.CreateFileW.restype = w.HANDLE
+        kernel.CloseHandle.argtypes = [w.HANDLE]
+        kernel.CloseHandle.restype = w.BOOL
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "selected.txt"
+            path.write_bytes(b"clipboard fixture")
+            handle = kernel.CreateFileW(str(path), 0x40000000, 1, None, 3, 0x80, None)
+            self.assertNotEqual(handle, ctypes.c_void_p(-1).value)
+
+            def release_writer(delay):
+                nonlocal handle
+                self.assertTrue(kernel.CloseHandle(handle))
+                handle = None
+
+            try:
+                with patch("enge_spx.clipboard_file_windows.sleep", side_effect=release_writer) as retry:
+                    with open_source(path) as (stream, size):
+                        self.assertEqual(stream.read(), b"clipboard fixture")
+                        self.assertEqual(size, 17)
+                retry.assert_called_once_with(.05)
+            finally:
+                if handle is not None:
+                    kernel.CloseHandle(handle)
 
 
 class OwnedPTYTests(unittest.TestCase):

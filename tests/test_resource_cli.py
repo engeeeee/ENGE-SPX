@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from enge_spx.__main__ import main
-from enge_spx.resource_limits import preset
+from enge_spx.resource_limits import preset, validate
 from enge_spx.state import Store
 
 
@@ -28,7 +28,7 @@ class ResourceCLITests(unittest.TestCase):
         with patch("enge_spx.engine.Docker.run", side_effect=AssertionError("Unexpected Docker query")):
             code, out, error = self.invoke("--show-settings")
         self.assertEqual(code, 0, error)
-        self.assertEqual(json.loads(out), preset())
+        self.assertEqual(json.loads(out), validate())
 
     def test_apply_and_restore_work_without_installing_or_starting_docker(self):
         path = self.root / "budget.json"
@@ -39,7 +39,7 @@ class ResourceCLITests(unittest.TestCase):
             self.assertEqual(json.loads(out), preset("low"))
             code, out, error = self.invoke("--restore")
         self.assertEqual(code, 0, error)
-        self.assertEqual(json.loads(out), preset())
+        self.assertEqual(json.loads(out), validate())
 
     def test_bad_encoding_json_or_null_rejects_without_echoing_input_or_stopping(self):
         path = self.root / "invalid.json"

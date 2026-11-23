@@ -110,6 +110,16 @@ class TerminalRenderingTests(unittest.TestCase):
         self.assertGreater(len(ticks), 3)
         self.assertIn('SPX_LAST_OUTPUT', '\n'.join(self.view.screen.display))
 
+    def test_eof_flushes_partial_utf8_and_notifies_once(self):
+        ended = []
+        self.view.ended.connect(lambda: ended.append(True))
+        self.pty.queue.put(b'Last output: \xe4\xb8')
+        self.pty.queue.put(b'')
+        self.view.reader.join(2)
+        self.pump(lambda: bool(ended))
+        self.assertEqual(self.view.screen.display[0].rstrip(), 'Last output: \ufffd')
+        self.assertEqual(ended, [True])
+
     def test_synchronized_erase_and_partial_redraw_keep_last_complete_pixels(self):
         self.view.stream.feed('Old completed frame 中文')
         before = self.image()
@@ -159,6 +169,15 @@ class TerminalRenderingTests(unittest.TestCase):
         self.assertEqual(self.view.presented_generation, self.view.completed_generation)
         self.view.stream.feed('\x1b[?2026l')
         self.assertNotEqual(self.image(), second)
+
+    def test_text_after_synchronized_frame_is_painted_from_pty(self):
+        self.pty.queue.put(b'\x1b[?2026hCompleted frame\x1b[?2026l\x1b[2;1HFollowing output')
+        self.pump(lambda: 'Following output' in self.view.screen.display[1])
+        # Present the completed snapshot, then paint the live screen again.
+        self.image()
+        self.image()
+        cells, _ = self.view.surface_rows[1]
+        self.assertEqual(''.join(char.data for char in cells).rstrip(), 'Following output')
 
     def test_resize_during_synchronized_frame_does_not_use_old_grid_snapshot(self):
         self.view.stream.feed('\x1b[?2026hOld grid\x1b[?2026l')

@@ -10,6 +10,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from enge_spx.engine import Engine
+from enge_spx.resource_limits import preset
 from enge_spx.state import SPXError, Store
 
 
@@ -59,7 +60,7 @@ class WorkspaceLaunchTests(unittest.TestCase):
             self.assertEqual(command.count("project-container"), 1)
             engine.log.assert_called_once()
             engine.ready.assert_called_once()
-            engine._browser.assert_called_once()
+            engine._browser.assert_not_called()
             engine._project.assert_called_once()
         finally:
             release.set()
@@ -67,7 +68,9 @@ class WorkspaceLaunchTests(unittest.TestCase):
         self.assertFalse(thread.is_alive())
         self.assertFalse(failures, failures)
 
+    @patch.dict(os.environ, {"SPX_BROWSER_TOKEN": "outer-session", "EWB_BROWSER_TOKEN": "outer-legacy-session"})
     def test_terminal_opens_prepared_viewer_without_reacquiring_after_launch(self):
+        self.store.write("settings.json", {"resources": preset()})
         for tool in ("claude", "codex", "shell", "login-claude", "login-codex"):
             with self.subTest(tool=tool):
                 engine = self.engine()
@@ -82,8 +85,8 @@ class WorkspaceLaunchTests(unittest.TestCase):
                     with patch("enge_spx.engine.os", SimpleNamespace(name="nt")), patch("enge_spx.terminal.resolve"), patch("enge_spx.terminal.launch", side_effect=launched) as launch, patch("enge_spx.engine.webbrowser.open") as viewer:
                         engine.terminal(str(self.project), tool)
                     launch.assert_called_once()
-                    self.assertNotIn("a" * 64, repr(launch.call_args))
-                    self.assertNotIn("SPX_BROWSER_TOKEN", launch.call_args.args[4])
+                    self.assertFalse("a" * 64 in repr(launch.call_args), "Session token passed to the host terminal")
+                    self.assertFalse({"SPX_BROWSER_TOKEN", "EWB_BROWSER_TOKEN"} & launch.call_args.args[4].keys())
                     viewer.assert_called_once_with(engine._browser.return_value)
                     engine.ready.assert_called_once()
                     engine._browser.assert_called_once()

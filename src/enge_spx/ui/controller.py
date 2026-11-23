@@ -27,7 +27,7 @@ from ..proxy import detect_system_proxy, download_proxy, protocol, proxy_url, re
 from ..resource_limits import ROLES, preset as resource_preset, validate as validate_resources, validate_budget
 from ..workspace_profiles import load as load_workspace_profiles, display_name as workspace_display_name, recent_projects, SHARED
 from ..startup import DOCKER_INSTALL_URL, StartupIssue, diagnostics, prepare_workspace
-from ..state import SPXError, Store, atomic_json, status_snapshot
+from ..state import SPXError, Store, atomic_json, review_is_current, status_snapshot
 from ..storage import desktop_storage, plan_migration, prepare_docker_move, verify_docker_move
 from .style import read_theme
 
@@ -1070,13 +1070,23 @@ class Controller(QObject):
     def confirm(self):
         if not self.settings_match():
             return
-        evidence = status_snapshot(self.store).get("evidence") or {}
+        status = status_snapshot(self.store)
+        if not review_is_current(status):
+            self.operation.set("检查结果已过期，请重新检查连接。")
+            self.refresh()
+            return
+        evidence = status.get("evidence") or {}
         text = f"前置线路出口：{evidence.get('line_ip', '—')}\n落地出口：{evidence.get('ip', '—')}\n地区：{evidence.get('country', '—')} / {evidence.get('city', '—')}\n时区：{self.timezone.get()}\n\n确认实际出口后启用工作区？"
         language = self.store.settings().get('environment_language')
         if self.language_mode.get() != 'unchanged' and language:
             text = text.replace('\n\n确认', f"\n环境语言：{language['tag']}（{'第一跳线路出口' if self.language_mode.get() == 'line' else '最终落地出口'}）\n终端仍支持中文输入；不改 Windows 语言。\n\n确认")
         if self.ask("核对线路与落地", text):
-            self.run(lambda engine: engine.confirm())
+            current = status_snapshot(self.store)
+            if current["checked"] == status["checked"] and review_is_current(current):
+                self.run(lambda engine: engine.confirm())
+            else:
+                self.operation.set("检查结果已变化，请重新核对线路和落地出口。")
+                self.refresh()
 
     def save_settings(self):
         try:
@@ -1445,8 +1455,9 @@ class Controller(QObject):
         try:
             state = status_snapshot(self.store)
             matching = self.settings_match()
+            review = review_is_current(state)
             ready = state["phase"] == "ready" and matching and self.compatible and self.docker_ready and state["guard_age"] <= 100
-            title = "连接已确认，可以开始工作" if ready else "核对出口后开始工作" if state["phase"] == "review" else "准备你的工作环境"
+            title = "连接已确认，可以开始工作" if ready else "核对出口后开始工作" if review else "准备你的工作环境"
             detail = state.get("reason") or "为 Claude Code、Codex 和浏览器准备独立工作区。"
             if not self.runtime_ok:
                 title, detail = "准备你的工作环境", "一键准备运行环境，然后配置线路与落地代理。"
@@ -1454,6 +1465,8 @@ class Controller(QObject):
                 title, detail = "添加你的落地代理", "选择合适的出口，连接你的工作环境。"
             elif state["phase"] in ("ready", "review") and not matching:
                 title, detail = "代理设置已更改", "重新检查线路，并核对实际出口后启用。"
+            elif state["phase"] == "review" and not review:
+                title, detail = "检查结果已过期", "重新检查线路和落地，再核对实际出口。"
             elif state["phase"] == "ready" and not ready:
                 title, detail = "连接需要重新核验", "检查当前环境，再核对线路和落地出口。"
             if self.startup_active:
@@ -1467,7 +1480,7 @@ class Controller(QObject):
             evidence = state.get("evidence") or {}
             if ready:
                 self.steps[2:] = ["检查通过", "已确认"]
-            elif state["phase"] == "review":
+            elif review:
                 self.steps[3] = "等待你确认"
             elif not self.busy:
                 self.steps[2:] = ["等待检查", "由你确认"]
@@ -1479,12 +1492,12 @@ class Controller(QObject):
                 value = node["outbound"]
                 prefix = ("加密线路  →  " if mode == "managed" else "本机 v2ray  →  ") if self.relay_enabled.get() else ""
                 route = prefix + f"{protocol(node)} 落地  {value['server']}:{value['server_port']}  →  目标服务"
-            next_text = "一键准备环境" if not self.runtime_ok or not self.docker_ready else "添加落地代理" if not self.nodes else "打开工作区" if ready else "核对并确认" if state["phase"] == "review" and matching else "启动并检查连接"
+            next_text = "一键准备环境" if not self.runtime_ok or not self.docker_ready else "添加落地代理" if not self.nodes else "打开工作区" if ready else "核对并确认" if review and matching else "启动并检查连接"
             exiting = self.exit_mode is not None
             view = dict(title=title, detail=detail, ready=ready, matching=matching, busy=self.busy or exiting, cancelable=self.cancelable and not self.cancel.is_set() and not exiting, next_text=next_text, steps=tuple(self.steps), route=route, line_status=line_status,
                         ip=evidence.get("ip", "—"), line_ip=evidence.get("line_ip", "—"), region=evidence.get("country", "—") + " / " + evidence.get("city", "—"), timezone=self.timezone.get(),
-                        badge="正在退出" if exiting else "工作区已就绪" if ready else "正在准备" if self.busy else "等待确认" if state["phase"] == "review" else "尚未启用",
-                        can_confirm=not self.busy and self.docker_ready and state["phase"] == "review" and matching)
+                        badge="正在退出" if exiting else "工作区已就绪" if ready else "正在准备" if self.busy else "等待确认" if review else "尚未启用",
+                        can_confirm=not self.busy and self.docker_ready and review and matching)
             if view != self.view:
                 self.view = view
                 self.changed.emit(view)
