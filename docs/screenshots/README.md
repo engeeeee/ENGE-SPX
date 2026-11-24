@@ -1,10 +1,24 @@
 # 软件界面截图与复现
 
+## 工作台 0.15.9
+
+工作台、项目、连接和资源页在 Windows 上以 3× Qt 缩放采集，使用 0.15.9 正式版对应的源码 `d645eee1d681c08eb097f44e020f3335dfb29fdd`。截图使用临时数据目录，账号、节点和工作区均未配置。
+
+- [Windows 截图运行记录](https://github.com/engeeeee/ENGE-SPX/actions/runs/45323210641)
+- [深色 PNG 清单及 SHA-256](../../website/public/screenshots/0.15.9/dark/capture.json) · [浅色 PNG 清单及 SHA-256](../../website/public/screenshots/0.15.9/light/capture.json)
+- 原始截图归档 SHA-256 `9f9e1566fefea64865f0768eeaf9d09df969da3feda5d4814851aa092beb21f7`
+
+## 智能终端（0.15.9）
+
+[终端原图](../../website/public/screenshots/0.15.9/terminal-codex@2x.png)来自 ENGE SPX 0.15.9 和 Codex 0.169.0 在 Linux 上的实际运行。PNG 为 2200×1360，保留了两张图片的原生附件标记和一个文件引用。草稿保留在输入区，采集使用临时项目与本地测试服务。[版本、平台与文件校验](../../website/public/screenshots/0.15.9/terminal-capture.json)
+
 ## 工作台 0.15.6
 
 新版工作台、项目、连接和资源页使用 Windows 上的 3× 原生采集，临时数据未配置账号或节点。文件尺寸与 SHA-256 见 [深色清单](../../website/public/screenshots/0.15.6/dark/capture.json) 和 [浅色清单](../../website/public/screenshots/0.15.6/light/capture.json)。[Windows 截图运行记录](https://github.com/engeeeee/ENGE-SPX/actions/runs/45031285658)
 
-README 中的四张主程序图片来自 **ENGE SPX 0.13.2 在原生 Windows 环境运行的真实 Qt 界面**。截取工作台、项目工作区、连接与代理、资源预算页面，PNG 原图保留，不经过图像生成、拼接或添加虚构状态。新增终端图的平台、版本与复现方法见下方“智能终端”。
+## 工作台 0.13.2
+
+历史截图来自 ENGE SPX 0.13.2 在原生 Windows 环境运行的 Qt 界面，保留了工作台、项目工作区、连接与代理、资源预算页面的 PNG 原图。
 
 | 项目 | 记录 |
 | --- | --- |

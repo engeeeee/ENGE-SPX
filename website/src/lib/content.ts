@@ -3,21 +3,21 @@ export type Theme = "dark" | "light";
 
 export const product = {
     name: "ENGE SPX",
-    version: "0.15.8",
-    published: "2026-11-22",
+    version: "0.15.9",
+    published: "2026-11-24",
     site: "https://enge1337.cn",
     repository: "https://github.com/engeeeee/ENGE-SPX",
     release:
-        "https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.8-windows",
+        "https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.9-windows",
     installer:
-        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.8-windows/ENGE-SPX-Windows-x64-0.15.8-Setup.exe",
+        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.9-windows/ENGE-SPX-Windows-x64-0.15.9-Setup.exe",
     portable:
-        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.8-windows/ENGE-SPX-Windows-x64-0.15.8-Portable.zip",
+        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.9-windows/ENGE-SPX-Windows-x64-0.15.9-Portable.zip",
     installerSha256:
-        "575c791cc22cd43528d2f76e8fc5dc9c0a26ebfc57e5b817f2d5de7af1f460d6",
+        "4dfd191f0f362608d3d3f69a909ee7d42087371debbee1696d64c22b36eff908",
     portableSha256:
-        "5c62f3f9bdedfbf36f2ee1993a658edee4479a13369aa976ead9ab195fa8e467",
-    screenshotVersion: "0.15.6",
+        "6ad6483893e4d91b7159a719adc0a8c19d47e96886817103038cc6e970f24492",
+    screenshotVersion: "0.15.9",
 } as const;
 
 export const docs = {
@@ -101,13 +101,13 @@ export const screenshots = [
     {
         id: "terminal",
         title: "Codex 智能终端",
-        alt: "ENGE SPX 0.15.1 实际运行的 Codex 0.169.0：中文草稿中包含两张原生图片标记与文件路径，尚未发送",
-        source: "/screenshots/terminal-codex-0.15.1@2x.png",
+        alt: "ENGE SPX 0.15.9 实际运行的 Codex 0.169.0：中文草稿中包含两张原生图片标记与文件路径，尚未发送",
+        source: `/screenshots/${product.screenshotVersion}/terminal-codex@2x.png`,
         width: 1100,
         height: 680,
         pixelRatio: 2,
         platform: "Linux 实际运行画面",
-        version: "0.15.1",
+        version: "0.15.9",
         context: "Codex 0.169.0 · 未发送的测试草稿",
     },
 ] as const;

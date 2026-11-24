@@ -2,7 +2,7 @@
 <h1 align="center">ENGE SPX</h1>
 <p align="center"><strong>An isolated AI coding workspace for Windows</strong></p>
 <p align="center">Run Claude Code, Codex and a workspace browser in Linux containers with a chosen, verified proxy exit.</p>
-<p align="center"><a href="README.md">简体中文</a> · <strong>English</strong> · <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.8-windows">Download</a></p>
+<p align="center"><a href="README.md">简体中文</a> · <strong>English</strong> · <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.9-windows">Download</a></p>
 
 [Official website](https://enge1337.cn/) · [Website source](website/README.md)
 
@@ -41,22 +41,22 @@ This diagram shows managed chaining. The browser does not mount the project or t
 
 **Start from one workspace dashboard.** Prepare the runtime, review the selected route and exits, then open your project and tools. Opening the app checks status; you choose when Docker starts.
 
-![ENGE SPX 0.15.6 running on Windows: preparation steps, exit information and workspace route](website/public/screenshots/0.15.6/dark/overview.png)
+![ENGE SPX 0.15.9 running on Windows: preparation steps, exit information and workspace route](website/public/screenshots/0.15.9/dark/overview.png)
 
 | Projects, identities and tools | Lines and landing proxies |
 | --- | --- |
-| [![Windows workspace page with project grants and Claude Code, Codex and Chromium launch controls](website/public/screenshots/0.15.6/dark/workspace.png)](website/public/screenshots/0.15.6/dark/workspace.png) | [![Windows proxy page with landing selection and managed line settings](website/public/screenshots/0.15.6/dark/connection.png)](website/public/screenshots/0.15.6/dark/connection.png) |
+| [![Windows workspace page with project grants and Claude Code, Codex and Chromium launch controls](website/public/screenshots/0.15.9/dark/workspace.png)](website/public/screenshots/0.15.9/dark/workspace.png) | [![Windows proxy page with landing selection and managed line settings](website/public/screenshots/0.15.9/dark/connection.png)](website/public/screenshots/0.15.9/dark/connection.png) |
 | Select a local project, apply an identity and read-only/read-write grant, then use the tool and browser controls after connection confirmation. | Import nodes, choose a managed fixed chain or local-v2ray compatibility, and configure the line, landing and download proxy separately. |
 
-These are actual **0.15.6 native Windows UI captures** using temporary data without accounts, proxy nodes or a running Docker workspace. Click an image for full size. [Capture provenance and reproduction](docs/screenshots/README.md) includes the source commit, Windows run and image hashes. The UI is currently Chinese.
+These are actual **0.15.9 native Windows UI captures** using temporary data without accounts, proxy nodes or a running Docker workspace. Click an image for full size. [Capture provenance and reproduction](docs/screenshots/README.md) includes the source commit, Windows run and image hashes. The UI is currently Chinese.
 
 **Smart terminal: edit the current Codex draft and paste images or files in place.**
 
-[![ENGE SPX 0.15.1 running Codex 0.169.0 with a Chinese draft, two native image markers and a file reference, not submitted](docs/images/0.15.1/terminal-codex@2x.png)](docs/images/0.15.1/terminal-codex@2x.png)
+[![ENGE SPX 0.15.9 running Codex 0.169.0 with a Chinese draft, two native image markers and a file reference, not submitted](website/public/screenshots/0.15.9/terminal-codex@2x.png)](website/public/screenshots/0.15.9/terminal-codex@2x.png)
 
 Ctrl+V pastes text, screenshots and file references without an upload dialog or automatic submission. Drag to copy, right-click to paste, scroll conversation history, and save font, tint and background preferences. Native click-to-position depends on CLI support; Windows Acrylic depends on OS support. Smart attachments require the owned terminal; external terminals retain their original behavior.
 
-This is an actual **Linux capture of the 0.15.1 product terminal and Codex 0.169.0**, rendered at 2× DPI. It shows an unsent test draft, with no model response; it is not evidence of Windows Acrylic or Docker transport. See [capture provenance](docs/screenshots/README.md#智能终端0151), [clipboard compatibility](docs/smart-clipboard.zh-CN.md) and [terminal settings](docs/terminal-appearance-performance.zh-CN.md).
+This 2× capture shows an unsent draft in **ENGE SPX 0.15.9 and Codex 0.169.0 running on Linux**. [Terminal settings](docs/terminal-appearance-performance.zh-CN.md) · [Capture provenance](docs/screenshots/README.md#智能终端0159)
 
 ## Typical uses
 
@@ -66,12 +66,12 @@ This is an actual **Linux capture of the 0.15.1 product terminal and Codex 0.169
 
 ## Download and start
 
-Current release: **[0.15.8 stable](https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.8-windows)**. Windows x64 requires Docker Desktop with Linux containers / WSL 2 and Docker Engine 28+. Packaged builds do not require a separate Python installation. Executables are currently unsigned.
+Current release: **[0.15.9 stable](https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.9-windows)**. Windows x64 requires Docker Desktop with Linux containers / WSL 2 and Docker Engine 28+. Packaged builds do not require a separate Python installation. Executables are currently unsigned.
 
-**0.15.8 stable** adds Preferences to the top navigation and checks for official releases when the app opens. You can disable startup checks under Preferences → General. [Release notes](docs/releases/0.15.8.zh-CN.md)
+**0.15.9 stable** improves workspace recovery, terminal rendering and Windows file-lock handling. Chromium opens on demand with the default resource preferences. [Release notes](docs/releases/0.15.9.zh-CN.md)
 
-- **[Windows installer](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.8-windows/ENGE-SPX-Windows-x64-0.15.8-Setup.exe)**: per-user setup with shortcuts.
-- **[Portable ZIP](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.8-windows/ENGE-SPX-Windows-x64-0.15.8-Portable.zip)**: extract everything, run `ENGE-SPX.exe` and keep `_internal` beside it.
+- **[Windows installer](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.9-windows/ENGE-SPX-Windows-x64-0.15.9-Setup.exe)**: per-user setup with shortcuts.
+- **[Portable ZIP](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.9-windows/ENGE-SPX-Windows-x64-0.15.9-Portable.zip)**: extract everything, run `ENGE-SPX.exe` and keep `_internal` beside it.
 - Both packages contain `spx.exe`. Checksums and the matching runtime are on the release page.
 
 1. Install [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/) once and complete its license, WSL and Linux-engine initialization.

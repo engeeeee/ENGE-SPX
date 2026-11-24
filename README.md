@@ -3,7 +3,7 @@
 <p align="center"><strong>Windows 上的 AI 编程隔离工作台</strong></p>
 <p align="center">为 Claude Code、Codex 和浏览器提供容器工作区，以及可指定、可核对的代理出口。</p>
 <p align="center">
-  <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.8-windows">下载 Windows 版</a> ·
+  <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.9-windows">下载 Windows 版</a> ·
   <a href="https://enge1337.cn/">官方网站</a> ·
   <a href="#界面预览">界面预览</a> ·
   <a href="docs/quickstart.zh-CN.md">快速入门</a> ·
@@ -12,8 +12,8 @@
 </p>
 <p align="center">
   <a href="https://github.com/engeeeee/ENGE-SPX/actions/workflows/ci.yml"><img src="https://github.com/engeeeee/ENGE-SPX/actions/workflows/ci.yml/badge.svg" alt="Windows / Linux CI"></a>
-  <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.8-windows"><img src="https://img.shields.io/badge/Windows-x64-0078D4" alt="Windows x64"></a>
-  <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.8-windows"><img src="https://img.shields.io/badge/0.15.8-Stable-3F8F61" alt="0.15.8 正式版"></a>
+  <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.9-windows"><img src="https://img.shields.io/badge/Windows-x64-0078D4" alt="Windows x64"></a>
+  <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.9-windows"><img src="https://img.shields.io/badge/0.15.9-Stable-3F8F61" alt="0.15.9 正式版"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-PolyForm_Noncommercial-6D5BD0" alt="PolyForm Noncommercial"></a>
 </p>
 
@@ -37,24 +37,24 @@
 
 **工作台：顶部导航、环境启用和项目工具。** 打开软件先查看状态，何时启动 Docker、准备环境和启用连接，由你决定。
 
-![ENGE SPX 0.15.6 在 Windows 上运行的工作台，包含一键准备、出口信息和工作区网络路径](website/public/screenshots/0.15.6/dark/overview.png)
+![ENGE SPX 0.15.9 在 Windows 上运行的工作台，包含一键准备、出口信息和工作区网络路径](website/public/screenshots/0.15.9/dark/overview.png)
 
 | 项目工作区：选择项目、身份和工具 | 连接与代理：分别管理线路和落地 |
 | --- | --- |
-| [![Windows 项目工作区，展示目录选择、身份授权及 Claude Code、Codex 和 Chromium 入口](website/public/screenshots/0.15.6/dark/workspace.png)](website/public/screenshots/0.15.6/dark/workspace.png) | [![Windows 连接与代理页，展示 SOCKS5、HTTP、HTTPS 落地和前置线路设置](website/public/screenshots/0.15.6/dark/connection.png)](website/public/screenshots/0.15.6/dark/connection.png) |
+| [![Windows 项目工作区，展示目录选择、身份授权及 Claude Code、Codex 和 Chromium 入口](website/public/screenshots/0.15.9/dark/workspace.png)](website/public/screenshots/0.15.9/dark/workspace.png) | [![Windows 连接与代理页，展示 SOCKS5、HTTP、HTTPS 落地和前置线路设置](website/public/screenshots/0.15.9/dark/connection.png)](website/public/screenshots/0.15.9/dark/connection.png) |
 | 选择本地目录，应用身份和只读/读写权限；连接确认后，从同一页面打开 Claude Code、Codex、Linux 终端与工作区浏览器。 | 导入或添加节点，选择软件内双跳或本机 v2ray 兼容模式，配置线路服务器、落地和下载代理。 |
 
-截图为 **0.15.6 真实程序在 Windows 原生环境中的运行画面**，使用未配置账号与节点的临时数据，展示配置入口。点击图片可查看原图；[截图来源与复现](docs/screenshots/README.md)记录了源码版本、Windows CI 和文件校验信息。
+截图为 **0.15.9 真实程序在 Windows 原生环境中的运行画面**，使用未配置账号与节点的临时数据，展示配置入口。点击图片可查看原图；[截图来源与复现](docs/screenshots/README.md)记录了源码版本、Windows CI 和文件校验信息。
 
 **智能终端：在 Codex 原来的输入区编辑文字、粘贴图片和文件。**
 
-[![ENGE SPX 0.15.1 实际运行的 Codex 智能终端，中文草稿包含两张原生图片标记和文件引用，尚未发送](docs/images/0.15.1/terminal-codex@2x.png)](docs/images/0.15.1/terminal-codex@2x.png)
+[![ENGE SPX 0.15.9 实际运行的 Codex 智能终端，中文草稿包含两张原生图片标记和文件引用，尚未发送](website/public/screenshots/0.15.9/terminal-codex@2x.png)](website/public/screenshots/0.15.9/terminal-codex@2x.png)
 
 - **Ctrl+V 粘贴**：文字直接进入当前草稿；截图和 PNG/JPEG/WebP 等图片等待原生附件标记；普通文件保留原件并插入容器内路径。不打开上传对话框，也不自动发送。
 - **复制与编辑**：拖选后自动复制，右键粘贴；支持中文输入法、ANSI 颜色和滚动历史。支持原生鼠标的 CLI 可单击定位；Codex 草稿可 Ctrl+A 后 Delete 删除。
 - **保存外观设置**：字体、字号、配色、背景不透明度和操作偏好可长期保存。Windows 可选 Acrylic 毛玻璃，效果取决于系统支持。
 
-终端图为 **0.15.1 产品终端与 Codex 0.169.0 在 Linux 上的真实运行截图**，按 2× DPI 原生渲染；展示未发送的测试草稿，没有模型回复，不作为 Windows 毛玻璃或 Docker 传输验收。智能附件粘贴需要自带终端；外部终端保留原有行为。详见[使用与兼容范围](docs/smart-clipboard.zh-CN.md)、[终端设置](docs/terminal-appearance-performance.zh-CN.md)及[截图来源](docs/screenshots/README.md#智能终端0151)。
+终端图来自 **ENGE SPX 0.15.9 与 Codex 0.169.0 在 Linux 上的实际运行**，按 2× DPI 截取，展示一条未发送的测试草稿。[终端设置](docs/terminal-appearance-performance.zh-CN.md) · [截图来源](docs/screenshots/README.md#智能终端0159)
 
 ## 适合哪些场景
 
@@ -87,15 +87,15 @@ flowchart LR
 
 新增 **[Smart Clipboard 智能粘贴](docs/smart-clipboard.zh-CN.md)**：在自有终端的 Claude Code / Codex 当前输入区 Ctrl+V 粘贴文字、截图和文件，无额外上传对话框、不自动发送。完整功能需要智能粘贴终端；显式 Windows Terminal / PowerShell / 自定义终端保留原有行为。图片按当前会话的原生附件标记确认，兼容记录与限制见[验证记录](docs/validation-smart-clipboard.zh-CN.md)。
 
-当前版本为 **[0.15.8 正式版](https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.8-windows)**。支持 Windows x64，需要 Docker Desktop 的 **Linux containers / WSL 2** 后端，Docker Engine **28+**。安装版和便携版均不需要另装 Python。
+当前版本为 **[0.15.9 正式版](https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.9-windows)**。支持 Windows x64，需要 Docker Desktop 的 **Linux containers / WSL 2** 后端，Docker Engine **28+**。安装版和便携版均不需要另装 Python。
 
-本版将「偏好设置」移到顶部导航，并在每次打开软件时自动检查更新。可在「偏好设置 → 常规」关闭自动检查。[0.15.8 发布说明](docs/releases/0.15.8.zh-CN.md)
+0.15.9 改善工作区重连、终端输出和文件占用时的恢复。未设置资源偏好时，Chromium 按需打开。[0.15.9 发布说明](docs/releases/0.15.9.zh-CN.md)
 
 | 下载方式 | 适合谁 |
 | --- | --- |
-| **[Windows 安装版](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.8-windows/ENGE-SPX-Windows-x64-0.15.8-Setup.exe)** | 常规使用；当前用户安装，提供开始菜单和桌面快捷方式 |
-| **[Windows 便携版](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.8-windows/ENGE-SPX-Windows-x64-0.15.8-Portable.zip)** | 自行管理程序目录；完整解压后运行 `ENGE-SPX.exe`，保留 `_internal` |
-| **[发布记录与 SHA-256](https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.8-windows)** | 查看改动、校验文件与同版本资产；两个 Windows 包均包含 `spx.exe` 命令行入口 |
+| **[Windows 安装版](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.9-windows/ENGE-SPX-Windows-x64-0.15.9-Setup.exe)** | 常规使用；当前用户安装，提供开始菜单和桌面快捷方式 |
+| **[Windows 便携版](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.9-windows/ENGE-SPX-Windows-x64-0.15.9-Portable.zip)** | 自行管理程序目录；完整解压后运行 `ENGE-SPX.exe`，保留 `_internal` |
+| **[发布记录与 SHA-256](https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.9-windows)** | 查看改动、校验文件与同版本资产；两个 Windows 包均包含 `spx.exe` 命令行入口 |
 
 1. **安装一次 Docker Desktop**：按 [官方安装说明](https://docs.docker.com/desktop/setup/install/windows-install/)完成许可、WSL 和 Linux 引擎初始化。
 2. **点击“一键准备环境”**：软件自动启动已安装的 Docker，等待引擎就绪，再复用已有运行环境，或下载、校验并导入。
