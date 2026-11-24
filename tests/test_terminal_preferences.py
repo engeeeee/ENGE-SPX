@@ -124,10 +124,61 @@ class TerminalPreferenceTests(unittest.TestCase):
         self.assertEqual(read(self.store)['font_size'], 16)
 
     def test_unknown_versions_invalid_types_and_ranges_do_not_overwrite(self):
-        for patch in ({'schema': 2}, {'font_size': True}, {'opacity': 5}, {'tint': 'unsafe'}, {'tint': []}, {'appearance': {}}, {'font_family': 'x\ncmd'}):
+        for patch in ({'schema': 2}, {'font_size': True}, {'opacity': 5}, {'tint': 'unsafe'}, {'tint': []}, {'appearance': {}},
+                      {'font_family': 'x\ncmd'}, {'color_background': '#123'}, {'color_cursor': 'red; border: none'}):
             with self.assertRaises(SPXError):
                 validate({'schema': 1, **patch})
         self.assertFalse((self.store.home / FILE).exists())
+
+    def test_existing_preferences_and_partial_color_saves(self):
+        self.store.write(FILE, {"schema": 1, "font_size": 16, "tint": "purple"})
+        self.assertIsNone(read(self.store)["color_background"])
+        save(self.store, {"color_background": "#F0ABCD"})
+        save(self.store, {"color_title_foreground": "#321765"})
+        settings = read(self.store)
+        self.assertEqual(settings["font_size"], 16)
+        self.assertEqual(settings["tint"], "purple")
+        self.assertEqual(settings["color_background"], "#f0abcd")
+        self.assertEqual(settings["color_title_foreground"], "#321765")
+
+    def test_color_controls_keep_live_rendering_and_save_after_close(self):
+        from PySide6.QtGui import QColor
+        from enge_spx.smart_terminal import TerminalWindow
+        from enge_spx.terminal_appearance import ColorPage
+
+        window = TerminalWindow(FixturePTY(), "ssh", self.store.home, preferences_store=self.store)
+        try:
+            window.show()
+            window.show_appearance()
+            page = window.appearance_dialog.findChild(ColorPage)
+            view = window.view
+            page.preset.setCurrentText("高对比度")
+            self.assertEqual(view.foreground.name(), "#ffffff")
+            self.assertEqual(view.cursor_color.name(), "#ffdf69")
+            self.assertEqual(view.row_painter.selection_bg.name(), "#244b70")
+            self.assertIn("#b6b6b6", window.styleSheet())
+            page.role.setCurrentIndex(page.role.findData("foreground"))
+            with patch("enge_spx.terminal_appearance.QColorDialog.getColor", return_value=QColor("#123456")):
+                page.swatch.click()
+            self.assertEqual(view._color("default").name(), "#123456")
+            self.assertEqual(page.preset.currentText(), "自定义")
+            with patch.object(view.screen, "respond") as respond:
+                view.stream.feed("\x1b]10;?\x07")
+                self.assertIn(b"1212/3434/5656", respond.call_args.args[0])
+            page.reset.click()
+            self.assertEqual(view.foreground.name(), "#e8e3dc")
+            self.assertEqual(view.background.name(), "#101010")
+            window.appearance_dialog.font_size.setValue(15)
+            self.assertEqual(view.font.pointSize(), 15)
+            self.assertEqual(view.row_painter.selection_bg.name(), "#244b70")
+            window.close()
+            if window.preferences.worker:
+                window.preferences.worker.join(3)
+            self.assertEqual(read(self.store)["color_background"], "#101010")
+            self.assertIsNone(read(self.store)["color_foreground"])
+        finally:
+            window.close()
+            window.view.reader.join(2)
 
     def test_opacity_track_click_and_drag_commit_on_release(self):
         from PySide6.QtCore import QPoint, Qt

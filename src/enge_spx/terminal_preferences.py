@@ -1,16 +1,71 @@
 """Versioned public terminal preferences, independent of proxy credentials."""
+import re
 import threading
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from .state import SPXError
+from .terminal_render import FOREGROUND
 
 FILE = "terminal-preferences.json"
+COLOR_ROLES = {
+    "background": ("终端背景", None),
+    "foreground": ("终端文字", FOREGROUND),
+    "cursor": ("光标", "#d89979"),
+    "selection_background": ("选区背景", "#654638"),
+    "selection_foreground": ("选区文字", FOREGROUND),
+    "title_background": ("标题栏背景", None),
+    "title_foreground": ("标题栏文字", "#aaa296"),
+    "session_background": ("会话栏背景", None),
+    "session_foreground": ("会话栏文字", "#b8afa3"),
+    "connection_foreground": ("连接状态文字", "#91ad83"),
+    "footer_background": ("底栏背景", None),
+    "footer_foreground": ("底栏文字", "#b2a79b"),
+    "badge_background": ("工具标签背景", None),
+    "badge_foreground": ("工具标签文字", None),
+    "border": ("窗口边框与分隔线", "#4a4239"),
+    "menu_background": ("菜单背景", "#2a2722"),
+    "menu_foreground": ("菜单文字", FOREGROUND),
+    "menu_selection_background": ("菜单选中背景", "#4b382c"),
+    "menu_selection_foreground": ("菜单选中文字", "#f6dfcc"),
+    "scrollbar_track": ("滚动条轨道", None),
+    "scrollbar_thumb": ("滚动条滑块", "#53473d"),
+}
+COLOR_FIELDS = {role: "color_" + role for role in COLOR_ROLES}
 DEFAULTS = {"font_size": 11, "font_family": "", "copy_on_select": True, "right_click_paste": True,
-            "appearance": "solid", "tint": "clay", "opacity": 65}
+            "appearance": "solid", "tint": "clay", "opacity": 65,
+            **dict.fromkeys(COLOR_FIELDS.values())}
 TINTS = {"clay": "#1c1a18", "purple": "#302034", "graphite": "#1d252c"}
 MATERIALS = {'solid': '纯色', 'acrylic': 'Acrylic 毛玻璃', 'blur': '柔和模糊',
              'mica': 'Mica 云母', 'mica-alt': 'Mica Alt 深色云母'}
+BADGES = {"clay": ("#e5b194", "#3a2e26", "#5e4333"),
+          "purple": ("#dbc2e5", "#44304d", "#775985"),
+          "graphite": ("#bed2e2", "#2f3e4b", "#587186")}
+COLOR_PRESETS = {
+    "默认配色": {},
+    "浅色": {
+        "background": "#fbf7ef", "foreground": "#29231f", "cursor": "#914428",
+        "selection_background": "#e5d1bf", "selection_foreground": "#241b15",
+        "title_background": "#f1e7da", "title_foreground": "#392d24",
+        "session_background": "#f5ede2", "session_foreground": "#392d24", "connection_foreground": "#386043",
+        "footer_background": "#f5ede2", "footer_foreground": "#544437", "border": "#c6b4a2",
+        "badge_background": "#e9d6c5", "badge_foreground": "#674127",
+        "menu_background": "#fff9ef", "menu_foreground": "#34261e",
+        "menu_selection_background": "#e7d6c7", "menu_selection_foreground": "#39271c",
+        "scrollbar_track": "#f1e7da", "scrollbar_thumb": "#9a7c63",
+    },
+    "高对比度": {
+        "background": "#101010", "foreground": "#ffffff", "cursor": "#ffdf69",
+        "selection_background": "#244b70", "selection_foreground": "#ffffff",
+        "title_background": "#191919", "title_foreground": "#ffffff",
+        "session_background": "#191919", "session_foreground": "#ffffff", "connection_foreground": "#b2f0a7",
+        "footer_background": "#191919", "footer_foreground": "#ffffff", "border": "#777777",
+        "badge_background": "#292929", "badge_foreground": "#ffdf69",
+        "menu_background": "#202020", "menu_foreground": "#ffffff",
+        "menu_selection_background": "#3a5977", "menu_selection_foreground": "#ffffff",
+        "scrollbar_track": "#171717", "scrollbar_thumb": "#b6b6b6",
+    },
+}
 
 
 def display_color(tint, material):
@@ -26,6 +81,23 @@ def display_color(tint, material):
     return QColor(*(round(channel * .55 + target * .45) for channel, target in zip(base.getRgb()[:3], overlay)))
 
 
+def display_palette(values, glass=False):
+    from PySide6.QtGui import QColor
+
+    custom = {role: values.get(key) for role, key in COLOR_FIELDS.items() if values.get(key) is not None}
+    background = QColor(custom["background"]) if "background" in custom else display_color(
+        values["tint"], values["appearance"] if glass else "solid")
+    bar = QColor(*(min(255, channel + 8) for channel in background.getRgb()[:3])).name()
+    badge_text, badge_base, _ = BADGES[values["tint"]]
+    return {
+        **{role: default for role, (_, default) in COLOR_ROLES.items()},
+        "background": background.name(), "title_background": bar, "session_background": bar,
+        "footer_background": bar, "scrollbar_track": background.name(),
+        "badge_background": badge_base, "badge_foreground": badge_text,
+        **custom,
+    }
+
+
 def validate(value):
     if not isinstance(value, dict) or type(value.get("schema")) is not int or value["schema"] != 1 or set(value) - {"schema", *DEFAULTS}:
         raise SPXError("终端偏好格式无效，原文件已保留；可在右上角恢复默认设置。")
@@ -36,6 +108,12 @@ def validate(value):
         raise SPXError("终端字体设置无效，原文件已保留。")
     if any(type(result[key]) is not bool for key in ("copy_on_select", "right_click_paste")) or not isinstance(result["appearance"], str) or not isinstance(result["tint"], str) or result["appearance"] not in MATERIALS or result["tint"] not in TINTS:
         raise SPXError("终端外观或鼠标设置无效，原文件已保留。")
+    for key in COLOR_FIELDS.values():
+        color = result[key]
+        if color is not None:
+            if not isinstance(color, str) or re.fullmatch(r"#[a-fA-F0-9]{6}", color) is None:
+                raise SPXError("终端配色值应使用六位十六进制颜色，原文件已保留。")
+            result[key] = color.lower()
     return result
 
 
@@ -90,10 +168,15 @@ class Preferences(QObject):
         self.timer.timeout.connect(self.flush)
 
     def set(self, key, value):
-        if self.value.get(key) == value:
+        self.update({key: value})
+
+    def update(self, patch):
+        updated = validate({"schema": 1, **self.value, **patch})
+        changed = {key: updated[key] for key in patch if updated[key] != self.value[key]}
+        if not changed:
             return
-        self.value = validate({"schema": 1, **self.value, key: value})
-        self.dirty[key] = value
+        self.value = updated
+        self.dirty.update(changed)
         self.changed.emit(dict(self.value))
         if self.load_error:
             self.error.emit(self.load_error)

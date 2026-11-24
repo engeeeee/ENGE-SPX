@@ -70,6 +70,7 @@ class Window(QMainWindow):
         self.log_view = None
         self._last_view = None
         self._force_close = False
+        self.ssh_windows = set()
         self.tray = None
         self.tray_hint_shown = False
         self._restore_message = restore_message()
@@ -484,6 +485,8 @@ class Window(QMainWindow):
             tiles.addWidget(item, index // 2, index % 2)
             tiles.setColumnStretch(index % 2, 1)
         launch.layout.addLayout(tiles)
+        launch.layout.addWidget(button("远程 SSH ↗", self.open_ssh, ghost=True),
+                                alignment=Qt.AlignmentFlag.AlignLeft)
         launch.layout.addWidget(button("更换工作区终端", lambda: self.show_settings("terminal"), ghost=True),
                                 alignment=Qt.AlignmentFlag.AlignLeft)
         browser = Panel("浏览器与账号", surface="RoutePanel")
@@ -1066,6 +1069,39 @@ class Window(QMainWindow):
         if self.c.project.get().strip():
             self.c.open_terminal(tool)
 
+    def open_ssh(self):
+        from PySide6.QtWidgets import QDialog
+        from .ssh_dialog import SSHDialog
+        from ..ssh_client import environment
+        from ..smart_terminal import TerminalWindow
+        from ..terminal_pty import start
+
+        if self.c.exit_mode is not None:
+            return
+        dialog = SSHDialog(self)
+        try:
+            if dialog.exec() != QDialog.DialogCode.Accepted or self.c.exit_mode is not None:
+                return
+            connection = dialog.connection
+            pty = start(connection.command(), environment(), Path.home())
+        except (OSError, SPXError) as error:
+            notice(self, "无法启动 SSH", str(error), error=True)
+            return
+        finally:
+            dialog.deleteLater()
+        try:
+            from ..clipboard import WindowsClipboard
+            clipboard = WindowsClipboard() if os.name == "nt" else None
+            window = TerminalWindow(pty, "ssh", Path.home(), clipboard=clipboard,
+                                    preferences_store=self.c.store, session_label=connection.label)
+        except Exception:
+            pty.close()
+            raise
+        window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        self.ssh_windows.add(window)
+        window.destroyed.connect(lambda: self.ssh_windows.discard(window))
+        window.show()
+
     def choose_storage(self, value):
         path = QFileDialog.getExistingDirectory(self, "选择专用的空目标目录", value.get())
         if path:
@@ -1309,6 +1345,8 @@ class Window(QMainWindow):
             event.ignore()
             return
         if self._force_close or self.c.request_close():
+            for session in tuple(self.ssh_windows):
+                session.close()
             self.c.stop_resource_monitor()
             self.c.delivery.stop()
             self.c.status_timer.stop()

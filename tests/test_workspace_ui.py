@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import queue
 import tempfile
 import time
 import unittest
@@ -51,6 +52,35 @@ class WorkspaceUITests(unittest.TestCase):
         buttons = [item.text() for item in self.window.findChildren(QPushButton) if item.isVisible()]
         self.assertNotIn("Antigravity 首次打开时通过工作区代理下载安装。", labels)
         self.assertTrue(any(text.startswith("Antigravity CLI") for text in buttons))
+
+    def test_ssh_launcher_opens_own_terminal_without_workspace_and_closes_it(self):
+        output = queue.Queue()
+        pty = Mock()
+        pty.read.side_effect = output.get
+        pty.close.side_effect = lambda: output.put(b"")
+
+        def accept(dialog):
+            dialog.host.setText("example.invalid")
+            dialog.username.setText("operator")
+            dialog.accept()
+            return dialog.result()
+
+        self.assertFalse(self.controller.docker_ready)
+        with patch("enge_spx.ui.ssh_dialog.SSHDialog.exec", accept), \
+                patch("enge_spx.ssh_client.executable", return_value="system-ssh"), \
+                patch("enge_spx.terminal_pty.start", return_value=pty) as start, \
+                patch.object(self.controller, "run") as run:
+            self.window.open_ssh()
+        run.assert_not_called()
+        self.assertEqual(start.call_args.args[0][-6:], ["-l", "operator", "-p", "22", "--", "example.invalid"])
+        session, = self.window.ssh_windows
+        self.assertTrue(session.isVisible())
+        self.assertEqual(session.findChild(QLabel, "ProjectName").text(), "operator@example.invalid:22")
+        reader = session.view.reader
+        self.window.finish_close()
+        reader.join(2)
+        self.assertFalse(reader.is_alive())
+        pty.close.assert_called_once()
 
     def test_selection_does_not_mutate_or_launch_and_apply_captures_identity(self):
         c = self.controller

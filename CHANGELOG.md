@@ -1,5 +1,11 @@
 # Changes
 
+## 0.15.11 remote SSH and terminal colors — 2026-11-24
+
+- Open remote SSH sessions from the workspace using system OpenSSH, with interactive password or private key authentication.
+- Show the Ctrl+click shortcut when users click a terminal link directly.
+- Customize terminal fonts and 21 interface colors. Apply light or high-contrast presets, reset individual colors, and save changes automatically.
+
 ## 0.15.10 terminal links and shared file paste — 2026-11-24
 
 - Open HTTP and HTTPS links in the default browser with Ctrl+click, including wrapped URLs and OSC 8 links.

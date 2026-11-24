@@ -28,6 +28,7 @@ from .clipboard_transfer import Transfer, text_frame
 from .state import SPXError
 from .terminal_render import BACKGROUND, FOREGROUND, MAX_WEB_LINK_LENGTH, PALETTE, TerminalChar, TerminalStream, plain_web_link, sgr_attributes
 from .terminal_paint import RowPainter
+from .terminal_preferences import DEFAULTS, display_palette
 
 
 def codex_composer_band(rows, cursor, columns, blank):
@@ -431,7 +432,7 @@ class OrderedInput:
                 result.set_exception(error)
         threading.Thread(target=capture, name="spx-clipboard-snapshot", daemon=True).start()
 
-    def close(self):
+    def close(self, *, daemon=True):
         if self.closed.is_set():
             return
         self.closed.set()
@@ -446,7 +447,7 @@ class OrderedInput:
         if self.transfer is not None:
             self.transfer.close()
         # Closing the owned PTY may wait for output draining; never block Qt.
-        threading.Thread(target=self.pty.close, name="spx-terminal-close", daemon=True).start()
+        threading.Thread(target=self.pty.close, name="spx-terminal-close", daemon=daemon).start()
 
 
 class TerminalView(QWidget):
@@ -530,8 +531,11 @@ class TerminalView(QWidget):
         self.wheel_remainder = 0.0
         self.colors = {}
         self.fonts = {}
+        self.display_colors = display_palette(DEFAULTS)
         self.background = QColor(BACKGROUND)
-        self.row_painter = RowPainter(self.font, self.cell_width, self.cell_height, self._color)
+        self.foreground = QColor(FOREGROUND)
+        self.cursor_color = QColor(self.display_colors["cursor"])
+        self._reset_row_painter()
         self.scrollbar = QScrollBar(Qt.Orientation.Vertical, self)
         self.scrollbar.valueChanged.connect(self._scroll)
         self.blink = True
@@ -771,7 +775,8 @@ class TerminalView(QWidget):
         blank = self.screen.default_char
         # A conservative fallback after native deletion/history navigation.
         # Placeholder text is dim; do not turn empty-draft Delete into Ctrl+C.
-        return any(char.data.strip() and not getattr(char, 'faint', False) and char.fg in ('default', 'white', 'brightwhite', FOREGROUND[1:])
+        foregrounds = ('default', 'white', 'brightwhite', FOREGROUND[1:], self.display_colors["foreground"][1:])
+        return any(char.data.strip() and not getattr(char, 'faint', False) and char.fg in foregrounds
                    for x in range(2, self.screen.columns) if (char := row.get(x, blank)))
 
     def zoom(self, amount=0, reset=False):
@@ -782,8 +787,7 @@ class TerminalView(QWidget):
         self.setFont(self.font)
         self._measure_font()
         self.fonts.clear()
-        self.row_painter = RowPainter(self.font, self.cell_width, self.cell_height, self._color)
-        self.row_painter.background = self.background
+        self._reset_row_painter()
         self._resize_grid()
         self.font_changed.emit(size)
         self.update()
@@ -793,7 +797,6 @@ class TerminalView(QWidget):
         self.option_changed.emit(name, enabled)
 
     def apply_display(self, preferences, glass=False):
-        from .terminal_preferences import display_color
         families = [preferences["font_family"]] if preferences["font_family"] else (["Cascadia Mono", "Cascadia Code", "Consolas"] if os.name == "nt" else ["DejaVu Sans Mono", "Liberation Mono"])
         font_changed = self.font.families() != families or self.font.pointSize() != preferences["font_size"]
         if font_changed:
@@ -801,24 +804,39 @@ class TerminalView(QWidget):
             self.font.setPointSize(preferences["font_size"])
             self.setFont(self.font)
             self._measure_font()
-        background = display_color(preferences["tint"], preferences["appearance"] if glass else "solid")
+        colors = display_palette(preferences, glass)
+        background = QColor(colors["background"])
         background.setAlpha(round(preferences["opacity"] * 2.55) if glass else 255)
-        changed = font_changed or background != self.background
+        background_changed = background != self.background
+        ink_changed = any(colors[role] != self.display_colors[role] for role in
+                          ("foreground", "selection_background", "selection_foreground"))
+        cursor_changed = colors["cursor"] != self.display_colors["cursor"]
+        self.display_colors = colors
         self.background = background
+        self.foreground = QColor(colors["foreground"])
+        self.cursor_color = QColor(colors["cursor"])
         self.screen.terminal_background = background.name()
-        if changed:
+        self.screen.terminal_foreground = colors["foreground"]
+        if font_changed or ink_changed or background_changed:
             self.colors.clear()
             self.fonts.clear()
-            if font_changed:
-                self.row_painter = RowPainter(self.font, self.cell_width, self.cell_height, self._color)
-            self.row_painter.set_background(self.background)
+            if font_changed or ink_changed:
+                self._reset_row_painter()
+            else:
+                self.row_painter.set_background(background)
         self.copy_on_select, self.right_click_paste = preferences["copy_on_select"], preferences["right_click_paste"]
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, not glass)
         if font_changed:
             self._resize_grid()
             self.font_changed.emit(self.font.pointSize())
-        if changed:
+        if font_changed or ink_changed or background_changed or cursor_changed:
             self.update()
+
+    def _reset_row_painter(self):
+        self.row_painter = RowPainter(self.font, self.cell_width, self.cell_height, self._color)
+        self.row_painter.background = self.background
+        self.row_painter.selection_fg = QColor(self.display_colors["selection_foreground"])
+        self.row_painter.selection_bg = QColor(self.display_colors["selection_background"])
 
     def _color(self, value, foreground=True):
         if value == "default" and not foreground:
@@ -826,7 +844,7 @@ class TerminalView(QWidget):
         key = (value, foreground)
         if key in self.colors:
             return self.colors[key]
-        named = {"default": FOREGROUND if foreground else BACKGROUND, **PALETTE}
+        named = {"default": self.display_colors["foreground" if foreground else "background"], **PALETTE}
         result = QColor(named.get(value, "#" + value if re.fullmatch("[a-fA-F0-9]{6}", value) else named["default"]))
         if len(self.colors) >= 512:
             self.colors.clear()
@@ -944,7 +962,7 @@ class TerminalView(QWidget):
         p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
         x, y, hidden = self.presented_cursor
         if not self.preedit and self.blink and self.hasFocus() and self.selection_lines is None and self.offset == 0 and not hidden:
-            p.fillRect(QRectF(self.PAD_X + x * self.cell_width, self.PAD_Y + y * self.cell_height, 2, self.cell_height), QColor("#d89979"))
+            p.fillRect(QRectF(self.PAD_X + x * self.cell_width, self.PAD_Y + y * self.cell_height, 2, self.cell_height), self.cursor_color)
         if self.preedit and self.offset == 0 and self.selection_lines is None:
             layout, masks, caret = self.composition_layout()
             p.save()
@@ -956,10 +974,10 @@ class TerminalView(QWidget):
                 p.fillRect(rectangle, self.background)
             p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
             p.setFont(self.font)
-            p.setPen(QColor(FOREGROUND))
+            p.setPen(self.foreground)
             layout.draw(p, QPointF())
             if self.hasFocus() and self.preedit_cursor_visible:
-                p.fillRect(caret, QColor("#d89979"))
+                p.fillRect(caret, self.cursor_color)
             p.restore()
 
     def resizeEvent(self, event):
@@ -978,8 +996,7 @@ class TerminalView(QWidget):
         if environment == self.render_environment:
             return
         self._measure_font()
-        self.row_painter = RowPainter(self.font, self.cell_width, self.cell_height, self._color)
-        self.row_painter.set_background(self.background)
+        self._reset_row_painter()
         self._resize_grid()
         self.update_input_method()
 
@@ -1107,7 +1124,7 @@ class TerminalView(QWidget):
         layout.setTextOption(option)
         base = QTextLayout.FormatRange()
         base.start, base.length = 0, len(self.preedit.encode("utf-16-le")) // 2
-        base.format.setForeground(QColor(FOREGROUND))
+        base.format.setForeground(self.foreground)
         base.format.setUnderlineStyle(QTextCharFormat.UnderlineStyle.DashUnderline)
         layout.setFormats([base, *self.preedit_formats])
         cursor = self.screen.cursor
@@ -1294,6 +1311,8 @@ class TerminalView(QWidget):
                     y, x = self.cell(event)
                     self.left_drag = self.explicit_selection = True
                     self.selection = (self.selection[0], (y + self.selection_start(), x))
+                elif event.modifiers() == Qt.KeyboardModifier.NoModifier and self.link_at(event.position()) is not None:
+                    self.status.emit("按住 Ctrl 再单击链接，即可在默认浏览器打开。")
             if click is not None and click[2]:
                 self.sender.put('keys', self.mouse_packet(event, 0, True, insertion=True))
                 self.native_selected_input = self.native_press_was_input and self.has_selection
@@ -1415,7 +1434,7 @@ class TerminalView(QWidget):
         self.stopping.set()
         self.blink_timer.stop()
         self.frame_timer.stop()
-        self.sender.close()
+        self.sender.close(daemon=self.tool != "ssh")
 
 
 class TerminalResizeEdge(QWidget):
@@ -1432,7 +1451,7 @@ class TerminalResizeEdge(QWidget):
 
 
 class TerminalWindow(QMainWindow):
-    def __init__(self, pty, tool, project, transfer=None, clipboard=None, preferences_store=None):
+    def __init__(self, pty, tool, project, transfer=None, clipboard=None, preferences_store=None, *, session_label=None):
         super().__init__(None, Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
         from .terminal_preferences import Preferences
         self.preferences = Preferences(preferences_store, self)
@@ -1443,47 +1462,18 @@ class TerminalWindow(QMainWindow):
         self.effect_key = self.chrome_key = None
         self._frame_configured = False
         self.appearance_dialog = None
+        self.is_ssh = tool == "ssh"
         # Qt chooses the HWND surface at creation. Paint an opaque fill in
         # solid mode so later material changes need no window recreation.
         self.translucent_surface = os.name == "nt"
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, self.translucent_surface)
-        self.setWindowTitle("ENGE SPX · " + tool + " · 智能粘贴终端")
+        self.setWindowTitle("ENGE SPX · 远程 SSH" if self.is_ssh else "ENGE SPX · " + tool + " · 智能粘贴终端")
         self.setObjectName("SmartTerminal")
         from .platform_ui import ASSETS
         from .ui.widgets import TitleBar
         self.setWindowIcon(QIcon(str(ASSETS / "app.ico")))
         self.resize(1180, 780)
         self.setMinimumSize(640, 400)
-        self.setStyleSheet("""
-QMainWindow#SmartTerminal { background: #1c1a18; }
-QFrame#TerminalShell { background: #1c1a18; border: 1px solid #4a4239; }
-QWidget { color: #e8e3dc; }
-QWidget#TitleBar { background: #24221f; border-bottom: 1px solid #39352f; }
-QLabel#Caption { color: #aaa296; font-size: 12px; }
-QPushButton#WindowControl, QPushButton#WindowClose { background: transparent; border: none; border-radius: 4px; color: #aaa296; font-size: 16px; padding: 0; }
-QPushButton#WindowControl:hover { color: #eee7dc; background: #39342e; }
-QPushButton#WindowClose:hover { color: #fff0e5; background: #8b423b; }
-QFrame#SessionBar { background: #24221f; border-bottom: 1px solid #39352f; }
-QLabel#ToolBadge { color: #e5b194; background: #3a2e26; border: 1px solid #5e4333; border-radius: 5px; padding: 4px 10px; font-size: 12px; font-weight: 600; }
-QLabel#ProjectName { color: #b8afa3; font-size: 12px; }
-QLabel#ConnectionState { color: #91ad83; font-size: 11px; }
-QToolButton#TerminalOptions { color: #aaa296; background: transparent; border: none; border-radius: 5px; font-size: 22px; }
-QToolButton#TerminalOptions:hover { color: #f0d2bc; background: #39312a; }
-QFrame#TerminalFooter { background: #24221f; border-top: 1px solid #39352f; }
-QLabel#TerminalMessage { color: #b2a79b; font-size: 11px; }
-QLabel#FontSize { color: #8e847a; font-size: 11px; }
-QMenu#TerminalMenu { color: #e8e3dc; background: #2a2722; border: 1px solid #54483c; border-radius: 7px; padding: 5px; }
-QMenu#TerminalMenu::item { padding: 7px 18px; border-radius: 4px; }
-QMenu#TerminalMenu::item:selected { background: #4b382c; color: #f6dfcc; }
-QMenu#TerminalMenu::item:disabled { color: #71685e; }
-QMenu#TerminalMenu::separator { height: 1px; background: #423a31; margin: 5px 9px; }
-QScrollBar:vertical { background: #1c1a18; width: 10px; margin: 0; border: none; }
-QScrollBar::handle:vertical { background: #53473d; min-height: 36px; border-radius: 4px; margin: 1px; }
-QScrollBar::handle:vertical:hover { background: #7e604b; }
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
-""")
-        self.base_stylesheet = self.styleSheet()
         root = QFrame()
         root.setObjectName("TerminalShell")
         layout = QVBoxLayout(root)
@@ -1504,17 +1494,17 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: trans
         header = QHBoxLayout(session)
         header.setContentsMargins(16, 8, 8, 8)
         header.setSpacing(12)
-        badge = QLabel({"codex": "Codex", "claude": "Claude Code", "antigravity": "Antigravity", "shell": "Linux 终端"}.get(tool, tool))
+        badge = QLabel({"codex": "Codex", "claude": "Claude Code", "antigravity": "Antigravity", "shell": "Linux 终端", "ssh": "SSH"}.get(tool, tool))
         badge.setObjectName("ToolBadge")
         badge.setTextFormat(Qt.TextFormat.PlainText)
         header.addWidget(badge)
-        project_label = QLabel(project.name or str(project))
+        project_label = QLabel(session_label or project.name or str(project))
         project_label.setTextFormat(Qt.TextFormat.PlainText)
         project_label.setObjectName("ProjectName")
-        project_label.setToolTip(str(project))
+        project_label.setToolTip(session_label or str(project))
         project_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         header.addWidget(project_label, 1)
-        self.connection = QLabel("●  等待 CLI 输入区")
+        self.connection = QLabel("●  SSH 会话" if self.is_ssh else "●  等待 CLI 输入区")
         self.connection.setObjectName("ConnectionState")
         header.addWidget(self.connection)
         options = QToolButton()
@@ -1532,7 +1522,8 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: trans
         bottom = QHBoxLayout(footer)
         bottom.setContentsMargins(16, 9, 16, 9)
         bottom.setSpacing(16)
-        self.message = QLabel("单击定位 · 拖选自动复制 · 右键粘贴 · 右上角设置")
+        self.message = QLabel("请核对首次连接的主机指纹，并按提示输入密码或私钥口令。"
+                              if self.is_ssh else "单击定位 · 拖选自动复制 · 右键粘贴 · 右上角设置")
         self.message.setObjectName("TerminalMessage")
         self.message.setTextFormat(Qt.TextFormat.PlainText)
         self.message.setWordWrap(True)
@@ -1545,7 +1536,8 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: trans
         self.view.font_changed.connect(lambda size: self.preferences.set("font_size", size))
         self.view.option_changed.connect(self.preferences.set)
         self.view.status.connect(self.message.setText)
-        self.view.readiness_changed.connect(lambda ready: self.connection.setText("●  输入区就绪" if ready else "●  等待 CLI 输入区"))
+        if not self.is_ssh:
+            self.view.readiness_changed.connect(lambda ready: self.connection.setText("●  输入区就绪" if ready else "●  等待 CLI 输入区"))
         self.view.ended.connect(self.connection_ended)
         options.clicked.connect(lambda: self.show_options(options))
         self.setCentralWidget(root)
@@ -1567,9 +1559,10 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: trans
             self.message.setText(self.preferences.load_error)
 
     def apply_preferences(self, values):
-        from .terminal_preferences import TINTS
+        from .terminal_appearance import terminal_stylesheet
+        from .terminal_preferences import COLOR_FIELDS, TINTS
         from .window_effects import GLASS_BACKENDS, apply_backdrop
-        color = QColor(TINTS[values["tint"]])
+        color = QColor(values.get("color_background") or TINTS[values["tint"]])
         material = values['appearance']
         effect_key = material, color.name()
         if effect_key != self.effect_key:
@@ -1581,19 +1574,11 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: trans
         self.view.apply_display(values, glass)
         color = self.view.background
         self.font_size.setText(str(values["font_size"]) + " pt  ·  UTF-8")
-        base = "transparent" if glass else color.name()
-        header = f"rgba({color.red()+8}, {color.green()+8}, {color.blue()+8}, {color.alpha()})"
-        chrome_key = base, header, glass
+        palette = self.view.display_colors
+        chrome_key = (glass, color.alpha(), values["tint"], tuple(palette.values()),
+                      tuple(values.get(key) for key in COLOR_FIELDS.values()))
         if chrome_key != self.chrome_key:
-            sheet = self.base_stylesheet.replace("#1c1a18", base).replace("#24221f", header)
-            badge_fg, badge_bg, badge_border = {'clay': ('#e5b194', '#3a2e26', '#5e4333'),
-                                               'purple': ('#dbc2e5', '#44304d', '#775985'),
-                                               'graphite': ('#bed2e2', '#2f3e4b', '#587186')}[values['tint']]
-            sheet = sheet.replace('#e5b194', badge_fg).replace('#3a2e26', badge_bg).replace('#5e4333', badge_border)
-            sheet = sheet.replace('#39342e', color.lighter(145).name()).replace('#39312a', color.lighter(145).name())
-            if glass:
-                sheet = sheet.replace('#4a4239', 'rgba(232, 227, 220, 45)').replace('#39352f', 'rgba(232, 227, 220, 24)')
-            self.setStyleSheet(sheet)
+            self.setStyleSheet(terminal_stylesheet(palette, values, color.alpha(), glass))
             self.chrome_key = chrome_key
 
     def sync_move_effect(self):
@@ -1604,7 +1589,8 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: trans
             return
         from .terminal_preferences import TINTS
         from .window_effects import apply_backdrop
-        tint = QColor(TINTS[self.preferences.value['tint']])
+        values = self.preferences.value
+        tint = QColor(values.get("color_background") or TINTS[values['tint']])
         apply_backdrop(self, tint, 'blur' if self.interaction_active else 'acrylic')
 
     def set_interaction_active(self, active):
@@ -1700,7 +1686,8 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: trans
     def connection_ended(self):
         self.view.stop()
         self.connection.setText("○  连接已结束")
-        self.message.setText("终端连接已结束。工作区和持久资料按现有规则保留；可关闭此窗口。")
+        self.message.setText("SSH 连接已结束，可以关闭此窗口。" if self.is_ssh
+                             else "终端连接已结束。工作区和持久资料按现有规则保留；可关闭此窗口。")
 
     def closeEvent(self, event):
         self.interaction_guard.stop()

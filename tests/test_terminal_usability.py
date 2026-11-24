@@ -230,6 +230,8 @@ class TerminalUsabilityTests(unittest.TestCase):
         padding = " " * (self.view.screen.columns - 17)
         self.view.stream.feed("\x1b[?1000;1006h" + padding + "(" + url + ").")
         self.view.grab()
+        messages = []
+        self.view.status.connect(messages.append)
         with patch("enge_spx.smart_terminal.QDesktopServices.openUrl", return_value=True) as opened, patch.object(self.view.sender, "put") as sent:
             QTest.mouseClick(self.view, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ControlModifier, self.point(5, 1))
             sent.assert_not_called()
@@ -238,6 +240,7 @@ class TerminalUsabilityTests(unittest.TestCase):
             QTest.mouseClick(self.view, Qt.MouseButton.LeftButton, pos=self.point(5, 1))
             self.assertEqual(sent.call_count, 2)
             opened.assert_called_once()
+            self.assertEqual(messages, ["按住 Ctrl 再单击链接，即可在默认浏览器打开。"])
 
     def test_ctrl_click_opens_osc8_target_across_sgr_and_ignores_file_scheme(self):
         self.view.stream.feed("\x1b]8;id=docs;https://example.invalid/a;b\x1b")
