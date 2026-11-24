@@ -10,8 +10,9 @@ from .state import SPXError
 
 _DNS_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", re.IGNORECASE | re.ASCII)
 _HOST_ERROR = "请输入服务器域名、IPv4 或 IPv6 地址，端口请单独填写。"
+# Windows OpenSSH reads ProgramData during startup, including for -F none.
 _ENVIRONMENT = {
-    "SYSTEMROOT", "WINDIR", "SYSTEMDRIVE", "PATH", "HOME", "USERPROFILE", "USERNAME",
+    "SYSTEMROOT", "WINDIR", "SYSTEMDRIVE", "PROGRAMDATA", "PATH", "HOME", "USERPROFILE", "USERNAME",
     "HOMEDRIVE", "HOMEPATH", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "TMPDIR",
     "LANG", "LC_ALL", "LC_CTYPE",
 }

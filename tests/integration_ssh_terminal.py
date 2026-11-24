@@ -132,13 +132,18 @@ def exercise(app, root, host_key, identity=None, public_key=None):
 
 
 def main():
+    ssh = executable()
+    probe = subprocess.run([ssh, "-V"], env=environment(), capture_output=True, timeout=8)
+    assert probe.returncode == 0 and b"OpenSSH" in probe.stdout + probe.stderr, (
+        f"OpenSSH did not start with the session environment (exit {probe.returncode})"
+    )
     app = QApplication([])
     host_key = paramiko.RSAKey.generate(2048)
     with tempfile.TemporaryDirectory(prefix="spx-ssh-loopback-") as folder:
         root = Path(folder)
         exercise(app, root, host_key)
         key = root / "selected test key 100%.ed25519"
-        keygen = Path(executable()).with_name("ssh-keygen.exe" if os.name == "nt" else "ssh-keygen")
+        keygen = Path(ssh).with_name("ssh-keygen.exe" if os.name == "nt" else "ssh-keygen")
         subprocess.run([str(keygen), "-q", "-t", "ed25519", "-N", PASSPHRASE, "-f", str(key)], check=True, timeout=15)
         kind, encoded, *_ = key.with_suffix(".ed25519.pub").read_text().split()
         public_key = paramiko.PKey.from_type_string(kind, base64.b64decode(encoded))

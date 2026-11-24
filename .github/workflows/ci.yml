@@ -56,10 +56,10 @@ jobs:
       - if: runner.os == 'Linux'
         name: Install Qt offscreen system libraries
         run: |
-          # Keep Ubuntu's archive keyring and source suites; use a reachable HTTPS mirror.
-          printf 'https://mirrors.edge.kernel.org/ubuntu/\tpriority:1\n' | sudo tee /etc/apt/apt-mirrors.txt
-          sudo apt-get -o Acquire::Retries=2 -o Acquire::https::Timeout=30 update
-          sudo apt-get -o Acquire::Retries=2 -o Acquire::https::Timeout=30 install -y --no-install-recommends libegl1 libgl1 libxkbcommon0
+          # Keep Ubuntu's archive keyring and source suites, with two HTTPS mirrors.
+          printf 'https://archive.ubuntu.com/ubuntu/\tpriority:1\nhttps://mirrors.edge.kernel.org/ubuntu/\tpriority:2\n' | sudo tee /etc/apt/apt-mirrors.txt
+          sudo apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=2 -o Acquire::https::Timeout=20 update
+          sudo apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=2 -o Acquire::https::Timeout=20 install -y --no-install-recommends libegl1 libgl1 libxkbcommon0
       - run: python tools/check_repository.py
       - name: Verify formal release publication and immutable assets
         run: node --test tests/test_release_publication.cjs

@@ -44,8 +44,8 @@ class SSHClientTests(unittest.TestCase):
                 Connection.from_fields("example.invalid", username, port, key)
 
     def test_environment_passes_system_values_and_drops_unrelated_credentials(self):
-        with patch.dict(os.environ, {"PATH": "fixture", "HOME": "fixture",
+        with patch.dict(os.environ, {"PATH": "fixture", "HOME": "fixture", "PROGRAMDATA": "system-fixture",
                                      "SPX_BROWSER_TOKEN": "synthetic", "SSH_ASKPASS": "synthetic",
                                      "SSH_AUTH_SOCK": "synthetic", "HTTPS_PROXY": "synthetic"}, clear=True):
-            self.assertEqual(environment(), {"PATH": "fixture", "HOME": "fixture",
+            self.assertEqual(environment(), {"PATH": "fixture", "HOME": "fixture", "PROGRAMDATA": "system-fixture",
                                              "TERM": "xterm-256color", "COLORTERM": "truecolor"})
