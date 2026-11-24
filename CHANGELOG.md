@@ -1,5 +1,11 @@
 # Changes
 
+## 0.15.12 saved SSH machines and workspace preparation — 2026-11-24
+
+- Add a dedicated SSH page to save, edit, remove, and connect to machines. Keep temporary connections available.
+- Preserve saved SSH machines when moving the application data directory.
+- Fix the runtime download progress callback during workspace preparation. Show the latest progress and retain the pause or completion status.
+
 ## 0.15.11 remote SSH and terminal colors — 2026-11-24
 
 - Open remote SSH sessions from the workspace using system OpenSSH, with interactive password or private key authentication.

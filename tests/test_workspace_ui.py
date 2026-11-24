@@ -12,6 +12,7 @@ if os.name != "nt":
 from PySide6.QtTest import QTest
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication, QLabel, QLineEdit, QPushButton
+from enge_spx import ssh_machines
 from enge_spx.engine import Engine
 from enge_spx.state import Store
 from enge_spx.ui.controller import Controller
@@ -53,6 +54,29 @@ class WorkspaceUITests(unittest.TestCase):
         self.assertNotIn("Antigravity 首次打开时通过工作区代理下载安装。", labels)
         self.assertTrue(any(text.startswith("Antigravity CLI") for text in buttons))
 
+    def test_runtime_download_progress_survives_restart_and_preserves_pause_status(self):
+        c = self.controller
+        c.events.put(("app_update_progress", {"message": "软件更新", "progress": 12}))
+        c.preparation_progress({"stage": "manifest"})
+        c.drain()
+        self.assertEqual(c.download_title.get(), "获取运行环境信息")
+        self.assertEqual(c.download_progress.get(), -1)
+        self.assertEqual(c.update_progress.get(), 12)
+
+        c.preparation_progress({"stage": "download", "bytes": 750, "total": 1000, "speed": 500, "eta": .5})
+        c.events.put(("paused", "下载已暂停，可继续。"))
+        c.drain()
+        self.assertEqual(c.download_progress.get(), 75)
+        self.assertEqual(c.download_title.get(), "已暂停，可继续")
+        self.assertEqual(c.download_detail.get(), "下载已暂停，可继续。")
+        self.assertEqual(c.update_progress.get(), 12)
+
+        for stage in ("manifest", "verify", "import", "done"):
+            c.preparation_progress({"stage": stage})
+        c.drain()
+        self.assertEqual(c.download_progress.get(), 100)
+        self.assertEqual(c.download_title.get(), "运行环境已安装")
+
     def test_ssh_launcher_opens_own_terminal_without_workspace_and_closes_it(self):
         output = queue.Queue()
         pty = Mock()
@@ -66,11 +90,13 @@ class WorkspaceUITests(unittest.TestCase):
             return dialog.result()
 
         self.assertFalse(self.controller.docker_ready)
+        self.window.nav["ssh"].click()
+        page = self.window.pages["ssh"]
         with patch("enge_spx.ui.ssh_dialog.SSHDialog.exec", accept), \
                 patch("enge_spx.ssh_client.executable", return_value="system-ssh"), \
                 patch("enge_spx.terminal_pty.start", return_value=pty) as start, \
                 patch.object(self.controller, "run") as run:
-            self.window.open_ssh()
+            page.quick_connect.click()
         run.assert_not_called()
         self.assertEqual(start.call_args.args[0][-6:], ["-l", "operator", "-p", "22", "--", "example.invalid"])
         session, = self.window.ssh_windows
@@ -81,6 +107,49 @@ class WorkspaceUITests(unittest.TestCase):
         reader.join(2)
         self.assertFalse(reader.is_alive())
         pty.close.assert_called_once()
+        self.assertFalse((self.store.home / ssh_machines.FILE).exists())
+
+    def test_dedicated_ssh_page_saves_edits_connects_and_removes_machine(self):
+        self.window.nav["ssh"].click()
+        page = self.window.pages["ssh"]
+        self.assertEqual(self.window.current_page, "ssh")
+        self.assertTrue(page.empty.isVisible())
+
+        def create(dialog):
+            dialog.name.setText("开发机")
+            dialog.host.setText("ssh.example.invalid")
+            dialog.username.setText("operator")
+            dialog.port.setValue(2200)
+            dialog.accept()
+            return dialog.result()
+
+        with patch("enge_spx.ui.ssh_dialog.SSHDialog.exec", create):
+            page.add_machine.click()
+        saved = page.selected()
+        self.assertEqual(saved.title, "开发机")
+        self.assertEqual(page.address.text(), "operator@ssh.example.invalid:2200")
+        self.assertEqual(ssh_machines.load(Store(self.store.home))[saved.id], saved)
+        self.window.show_page("overview")
+        self.window.nav["ssh"].click()
+        with patch.object(self.window, "launch_ssh") as launch:
+            page.list.itemDoubleClicked.emit(page.list.currentItem())
+            launch.assert_called_once_with(saved.connection, "开发机 · operator@ssh.example.invalid:2200")
+
+        def edit(dialog):
+            self.assertEqual(dialog.host.text(), "ssh.example.invalid")
+            self.assertEqual(dialog.auth.currentData(), "password")
+            dialog.name.setText("测试机")
+            dialog.accept()
+            return dialog.result()
+
+        with patch("enge_spx.ui.ssh_dialog.SSHDialog.exec", edit):
+            page.edit_selected()
+        self.assertEqual(page.selected().id, saved.id)
+        self.assertEqual(page.selected().name, "测试机")
+        with patch.object(self.controller, "ask", return_value=True):
+            page.remove_selected()
+        self.assertTrue(page.empty.isVisible())
+        self.assertEqual(ssh_machines.load(self.store), {})
 
     def test_selection_does_not_mutate_or_launch_and_apply_captures_identity(self):
         c = self.controller

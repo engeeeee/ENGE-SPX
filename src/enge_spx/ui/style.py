@@ -52,6 +52,7 @@ GLYPHS = {
     "connection": '<circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="m8.5 8.5 7 7M15 3h6v6M3 15v6h6"/>',
     "network": '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18M5 7h14M5 17h14"/>',
     "workspace": '<path d="M3 8V5h7l2 3h9v12H3z"/><path d="m8 12 3 3-3 3m6 0h3"/>',
+    "ssh": '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m7 9 3 3-3 3m6 0h4"/>',
     "downloads": '<path d="M12 3v12m-4-4 4 4 4-4M4 16v5h16v-5"/>',
     "logs": '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
     "resources": '<rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 9h6v6H9zM9 2v3m6-3v3M9 19v3m6-3v3M2 9h3m-3 6h3m14-6h3m-3 6h3"/>',
@@ -167,6 +168,9 @@ QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled, QDoubleSpinBox:disabl
 QComboBox { padding-right: 30px; }
 QComboBox::drop-down { width: 28px; border: none; }
 QComboBox QAbstractItemView { background: @paper@; border: 1px solid @edge@; selection-background-color: @wash@; selection-color: @ink@; padding: 5px; }
+QListWidget#SSHMachineList { background: @field@; border: 1px solid @line@; border-radius: 8px; padding: 4px; }
+QListWidget#SSHMachineList::item { padding: 10px 8px; border-radius: 5px; }
+QListWidget#SSHMachineList::item:selected { background: @wash@; color: @ink@; }
 QCheckBox { spacing: 9px; color: @muted@; font-size: 13px; }
 QCheckBox::indicator { width: 16px; height: 16px; border: 1px solid @edge@; border-radius: 4px; background: @field@; }
 QCheckBox::indicator:checked { background: #E4AF92; border: 1px solid @hero_line@; image: url("@check_icon@"); }

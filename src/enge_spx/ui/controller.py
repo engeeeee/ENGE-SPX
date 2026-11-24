@@ -905,6 +905,9 @@ class Controller(QObject):
                 self.operation.set("未能确认工作区已停止；界面保留，可以重试退出。")
                 self.exit_failed.emit(value)
             else:
+                if progress is not None:
+                    self.update_runtime_progress(progress)
+                    progress = None
                 self.busy = self.cancelable = False
                 self.startup_progress.set(max(0, self.startup_progress.get()))
                 if kind == "done":
@@ -935,8 +938,8 @@ class Controller(QObject):
                 if self.exit_mode is not None and self.exit_stage == "waiting":
                     self.advance_exit()
             changed = True
-        if progress:
-            self.update_progress(progress)
+        if progress is not None:
+            self.update_runtime_progress(progress)
         if lines:
             self.log_lines.extend(lines)
             self.log_lines = self.log_lines[-1200:]
@@ -986,7 +989,7 @@ class Controller(QObject):
             elif stage in ("review", "ready"):
                 self.steps[2], self.steps[3] = "检查通过", "已确认" if stage == "ready" else "等待你确认"
 
-    def update_progress(self, value):
+    def update_runtime_progress(self, value):
         stage = value.get("stage")
         self.download_title.set({"manifest": "获取运行环境信息", "download": "正在下载运行环境", "retry": "正在重新连接", "verify": "核对文件完整性", "import": "导入 Docker", "build": "从源码构建", "done": "运行环境已安装"}.get(stage, "正在处理"))
         if stage == "download":

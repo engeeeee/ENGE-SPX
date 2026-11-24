@@ -121,13 +121,15 @@ class NativeWindowTests(unittest.TestCase):
         self.window.setMinimumSize(400, 320)
         self.controller.update_available.set(True)
         settings = self.window.nav["settings"]
-        for width, title in ((400, "设置·"), (840, "偏好设置 · 有更新")):
+        for width, title in ((400, "设置·"), (840, "设置·"), (920, "偏好设置 · 有更新")):
             with self.subTest(width=width):
                 self.window.resize(width, 520)
                 QTest.qWait(40)
                 self.assertEqual(self.window.width(), width)
                 self.assertEqual(settings.text(), title)
                 self.assertGreaterEqual(settings.width(), settings.minimumSizeHint().width())
+                ssh = self.window.nav["ssh"]
+                self.assertGreaterEqual(ssh.width(), ssh.minimumSizeHint().width())
                 manage = self.window.management_button
                 self.assertLessEqual(manage.geometry().right(), manage.parentWidget().rect().right())
 

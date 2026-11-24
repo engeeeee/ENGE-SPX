@@ -24,11 +24,12 @@ from .controller import Value
 from .widgets import (Page, Panel, TitleBar, Dialog, Combo, label, bind_text,
                       button, entry, combo, check, progress, confirm, notice, budget_number)
 
-NAMES = {"overview": "工作台", "connection": "连接与代理", "workspace": "项目工作区", "network": "网络检查", "downloads": "下载与安装", "resources": "资源与性能", "logs": "运行日志", "settings": "偏好设置"}
+NAMES = {"overview": "工作台", "connection": "连接与代理", "workspace": "项目工作区", "ssh": "远程 SSH", "network": "网络检查", "downloads": "下载与安装", "resources": "资源与性能", "logs": "运行日志", "settings": "偏好设置"}
 
 NAVIGATION = (
     ("overview", "工作台", "工作台"),
     ("workspace", "项目工作区", "项目"),
+    ("ssh", "SSH", "SSH"),
     ("connection", "连接与代理", "代理"),
     ("network", "网络检查", "检测"),
     ("resources", "资源管理", "资源"),
@@ -114,8 +115,9 @@ class Window(QMainWindow):
             nav.setObjectName("Nav")
             nav.setCheckable(True)
             nav.setIconSize(QSize(17, 17))
-            nav.setAccessibleName(title)
-            nav.setToolTip(title)
+            description = NAMES[key] if key == "ssh" else title
+            nav.setAccessibleName(description)
+            nav.setToolTip(description)
             self.nav_layout.addWidget(nav)
             self.nav[key] = nav
         self.nav_layout.addStretch()
@@ -179,6 +181,8 @@ class Window(QMainWindow):
             self.stack.addWidget(self.pages[name])
         self.stack.setCurrentWidget(self.pages[name])
         self.current_page = name
+        if name == "ssh":
+            self.pages[name].reload()
         self.update_nav_selection()
         self.update_resource_activity()
         self.render(self.c.view, force=True)
@@ -485,8 +489,6 @@ class Window(QMainWindow):
             tiles.addWidget(item, index // 2, index % 2)
             tiles.setColumnStretch(index % 2, 1)
         launch.layout.addLayout(tiles)
-        launch.layout.addWidget(button("远程 SSH ↗", self.open_ssh, ghost=True),
-                                alignment=Qt.AlignmentFlag.AlignLeft)
         launch.layout.addWidget(button("更换工作区终端", lambda: self.show_settings("terminal"), ghost=True),
                                 alignment=Qt.AlignmentFlag.AlignLeft)
         browser = Panel("浏览器与账号", surface="RoutePanel")
@@ -512,6 +514,10 @@ class Window(QMainWindow):
         adapt(page.viewport().width(), page.viewport().height())
         page.finish()
         return page
+
+    def build_ssh(self):
+        from .ssh_page import SSHPage
+        return SSHPage(self)
 
     def refresh_workspace_profiles(self):
         if not hasattr(self, "workspace_profile_box"):
@@ -1072,28 +1078,34 @@ class Window(QMainWindow):
     def open_ssh(self):
         from PySide6.QtWidgets import QDialog
         from .ssh_dialog import SSHDialog
+
+        if self.c.exit_mode is not None:
+            return
+        dialog = SSHDialog(self)
+        try:
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                self.launch_ssh(dialog.connection)
+        finally:
+            dialog.deleteLater()
+
+    def launch_ssh(self, connection, session_label=None):
         from ..ssh_client import environment
         from ..smart_terminal import TerminalWindow
         from ..terminal_pty import start
 
         if self.c.exit_mode is not None:
             return
-        dialog = SSHDialog(self)
+        home = Path.home()
         try:
-            if dialog.exec() != QDialog.DialogCode.Accepted or self.c.exit_mode is not None:
-                return
-            connection = dialog.connection
-            pty = start(connection.command(), environment(), Path.home())
+            pty = start(connection.command(), environment(), home)
         except (OSError, SPXError) as error:
             notice(self, "无法启动 SSH", str(error), error=True)
             return
-        finally:
-            dialog.deleteLater()
         try:
             from ..clipboard import WindowsClipboard
             clipboard = WindowsClipboard() if os.name == "nt" else None
-            window = TerminalWindow(pty, "ssh", Path.home(), clipboard=clipboard,
-                                    preferences_store=self.c.store, session_label=connection.label)
+            window = TerminalWindow(pty, "ssh", home, clipboard=clipboard,
+                                    preferences_store=self.c.store, session_label=session_label or connection.label)
         except Exception:
             pty.close()
             raise
@@ -1396,11 +1408,12 @@ class Window(QMainWindow):
             edge.raise_()
 
     def update_compact(self):
-        compact = self.width() < 840
+        compact = self.width() < 920
         if compact == self.compact:
             return
         self.compact = compact
         self.nav_layout.setContentsMargins(10 if compact else 26, 4, 10 if compact else 20, 4)
+        self.nav_layout.setSpacing(4 if compact else 6)
         for key, title, short in NAVIGATION:
             if key != "settings":
                 self.nav[key].setText(short if compact else title)

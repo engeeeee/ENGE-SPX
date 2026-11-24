@@ -7,8 +7,9 @@ import time
 import unittest
 from unittest.mock import Mock, patch
 
-from enge_spx import storage
+from enge_spx import ssh_machines, storage
 from enge_spx.engine import Engine, STORAGE
+from enge_spx.ssh_client import Connection
 from enge_spx.state import SPXError, Store, atomic_json, default_home, fingerprint, location_file
 
 
@@ -29,6 +30,17 @@ class StorageCase(unittest.TestCase):
 
 
 class StorageTests(StorageCase):
+    def test_move_preserves_saved_ssh_machines_and_serializes_catalog_writes(self):
+        connection = Connection.from_fields("example.invalid", "operator", 22)
+        machine = ssh_machines.save(self.store, "开发机", connection)
+        with self.store.lock(ssh_machines.LOCK):
+            with self.assertRaises(SPXError):
+                storage.migrate_home(self.store, self.target, self.stop, wait_seconds=0)
+        storage.migrate_home(self.store, self.target, self.stop)
+        moved = Store(self.store.home)
+        self.assertEqual(ssh_machines.load(moved), {machine.id: machine})
+        self.assertFalse((moved.home / (ssh_machines.LOCK + ".lock")).exists())
+
     def test_move_preserves_identity_secrets_partial_downloads_and_explicit_shortcuts(self):
         settings = {**self.store.settings(), "terminal": {"kind": "pebrel", "executable": "D:/Pebrel/pebrel.exe"}, "selected": "saved"}
         self.store.write("settings.json", settings)

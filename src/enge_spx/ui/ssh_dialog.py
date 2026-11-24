@@ -7,12 +7,20 @@ from .widgets import Combo, Dialog, button, label
 
 
 class SSHDialog(Dialog):
-    def __init__(self, parent):
-        super().__init__(parent, "远程 SSH")
+    def __init__(self, parent, *, machine=None, on_save=None):
+        super().__init__(parent, ("编辑 SSH 机器" if machine else "新建 SSH 机器") if on_save else "临时 SSH 连接")
         self.connection = None
-        self.body.addWidget(label("通过本机网络连接。首次连接请在终端核对服务器指纹。", "Muted", True))
+        self.on_save = on_save
+        self.saved_machine = None
+        if on_save is None:
+            self.body.addWidget(label("通过本机网络连接。首次连接请在终端核对服务器指纹。", "Muted", True))
         form = QFormLayout()
         self.body.addLayout(form)
+        if on_save is not None:
+            self.name = QLineEdit(machine.name if machine else "")
+            self.name.setMaxLength(80)
+            self.name.setPlaceholderText("留空时显示用户名和服务器")
+            form.addRow("机器名称", self.name)
         self.host = QLineEdit()
         self.host.setMaxLength(254)
         self.host.setPlaceholderText("例如 server.example.com")
@@ -29,6 +37,14 @@ class SSHDialog(Dialog):
 
         self.identity = QLineEdit()
         self.identity.setReadOnly(True)
+        if machine:
+            connection = machine.connection
+            self.host.setText(connection.host)
+            self.port.setValue(connection.port)
+            self.username.setText(connection.username)
+            if connection.identity is not None:
+                self.auth.setCurrentIndex(self.auth.findData("identity"))
+                self.identity.setText(str(connection.identity))
         key_row = QWidget()
         row = QHBoxLayout(key_row)
         row.setContentsMargins(0, 0, 0, 0)
@@ -52,9 +68,9 @@ class SSHDialog(Dialog):
         actions = QHBoxLayout()
         actions.addStretch()
         actions.addWidget(button("取消", self.reject, ghost=True))
-        connect = button("连接", self.accept, primary=True)
-        connect.setDefault(True)
-        actions.addWidget(connect)
+        submit = button("保存" if on_save else "连接", self.accept, primary=True)
+        submit.setDefault(True)
+        actions.addWidget(submit)
         self.body.addLayout(actions)
         self.host.setFocus()
 
@@ -66,9 +82,13 @@ class SSHDialog(Dialog):
     def accept(self):
         identity = self.identity.text() if self.auth.currentData() == "identity" else None
         try:
-            self.connection = Connection.from_fields(self.host.text(), self.username.text(), self.port.value(), identity)
-        except SPXError as error:
+            connection = Connection.from_fields(self.host.text(), self.username.text(), self.port.value(), identity,
+                                                require_key_file=self.on_save is None)
+            if self.on_save is not None:
+                self.saved_machine = self.on_save(self.name.text(), connection)
+        except (OSError, SPXError) as error:
             self.error.setText(str(error))
             self.error.show()
             return
+        self.connection = connection
         super().accept()

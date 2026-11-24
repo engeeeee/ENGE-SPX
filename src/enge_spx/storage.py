@@ -17,10 +17,11 @@ import time
 import uuid
 
 from .state import SPXError, Store, atomic_json, location_file
+from .ssh_machines import LOCK as SSH_MACHINES_LOCK
 
 DOCKER_STORAGE_DOC = "https://docs.docker.com/desktop/features/wsl/#turn-on-docker-desktop-wsl-2"
 TRANSIENT = {"relay.json", "forward.json", "ui-smoke.json"}
-LOCK_FILES = {name + ".lock" for name in ("operation", "instance", "guard", "forward", "relay")}
+LOCK_FILES = {name + ".lock" for name in ("operation", "instance", "guard", "forward", "relay", SSH_MACHINES_LOCK)}
 
 
 def _linked(path: Path) -> bool:
@@ -134,7 +135,7 @@ def migrate_home(store: Store, value: str | Path, stop, progress=lambda value: N
         stop()
         with ExitStack() as locks:
             deadline = time.monotonic() + wait_seconds
-            for name in ("guard", "forward", "relay"):
+            for name in ("guard", "forward", "relay", SSH_MACHINES_LOCK):
                 while True:
                     try:
                         locks.enter_context(store.lock(name))

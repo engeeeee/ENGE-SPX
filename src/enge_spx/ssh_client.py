@@ -57,6 +57,18 @@ def environment():
     return env
 
 
+def _key_path(identity, *, require_file):
+    if identity is None:
+        return None
+    try:
+        path = Path(identity).expanduser()
+        if not path.is_absolute() or not str(path).isprintable() or (require_file and not path.is_file()):
+            raise ValueError
+    except (OSError, RuntimeError, TypeError, ValueError) as error:
+        raise SPXError("请选择可读取的 OpenSSH 私钥文件。") from error
+    return path
+
+
 @dataclass(frozen=True)
 class Connection:
     host: str
@@ -65,21 +77,14 @@ class Connection:
     identity: Path | None
 
     @classmethod
-    def from_fields(cls, host, username, port, identity=None):
+    def from_fields(cls, host, username, port, identity=None, *, require_key_file=True):
         host = normalize_host(host)
         username = username.strip()
         if not username or len(username) > 255 or not username.isprintable() or any(c.isspace() for c in username):
             raise SPXError("请输入有效的 SSH 用户名。")
         if type(port) is not int or not 1 <= port <= 65535:
             raise SPXError("SSH 端口须在 1–65535 之间。")
-        if identity is not None:
-            try:
-                identity = Path(identity).expanduser()
-                if not identity.is_absolute() or not str(identity).isprintable() or not identity.is_file():
-                    raise ValueError
-            except (OSError, RuntimeError, ValueError) as error:
-                raise SPXError("请选择可读取的 OpenSSH 私钥文件。") from error
-        return cls(host, username, port, identity)
+        return cls(host, username, port, _key_path(identity, require_file=require_key_file))
 
     @property
     def label(self):
@@ -87,13 +92,14 @@ class Connection:
         return f"{self.username}@{host}:{self.port}"
 
     def command(self):
+        identity = _key_path(self.identity, require_file=True)
         args = [executable(), "-F", "none", "-tt", "-o", "StrictHostKeyChecking=ask",
                 "-o", "ConnectTimeout=15", "-o", "ServerAliveInterval=30", "-o", "ServerAliveCountMax=3",
                 "-o", "IdentityAgent=none"]
-        if self.identity is None:
+        if identity is None:
             args += ["-o", "PreferredAuthentications=password,keyboard-interactive", "-o", "PubkeyAuthentication=no"]
         else:
-            path = self.identity.as_posix().replace("\\", "\\\\").replace('"', '\\"').replace("%", "%%")
+            path = identity.as_posix().replace("\\", "\\\\").replace('"', '\\"').replace("%", "%%")
             args += ["-o", f'IdentityFile="{path}"', "-o", "IdentitiesOnly=yes",
                      "-o", "PreferredAuthentications=publickey"]
         return [*args, "-l", self.username, "-p", str(self.port), "--", self.host]
