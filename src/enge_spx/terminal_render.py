@@ -13,11 +13,33 @@ PALETTE = {
     "brightblack": "#8b8179", "brightred": "#f49b90", "brightgreen": "#c0d6a4", "brightbrown": "#f0cc93",
     "brightblue": "#b7cbee", "brightmagenta": "#dec0e1", "brightcyan": "#b5e2dc", "brightwhite": "#ffffff",
 }
-TerminalChar = namedtuple("TerminalChar", [*pyte.screens.Char._fields, "faint"],
-                          defaults=[*pyte.screens.Char._field_defaults.values(), False])
+TerminalChar = namedtuple("TerminalChar", [*pyte.screens.Char._fields, "faint", "hyperlink", "wrapped"],
+                          defaults=[*pyte.screens.Char._field_defaults.values(), False, None, False])
 _OSC_END = re.compile(r"\x07|\x1b\\|\x9c")
 _CSI_END = re.compile(r"[@-~]")
 _DEC_MODE = re.compile(r"\x1b\[\?([0-9;]+)([hl])")
+MAX_WEB_LINK_LENGTH = 4096
+_WEB_LINK = re.compile(r"""(?<![a-z0-9+._/@-])https?://[^\s<>"'\\`“”‘’，。！？；、]+""", re.IGNORECASE)
+
+
+def plain_web_link(text, index, clipped_end=False):
+    """Resolve a printed URL at a character offset in a logical terminal line."""
+    for match in _WEB_LINK.finditer(text):
+        if match.start() > index:
+            break
+        if index >= match.end() or (clipped_end and match.end() == len(text)):
+            continue
+        if match.end() - match.start() > MAX_WEB_LINK_LENGTH:
+            return None
+        value = match[0].rstrip(".,;:!?")
+        unmatched = {right: value.count(right) - value.count(left) for left, right in ("()", "[]", "{}")}
+        end = len(value)
+        while end and unmatched.get(value[end - 1], 0) > 0:
+            unmatched[value[end - 1]] -= 1
+            end -= 1
+        if index < match.start() + end:
+            return value[:end]
+    return None
 
 
 def sgr_attributes(attrs, faint):
@@ -98,6 +120,10 @@ class TerminalStream:
             self.screen.respond(("\x1b]4;" + str(index) + ";rgb:" + self._rgb(color) + "\x1b\\").encode())
         elif payload.startswith(("0;", "1;", "2;")):
             self.stream.feed("\x1b]" + payload + "\x07")
+        elif payload.startswith("8;"):
+            _, separator, address = payload[2:].partition(";")
+            if separator:
+                self.screen.set_hyperlink(address)
         # Other OSC, including clipboard writes/reads, are intentionally ignored.
 
     @staticmethod

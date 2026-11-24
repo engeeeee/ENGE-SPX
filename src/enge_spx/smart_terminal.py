@@ -19,14 +19,14 @@ import unicodedata
 
 import pyte
 from wcwidth import wcwidth
-from PySide6.QtCore import Qt, QTimer, Signal, QEvent, QRectF, QSize, QPointF
-from PySide6.QtGui import QColor, QFont, QFontMetricsF, QGuiApplication, QIcon, QKeySequence, QPainter, QContextMenuEvent, QInputMethodEvent, QTextLayout, QTextOption, QTextCharFormat, QRegion, QImage
+from PySide6.QtCore import Qt, QTimer, Signal, QEvent, QRectF, QSize, QPointF, QUrl
+from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontMetricsF, QGuiApplication, QIcon, QKeySequence, QPainter, QContextMenuEvent, QInputMethodEvent, QTextLayout, QTextOption, QTextCharFormat, QRegion, QImage
 from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollBar, QFrame, QMenu, QToolButton, QSizePolicy
 
 from .clipboard import WindowsClipboard
 from .clipboard_transfer import Transfer, text_frame
 from .state import SPXError
-from .terminal_render import BACKGROUND, FOREGROUND, PALETTE, TerminalChar, TerminalStream, sgr_attributes
+from .terminal_render import BACKGROUND, FOREGROUND, MAX_WEB_LINK_LENGTH, PALETTE, TerminalChar, TerminalStream, plain_web_link, sgr_attributes
 from .terminal_paint import RowPainter
 
 
@@ -63,6 +63,15 @@ def codex_composer_band(rows, cursor, columns, blank):
     return None
 
 
+def _web_url(address):
+    if not address or len(address) > MAX_WEB_LINK_LENGTH or not address.isprintable() or "\\" in address:
+        return None
+    url = QUrl(address, QUrl.ParsingMode.StrictMode)
+    if url.isValid() and url.scheme() in ("http", "https") and url.host():
+        return url
+    return None
+
+
 class TerminalScreen(pyte.HistoryScreen):
     TEXT_RUNS = re.compile(r'[ -~]+|[^ -~]+')
 
@@ -70,6 +79,10 @@ class TerminalScreen(pyte.HistoryScreen):
         self.respond = respond
         self.primary = None
         self.ascii_tables = {}
+        self._drawing_with_pyte = False
+        self.hyperlinks = {}
+        self.hyperlink_ids = {}
+        self.next_hyperlink = 0
         super().__init__(columns, lines, history=2000)
 
     def draw(self, data):
@@ -83,7 +96,7 @@ class TerminalScreen(pyte.HistoryScreen):
                     not char.isascii() and wcwidth(char) <= 0 and not unicodedata.combining(char)
                     for char in data
                 ))):
-            return super().draw(data)
+            return self._draw_with_pyte(data)
         cursor, columns, buffer, dirty = self.cursor, self.columns, self.buffer, self.dirty
         tables = self.ascii_tables
         for match in self.TEXT_RUNS.finditer(data):
@@ -116,25 +129,55 @@ class TerminalScreen(pyte.HistoryScreen):
                 cursor.x += width
                 dirty.add(cursor.y)
             else:
-                super().draw(run)
+                self._draw_with_pyte(run)
+
+    def _draw_with_pyte(self, data):
+        self._drawing_with_pyte = True
+        try:
+            super().draw(data)
+        finally:
+            self._drawing_with_pyte = False
+
+    def linefeed(self):
+        # pyte calls linefeed while drawing only for an automatic wrap.
+        if self._drawing_with_pyte:
+            line = self.buffer[self.cursor.y]
+            last = self.columns - 1
+            line[last] = line[last]._replace(wrapped=True)
+        super().linefeed()
 
     @property
     def default_char(self):
-        return TerminalChar(*super().default_char, False)
+        return TerminalChar(*super().default_char)
 
     def reset(self):
         super().reset()
         self.cursor.attrs = TerminalChar(**self.cursor.attrs._asdict())
 
     def select_graphic_rendition(self, *attrs):
+        hyperlink = self.cursor.attrs.hyperlink
         if not attrs:
             super().select_graphic_rendition()
+            self.cursor.attrs = self.cursor.attrs._replace(hyperlink=hyperlink)
             return
         self.cursor.attrs = TerminalChar(**self.cursor.attrs._asdict())
         forwarded, faint = sgr_attributes(attrs, self.cursor.attrs.faint)
         if forwarded:
             super().select_graphic_rendition(*forwarded)
-        self.cursor.attrs = self.cursor.attrs._replace(faint=faint)
+        self.cursor.attrs = self.cursor.attrs._replace(faint=faint, hyperlink=hyperlink)
+
+    def set_hyperlink(self, address):
+        hyperlink = self.hyperlink_ids.get(address, 0) if address else None
+        if hyperlink == 0 and _web_url(address) is not None:
+            self.next_hyperlink += 1
+            hyperlink = self.next_hyperlink
+            self.hyperlinks[hyperlink] = address
+            self.hyperlink_ids[address] = hyperlink
+            # Scrollback cells keep only numeric IDs, bounding URL storage.
+            if len(self.hyperlinks) > 512:
+                oldest = self.hyperlinks.pop(next(iter(self.hyperlinks)))
+                del self.hyperlink_ids[oldest]
+        self.cursor.attrs = self.cursor.attrs._replace(hyperlink=hyperlink)
 
     @property
     def bracketed(self):
@@ -470,6 +513,7 @@ class TerminalView(QWidget):
         self.right_click_paste = True
         self.left_press = None
         self.left_drag = False
+        self.link_press = None
         self.native_drag = False
         self.native_press_cell = None
         self.native_press_was_input = False
@@ -1107,6 +1151,32 @@ class TerminalView(QWidget):
         return (max(0, min(self.screen.lines - 1, int((event.position().y() - self.PAD_Y) / self.cell_height))),
                 max(0, min(self.screen.columns - 1, int((event.position().x() - self.PAD_X) / self.cell_width))))
 
+    def link_at(self, position):
+        if self.preedit:
+            return None
+        column = math.floor((position.x() - self.PAD_X) / self.cell_width)
+        row = math.floor((position.y() - self.PAD_Y) / self.cell_height)
+        # Click the cells actually displayed, including scrollback or a held frame.
+        rows = self.surface_rows
+        if not (0 <= row < len(rows) and rows[row] and 0 <= column < len(rows[row][0])):
+            return None
+        cells = rows[row][0]
+        while column and not cells[column].data:
+            column -= 1
+        char = cells[column]
+        if char.data.isspace():
+            return None
+        if char.hyperlink is not None:
+            return _web_url(self.screen.hyperlinks.get(char.hyperlink))
+        first = last = row
+        while first and rows[first - 1] and rows[first - 1][0][-1].wrapped:
+            first -= 1
+        while rows[last][0][-1].wrapped and last + 1 < len(rows) and rows[last + 1]:
+            last += 1
+        lines = ["".join(cell.data for cell in rows[y][0]) for y in range(first, last + 1)]
+        index = sum(map(len, lines[:row - first])) + sum(len(cell.data) for cell in cells[:column])
+        return _web_url(plain_web_link("".join(lines), index, rows[last][0][-1].wrapped))
+
     def insertion_cell(self, event):
         y, x = self.cell(event)
         if self.tool != 'codex' or event.modifiers() != Qt.KeyboardModifier.NoModifier:
@@ -1139,6 +1209,13 @@ class TerminalView(QWidget):
             event.accept()
             return
         if event.button() == Qt.MouseButton.LeftButton:
+            self.link_press = None
+            if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
+                url = self.link_at(event.position())
+                if url is not None:
+                    self.link_press = (event.position(), url)
+                    event.accept()
+                    return
             native = self.screen.mouse and self.offset == 0 and not event.modifiers() & Qt.KeyboardModifier.ShiftModifier
             self.clear_selection()
             if native and event.modifiers() & Qt.KeyboardModifier.AltModifier:
@@ -1160,6 +1237,12 @@ class TerminalView(QWidget):
             self.sender.put("keys", self.mouse_packet(event, 1))
 
     def mouseMoveEvent(self, event):
+        if self.link_press is not None:
+            origin, url = self.link_press
+            if url is not None and (event.position() - origin).manhattanLength() >= QApplication.startDragDistance():
+                self.link_press = origin, None
+            event.accept()
+            return
         if self.selecting:
             if self.left_press is not None and not self.left_drag:
                 delta = event.position() - self.left_press[0]
@@ -1190,6 +1273,16 @@ class TerminalView(QWidget):
             event.accept()
             return
         if event.button() == Qt.MouseButton.LeftButton:
+            if self.link_press is not None:
+                origin, url = self.link_press
+                self.link_press = None
+                if (url is not None and event.modifiers() == Qt.KeyboardModifier.ControlModifier
+                        and (event.position() - origin).manhattanLength() < QApplication.startDragDistance()
+                        and url == self.link_at(event.position())):
+                    if not QDesktopServices.openUrl(url):
+                        self.status.emit("无法打开此链接，请复制链接到浏览器打开。")
+                event.accept()
+                return
             if self.native_drag:
                 self.native_drag = False
                 self.sender.put("keys", self.mouse_packet(event, 0, True))

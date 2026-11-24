@@ -225,6 +225,46 @@ class TerminalUsabilityTests(unittest.TestCase):
         QApplication.sendEvent(self.view, QInputMethodEvent(text, list(attributes)))
         self.app.processEvents()
 
+    def test_ctrl_click_opens_complete_wrapped_url_without_sending_mouse_input(self):
+        url = "https://example.invalid/oauth?redirect_uri=http%3A%2F%2F127.0.0.1%3A1455"
+        padding = " " * (self.view.screen.columns - 17)
+        self.view.stream.feed("\x1b[?1000;1006h" + padding + "(" + url + ").")
+        self.view.grab()
+        with patch("enge_spx.smart_terminal.QDesktopServices.openUrl", return_value=True) as opened, patch.object(self.view.sender, "put") as sent:
+            QTest.mouseClick(self.view, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ControlModifier, self.point(5, 1))
+            sent.assert_not_called()
+            opened.assert_called_once()
+            self.assertEqual(bytes(opened.call_args.args[0].toEncoded()).decode("ascii"), url)
+            QTest.mouseClick(self.view, Qt.MouseButton.LeftButton, pos=self.point(5, 1))
+            self.assertEqual(sent.call_count, 2)
+            opened.assert_called_once()
+
+    def test_ctrl_click_opens_osc8_target_across_sgr_and_ignores_file_scheme(self):
+        self.view.stream.feed("\x1b]8;id=docs;https://example.invalid/a;b\x1b")
+        self.view.stream.feed("\\\x1b[31m文\x1b[0m档\x1b]8;;\x07  \x1b]8;;file:///C:/fixture\x07本地\x1b]8;;\x07")
+        self.view.grab()
+        with patch("enge_spx.smart_terminal.QDesktopServices.openUrl", return_value=True) as opened:
+            QTest.mouseClick(self.view, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ControlModifier, self.point(3))
+            opened.assert_called_once()
+            self.assertEqual(opened.call_args.args[0].toString(), "https://example.invalid/a;b")
+            QTest.mouseClick(self.view, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ControlModifier, self.point(6))
+            opened.assert_called_once()
+
+    def test_ctrl_drag_and_changed_link_cancel_browser_open(self):
+        self.view.stream.feed("https://example.invalid/first")
+        self.view.grab()
+        left, ctrl, point = Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ControlModifier, self.point(5)
+        with patch("enge_spx.smart_terminal.QDesktopServices.openUrl") as opened:
+            QTest.mousePress(self.view, left, ctrl, point)
+            QTest.mouseMove(self.view, self.point(20))
+            QTest.mouseMove(self.view, point)
+            QTest.mouseRelease(self.view, left, ctrl, point)
+            QTest.mousePress(self.view, left, ctrl, point)
+            self.view.stream.feed("\r\x1b[2Khttps://example.invalid/second")
+            self.view.grab()
+            QTest.mouseRelease(self.view, left, ctrl, point)
+            opened.assert_not_called()
+
     def test_ime_preedit_masks_placeholder_and_cancel_restores_original(self):
         self.view.stream.feed("\x1b[1;1HAsk Codex to do anything\x1b[1;1H")
         self.view.blink = False

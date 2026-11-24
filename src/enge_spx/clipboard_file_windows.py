@@ -15,6 +15,9 @@ from .state import SPXError
 
 _BUSY_ERRORS = (32, 33)
 _STATUS_REPARSE_POINT_ENCOUNTERED = 0xC000050B
+_FILE_SHARE_READ = 0x00000001
+_FILE_SHARE_WRITE = 0x00000002
+_FILE_SHARE_DELETE = 0x00000004
 _OPEN_ERRORS = {
     2: "源文件已不存在，请重新复制文件",
     3: "源目录已不存在，请重新复制文件",
@@ -68,10 +71,12 @@ def open_read(value):
         name = UnicodeString(size, size + 2, ctypes.cast(buffer, w.LPWSTR))
         attributes = ObjectAttributes(ctypes.sizeof(ObjectAttributes), root, ctypes.pointer(name), 0x1040, None, None)
         status = IoStatus()
+        # Read from the opened handle while other apps write or rotate the file.
+        sharing = _FILE_SHARE_READ | _FILE_SHARE_WRITE | _FILE_SHARE_DELETE
         for attempt in range(5):
             result = native.NtCreateFile(
                 ctypes.byref(handle), 0x00120089, ctypes.byref(attributes), ctypes.byref(status),
-                None, 0, 1, 1, 0x64, None, 0,
+                None, 0, sharing, 1, 0x64, None, 0,
             )
             if result >= 0:
                 break

@@ -10,7 +10,7 @@ if os.name != "nt":
 
 from PySide6.QtTest import QTest
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QApplication, QLineEdit, QPushButton
+from PySide6.QtWidgets import QApplication, QLabel, QLineEdit, QPushButton
 from enge_spx.engine import Engine
 from enge_spx.state import Store
 from enge_spx.ui.controller import Controller
@@ -45,6 +45,12 @@ class WorkspaceUITests(unittest.TestCase):
             if not self.controller.busy:
                 return
         self.fail("Workspace operation did not finish")
+
+    def test_antigravity_launch_has_no_download_caption(self):
+        labels = [item.text() for item in self.window.findChildren(QLabel)]
+        buttons = [item.text() for item in self.window.findChildren(QPushButton) if item.isVisible()]
+        self.assertNotIn("Antigravity 首次打开时通过工作区代理下载安装。", labels)
+        self.assertTrue(any(text.startswith("Antigravity CLI") for text in buttons))
 
     def test_selection_does_not_mutate_or_launch_and_apply_captures_identity(self):
         c = self.controller

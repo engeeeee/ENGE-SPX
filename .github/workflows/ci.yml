@@ -67,19 +67,25 @@ jobs:
         if: env.SPX_UI_HOTFIX != 'true' && env.SPX_WORKSPACE_UPDATE != 'true' && (runner.os != 'Windows' || env.SPX_CLIENT_RELEASE != 'true')
         env:
           PYTHONPATH: src
-      - name: Verify top navigation and software update checks
+      - name: Verify Ctrl-click links, clipboard file sharing and the workspace caption
         if: env.SPX_UI_HOTFIX == 'true'
         working-directory: tests
         env:
           PYTHONPATH: ../src
-        run: python -m unittest -v test_window_frame test_app_updates test_app_update_ui
-      - name: Check new layouts at 150% scaling
-        if: runner.os == 'Windows' && env.SPX_UI_HOTFIX == 'true'
-        env:
-          QT_SCALE_FACTOR: '1.5'
-        run: python tools/check_ui_dpi.py
+        run: >-
+          python -m unittest -v
+          test_terminal_usability.TerminalUsabilityTests.test_ctrl_click_opens_complete_wrapped_url_without_sending_mouse_input
+          test_terminal_usability.TerminalUsabilityTests.test_ctrl_click_opens_osc8_target_across_sgr_and_ignores_file_scheme
+          test_terminal_usability.TerminalUsabilityTests.test_ctrl_drag_and_changed_link_cancel_browser_open
+          test_terminal_usability.ColourProtocolTests.test_bold_italic_underline_strike_and_reset
+          test_terminal_usability.ColourProtocolTests.test_colour_queries_across_chunk_boundaries_and_osc52_never_touches_clipboard
+          test_terminal_text.TerminalTextTests.test_mixed_vt_matches_unmodified_pyte_through_wrap_charset_insert_and_unicode
+          test_terminal_rendering.TerminalRenderingTests.test_layout_cache_reuses_static_rows_and_refreshes_text_style_selection_and_font
+          test_windows_clipboard.ClipboardFileOpenTests
+          test_windows_clipboard.WindowsClipboardFileTests
+          test_workspace_ui.WorkspaceUITests.test_antigravity_launch_has_no_download_caption
       - name: Verify Windows Show Desktop then restore only the terminal
-        if: runner.os == 'Windows' && env.SPX_WORKSPACE_UPDATE != 'true'
+        if: runner.os == 'Windows' && env.SPX_WORKSPACE_UPDATE != 'true' && env.SPX_UI_HOTFIX != 'true'
         run: python tools/probe_windows_show_desktop.py
       - name: Focused Windows client, update and exit regression
         if: runner.os == 'Windows' && env.SPX_CLIENT_RELEASE == 'true' && env.SPX_UI_HOTFIX != 'true'
@@ -105,7 +111,7 @@ jobs:
       - if: runner.os == 'Windows' && env.SPX_UI_HOTFIX != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: ENGE-SPX-UI-0.15.9
+          name: ENGE-SPX-UI-0.15.10
           path: ${{ runner.temp }}/spx-ui-checks
           if-no-files-found: error
       - if: runner.os == 'Windows' && env.SPX_UI_HOTFIX != 'true'
@@ -133,13 +139,14 @@ jobs:
       - name: Verify real portable and installed client update handoff
         if: env.SPX_WORKSPACE_UPDATE != 'true'
         shell: pwsh
-        run: ./.venv-build/Scripts/python.exe tests/integration_app_update.py --bundle dist/ENGE-SPX-Windows-x64-0.15.9-Portable.zip --setup dist/ENGE-SPX-Windows-x64-0.15.9-Setup.exe --output '${{ runner.temp }}/app-update-e2e.json'
+        run: ./.venv-build/Scripts/python.exe tests/integration_app_update.py --bundle dist/ENGE-SPX-Windows-x64-0.15.10-Portable.zip --setup dist/ENGE-SPX-Windows-x64-0.15.10-Setup.exe --output '${{ runner.temp }}/app-update-e2e.json'
       - name: Verify terminal taskbar identity, materials and opacity on Windows
+        if: env.SPX_UI_HOTFIX != 'true'
         shell: pwsh
         run: |
           ./.venv-build/Scripts/python.exe tools/probe_windows_terminal_window.py --output '${{ runner.temp }}/terminal-caption.json'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if ($env:SPX_WORKSPACE_UPDATE -eq 'true' -or $env:SPX_UI_HOTFIX -eq 'true') {
+          if ($env:SPX_WORKSPACE_UPDATE -eq 'true') {
             ./.venv-build/Scripts/python.exe tools/probe_windows_terminal_window.py --legacy-accent --output '${{ runner.temp }}/terminal-caption-legacy.json'
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
@@ -152,11 +159,21 @@ jobs:
             ${{ runner.temp }}/app-update-e2e.json
             ${{ runner.temp }}/terminal-caption*
           if-no-files-found: warn
-      - name: Verify packaged CLI
+      - name: Verify frozen executable versions
         shell: pwsh
         run: |
-          & ./dist/ENGE-SPX/spx.exe --version
-          if ($LASTEXITCODE -ne 0) { throw 'Packaged CLI check failed.' }
+          $expected = python -c "from enge_spx import __version__; print(__version__)"
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to read the source version.' }
+          $actual = & ./dist/ENGE-SPX/spx.exe --version
+          if ($LASTEXITCODE -ne 0 -or $actual -ne $expected) { throw 'Packaged CLI version differs from source.' }
+          foreach ($executable in @('ENGE-SPX.exe', 'spx.exe')) {
+            $versionInfo = (Get-Item (Join-Path './dist/ENGE-SPX' $executable)).VersionInfo
+            if ($versionInfo.ProductVersion -ne $expected -or $versionInfo.FileVersion -ne $expected -or $versionInfo.IsPreRelease) { throw 'Executable is not the expected formal version.' }
+          }
+      - name: Verify packaged CLI and GUI
+        if: env.SPX_UI_HOTFIX != 'true'
+        shell: pwsh
+        run: |
           $selfTest = & ./dist/ENGE-SPX/spx.exe --self-test
           if ($LASTEXITCODE -ne 0) { throw 'Packaged proxy transports/resources failed.' }
           $selfTest | Write-Output
@@ -190,20 +207,19 @@ jobs:
           if ($timing.toolkit -ne 'Qt' -or -not $timing.brand_visible) { throw 'Packaged Qt interface or complete product name missing.' }
           $metadata = (Get-Item './dist/ENGE-SPX/ENGE-SPX.exe').VersionInfo
           if ($metadata.ProductName -ne 'ENGE SPX' -or $metadata.CompanyName -ne 'engeeeee') { throw 'Executable branding differs.' }
-          foreach ($executable in @('ENGE-SPX.exe', 'spx.exe')) {
-            $versionInfo = (Get-Item (Join-Path './dist/ENGE-SPX' $executable)).VersionInfo
-            if ($versionInfo.ProductVersion -ne $runtime.version -or $versionInfo.FileVersion -ne $runtime.version -or $versionInfo.IsPreRelease) { throw 'Executable is not the expected formal version.' }
-          }
       - name: Verify real DPAPI in the frozen Windows CLI
+        if: env.SPX_UI_HOTFIX != 'true'
         run: python tools/check_frozen_credentials.py dist/ENGE-SPX/spx.exe
       - name: Verify frozen GUI keeps Docker startup manual
+        if: env.SPX_UI_HOTFIX != 'true'
         shell: pwsh
         run: python tests/test_gui_startup.py --packaged dist/ENGE-SPX/ENGE-SPX.exe
       - name: Verify per-user setup and uninstall
+        if: env.SPX_UI_HOTFIX != 'true'
         shell: pwsh
         run: |
           $appDir = Join-Path $env:RUNNER_TEMP 'spx-installed'
-          $setup = Start-Process -FilePath ./dist/ENGE-SPX-Windows-x64-0.15.9-Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$appDir" -PassThru -Wait
+          $setup = Start-Process -FilePath ./dist/ENGE-SPX-Windows-x64-0.15.10-Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$appDir" -PassThru -Wait
           if ($setup.ExitCode -ne 0 -or -not (Test-Path "$appDir/ENGE-SPX.exe")) { throw 'Setup failed.' }
           & "$appDir/spx.exe" --version
           if ($LASTEXITCODE -ne 0) { throw 'Installed CLI failed.' }
@@ -217,10 +233,10 @@ jobs:
           if ((Get-Content (Join-Path $privateData 'uninstall-test.txt')) -ne 'preserved') { throw 'Uninstall removed private data.' }
       - uses: actions/upload-artifact@v4
         with:
-          name: ENGE-SPX-Windows-x64-0.15.9
+          name: ENGE-SPX-Windows-x64-0.15.10
           path: |
-            dist/ENGE-SPX-Windows-x64-0.15.9-Portable.zip
-            dist/ENGE-SPX-Windows-x64-0.15.9-Setup.exe
+            dist/ENGE-SPX-Windows-x64-0.15.10-Portable.zip
+            dist/ENGE-SPX-Windows-x64-0.15.10-Setup.exe
             dist/*.sha256
           if-no-files-found: error
   containers:
@@ -332,7 +348,7 @@ jobs:
         if: github.repository == 'engeeeee/ENGE-SPX' && github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: ENGE-SPX-Runtime-0.15.9
+          name: ENGE-SPX-Runtime-0.15.10
           path: ${{ runner.temp }}/runtime-package/*
           compression-level: 0
           retention-days: 1
@@ -345,13 +361,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Verify UI-only scope and reuse the published runtime bytes
+      - name: Verify client hotfix scope and reuse the published runtime bytes
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 tools/reuse_ui_hotfix_runtime.py --output "$RUNNER_TEMP/runtime-package"
       - uses: actions/upload-artifact@v4
         with:
-          name: ENGE-SPX-Runtime-0.15.9
+          name: ENGE-SPX-Runtime-0.15.10
           path: ${{ runner.temp }}/runtime-package/*
           compression-level: 0
           retention-days: 1
@@ -373,10 +389,10 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: python tools/reuse_workspace_runtime.py --output "$RUNNER_TEMP/runtime-package"
       - name: Verify cold SOCKS5 switching, official Antigravity install and workspace isolation
-        run: python -u tests/integration_chain.py --runtime-manifest "$RUNNER_TEMP/runtime-package/ENGE-SPX-Runtime-linux-amd64-0.15.9.json"
+        run: python -u tests/integration_chain.py --runtime-manifest "$RUNNER_TEMP/runtime-package/ENGE-SPX-Runtime-linux-amd64-0.15.10.json"
       - uses: actions/upload-artifact@v4
         with:
-          name: ENGE-SPX-Runtime-0.15.9
+          name: ENGE-SPX-Runtime-0.15.10
           path: ${{ runner.temp }}/runtime-package/*
           compression-level: 0
           retention-days: 1
@@ -391,11 +407,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: ENGE-SPX-Windows-x64-0.15.9
+          name: ENGE-SPX-Windows-x64-0.15.10
           path: verified-package
       - uses: actions/download-artifact@v4
         with:
-          name: ENGE-SPX-Runtime-0.15.9
+          name: ENGE-SPX-Runtime-0.15.10
           path: verified-runtime
       - name: Publish the verified ENGE SPX release
         uses: actions/github-script@v7

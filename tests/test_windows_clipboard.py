@@ -42,7 +42,8 @@ class ClipboardFileOpenTests(unittest.TestCase):
         self.assertEqual(open_read(r"C:\fixture\file.txt"), 7)
         self.assertEqual(self.sleep.call_args_list, [call(.05), call(.1)])
         for attempt in self.native.NtCreateFile.call_args_list:
-            self.assertEqual(attempt.args[6], 1)
+            self.assertEqual(attempt.args[1], 0x00120089)  # Read-only desired access
+            self.assertEqual(attempt.args[6], 7)  # Share read, write and delete
         self.crt.open_osfhandle.assert_called_once_with(456, os.O_RDONLY | os.O_BINARY)
         self.kernel.CloseHandle.assert_called_once_with(123)
 
@@ -198,23 +199,45 @@ class WindowsClipboardTests(unittest.TestCase):
 
 @unittest.skipUnless(os.name == "nt", "native Windows file sharing")
 class WindowsClipboardFileTests(unittest.TestCase):
-    def test_real_writer_releases_file_during_clipboard_open_retry(self):
+    def setUp(self):
+        self.kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        self.kernel.CreateFileW.argtypes = [w.LPCWSTR, w.DWORD, w.DWORD, ctypes.c_void_p, w.DWORD, w.DWORD, w.HANDLE]
+        self.kernel.CreateFileW.restype = w.HANDLE
+        self.kernel.CloseHandle.argtypes = [w.HANDLE]
+        self.kernel.CloseHandle.restype = w.BOOL
+
+    def open_writer(self, path, share):
+        handle = self.kernel.CreateFileW(str(path), 0x40000000, share, None, 3, 0x80, None)
+        self.assertNotEqual(handle, ctypes.c_void_p(-1).value)
+        return handle
+
+    def test_reads_file_while_existing_writer_allows_shared_read(self):
         from enge_spx.clipboard_transfer import open_source
 
-        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
-        kernel.CreateFileW.argtypes = [w.LPCWSTR, w.DWORD, w.DWORD, ctypes.c_void_p, w.DWORD, w.DWORD, w.HANDLE]
-        kernel.CreateFileW.restype = w.HANDLE
-        kernel.CloseHandle.argtypes = [w.HANDLE]
-        kernel.CloseHandle.restype = w.BOOL
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "live.log"
+            content = b"log fixture"
+            path.write_bytes(content)
+            handle = self.open_writer(path, share=1)
+            try:
+                with patch("enge_spx.clipboard_file_windows.sleep") as retry, open_source(path) as (stream, size):
+                    self.assertEqual(size, len(content))
+                    self.assertEqual(stream.read(), content)
+                    retry.assert_not_called()
+            finally:
+                self.kernel.CloseHandle(handle)
+
+    def test_exclusive_writer_releases_file_during_clipboard_open_retry(self):
+        from enge_spx.clipboard_transfer import open_source
+
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "selected.txt"
             path.write_bytes(b"clipboard fixture")
-            handle = kernel.CreateFileW(str(path), 0x40000000, 1, None, 3, 0x80, None)
-            self.assertNotEqual(handle, ctypes.c_void_p(-1).value)
+            handle = self.open_writer(path, share=0)
 
             def release_writer(delay):
                 nonlocal handle
-                self.assertTrue(kernel.CloseHandle(handle))
+                self.assertTrue(self.kernel.CloseHandle(handle))
                 handle = None
 
             try:
@@ -225,7 +248,7 @@ class WindowsClipboardFileTests(unittest.TestCase):
                 retry.assert_called_once_with(.05)
             finally:
                 if handle is not None:
-                    kernel.CloseHandle(handle)
+                    self.kernel.CloseHandle(handle)
 
 
 class OwnedPTYTests(unittest.TestCase):

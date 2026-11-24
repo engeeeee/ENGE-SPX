@@ -5,7 +5,9 @@ import math
 from PySide6.QtCore import Qt, QPointF, QRectF
 from PySide6.QtGui import QColor, QFont, QStaticText, QTransform, QImage, QPainter
 
-from .terminal_render import BACKGROUND, FOREGROUND
+from .terminal_render import BACKGROUND, FOREGROUND, TerminalChar
+
+_STYLE_END = TerminalChar._fields.index("hyperlink")
 
 
 class RowPainter:
@@ -56,7 +58,7 @@ class RowPainter:
         return cells[:end]
 
     def style(self, char, selected):
-        key = (*char[1:], selected)
+        key = char[1:_STYLE_END] + (selected,)
         cached = self.styles.get(key)
         if cached is not None:
             return cached

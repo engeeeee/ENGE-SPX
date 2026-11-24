@@ -1,5 +1,11 @@
 # Changes
 
+## 0.15.10 terminal links and shared file paste — 2026-11-24
+
+- Open HTTP and HTTPS links in the default browser with Ctrl+click, including wrapped URLs and OSC 8 links.
+- Paste Windows files while another program is writing to them if that program shares read access.
+- Remove the Antigravity first-launch download caption from the workspace.
+
 ## 0.15.9 workspace recovery and lower idle memory — 2026-11-24
 
 - Recheck unavailable workspaces and migrate legacy lease sessions during preparation. Retry lease revocation after the stopped gateway releases a shared file.

@@ -1,4 +1,4 @@
-"""Reuse the immutable 0.15.7 runtime for the reviewed desktop hotfix."""
+"""Reuse the immutable 0.15.9 runtime for the reviewed desktop hotfix."""
 import argparse
 import hashlib
 import json
@@ -10,20 +10,20 @@ import sys
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE = 'ee2123c4ea2a8aa441ddaaca4c2647a71428be0d'
+BASE = 'd645eee1d681c08eb097f44e020f3335dfb29fdd'
 PROJECT = 'https://github.com/engeeeee/ENGE-SPX'
-PREVIOUS = '0.15.7'
+PREVIOUS = '0.15.9'
 
 
 def check_scope():
     files = subprocess.check_output(['git', 'diff', '--name-only', BASE, 'HEAD', '--', 'src', 'requirements.txt', 'requirements-build.txt', 'pyproject.toml', 'packaging'], cwd=ROOT, text=True).splitlines()
     allowed = {
-        'src/enge_spx/__init__.py', 'src/enge_spx/app_updates.py', 'src/enge_spx/gui.py',
-        'src/enge_spx/ui/style.py', 'src/enge_spx/ui/controller.py', 'src/enge_spx/ui/window.py',
+        'src/enge_spx/__init__.py', 'src/enge_spx/clipboard_file_windows.py', 'src/enge_spx/smart_terminal.py',
+        'src/enge_spx/terminal_paint.py', 'src/enge_spx/terminal_render.py', 'src/enge_spx/ui/window.py',
         'packaging/windows/Installer.iss',
         'packaging/windows/version-info.txt', 'packaging/windows/cli-version-info.txt',
     }
-    assert set(files) <= allowed, 'Core, dependencies or runtime changed; UI-only reuse is forbidden'
+    assert set(files) <= allowed, 'Core, dependencies or runtime changed; desktop hotfix reuse is forbidden'
 
 
 class SecureRedirect(urllib.request.HTTPRedirectHandler):
@@ -90,7 +90,7 @@ def main(destination):
     check_scope()
     sys.path.insert(0, str(ROOT / 'src'))
     from enge_spx import __version__
-    assert __version__ == '0.15.8', 'This reuse gate is limited to the reviewed 0.15.8 hotfix'
+    assert __version__ == '0.15.10', 'This reuse gate is limited to the reviewed 0.15.10 hotfix'
     copy_runtime(destination, PREVIOUS, BASE, __version__, {'gateway': '9aa8a7818569', 'work': '6e3fcfa5633c', 'browser': '1bca0984bc51'})
 
 

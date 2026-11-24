@@ -484,7 +484,6 @@ class Window(QMainWindow):
             tiles.addWidget(item, index // 2, index % 2)
             tiles.setColumnStretch(index % 2, 1)
         launch.layout.addLayout(tiles)
-        launch.layout.addWidget(label("Antigravity 首次打开时通过工作区代理下载安装。", "Caption", True))
         launch.layout.addWidget(button("更换工作区终端", lambda: self.show_settings("terminal"), ghost=True),
                                 alignment=Qt.AlignmentFlag.AlignLeft)
         browser = Panel("浏览器与账号", surface="RoutePanel")

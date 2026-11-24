@@ -1,12 +1,11 @@
 """Differential semantic proof for the conservative ASCII fast path."""
 import random
 import unittest
-import pyte
 from enge_spx.smart_terminal import TerminalScreen, TerminalStream
 
 
 class ReferenceScreen(TerminalScreen):
-    draw = pyte.Screen.draw
+    draw = TerminalScreen._draw_with_pyte
 
 
 class TerminalTextTests(unittest.TestCase):
