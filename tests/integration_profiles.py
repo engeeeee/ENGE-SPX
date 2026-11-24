@@ -152,7 +152,16 @@ def run(context, runtime_report, output):
             assert network_report["status"] == "checked", json.dumps(network_report)
             observed = network_report["objects"]["browser"]
             assert observed["status"] == "observed"
-            assert observed["timezone_matches_session_offset"] is True
+            assert observed["workspace_timezone"] == store.settings()["timezone"]
+            assert observed["timezone_matches_workspace_offset"] is True, {
+                "workspace_timezone": observed["workspace_timezone"],
+                "workspace_offset_seconds": observed["workspace_offset_seconds"],
+                "browser_timezone": observed["timezone"],
+                "browser_offset_minutes": observed["offset_minutes"],
+            }
+            projects = network_report["objects"]["project_workspaces"]
+            assert len(projects) == 1
+            assert projects[0]["timezone"]["offset_seconds"] == observed["offset_minutes"] * 60
             assert observed["language_matches_session_primary"] is True
             assert observed["webrtc"]["offer_created"] and observed["webrtc"]["local_stun_datagrams"] == 0
             assert sockets() == before_sockets, "Diagnostics left host listening sockets open"

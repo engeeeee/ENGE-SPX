@@ -7,6 +7,7 @@
 - Start Chromium on demand for ordinary tools with default resource settings. Keep browser startup available for explicit login and saved preferences.
 - Retry temporarily locked clipboard files and report specific Windows errors. Preserve terminal output after synchronized frames and finish UTF-8 decoding at EOF.
 - Reduce terminal parsing work and clear inherited browser tokens from host terminal launches.
+- Compare the observed Chromium offset with the workspace timezone and report the network container's offset separately.
 
 ## 0.15.8 settings and startup update checks — 2026-11-22
 

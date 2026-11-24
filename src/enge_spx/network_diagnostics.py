@@ -318,9 +318,19 @@ def collect(engine, browser=True):
                     if observed["status"] != "observed":
                         report["status"] = "partial"
                     else:
-                        offset = session.get("timezone", {}).get("offset_seconds")
-                        browser_offset = observed.get("offset_minutes")
-                        observed["timezone_matches_session_offset"] = offset == browser_offset * 60 if offset is not None and browser_offset is not None else None
+                        session_offset = session.get("timezone", {}).get("offset_seconds")
+                        browser_minutes = observed.get("offset_minutes")
+                        browser_offset = None if browser_minutes is None else browser_minutes * 60
+                        observed["timezone_matches_session_offset"] = session_offset == browser_offset if session_offset is not None and browser_offset is not None else None
+                        # The network namespace can outlive a change of workspace timezone.
+                        workspace_zone = _zone(engine.store.settings().get("timezone"))
+                        workspace_offset = None
+                        if workspace_zone != "unavailable":
+                            current = datetime.now(timezone.utc).astimezone(ZoneInfo(workspace_zone))
+                            workspace_offset = int(current.utcoffset().total_seconds())
+                        observed["workspace_timezone"] = workspace_zone
+                        observed["workspace_offset_seconds"] = workspace_offset
+                        observed["timezone_matches_workspace_offset"] = workspace_offset == browser_offset if workspace_offset is not None and browser_offset is not None else None
                         system_language = session.get("language", {}).get("LANG", "unavailable").split("_", 1)[0].split(".", 1)[0].lower()
                         browser_language = observed["language"].split("-", 1)[0].lower()
                         observed["language_matches_session_primary"] = system_language == browser_language if system_language not in ("unavailable", "c", "posix") and browser_language != "unavailable" else None

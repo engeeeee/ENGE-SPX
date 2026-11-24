@@ -228,6 +228,30 @@ class NetworkLifecycleTests(unittest.TestCase):
         self.assertEqual(self.store.settings()["timezone"], "America/Los_Angeles")
         self.engine._shutdown_locked.assert_not_called()
 
+    def test_browser_timezone_checks_current_workspace_and_retains_network_session_facts(self):
+        self.store.write("settings.json", {**self.store.settings(), "timezone": "Asia/Tokyo"})
+        self.engine.inspect.return_value = {"Id": "browser-id", "State": {"Running": True}}
+        for timezone_name, offset in (("Asia/Tokyo", 540), ("UTC", 0)):
+            with self.subTest(timezone_name=timezone_name):
+                actual = browser()
+                actual["observation"].update(timezone=timezone_name, offset_minutes=offset)
+
+                def execute(engine, container, name, **kwargs):
+                    return actual if name == "browser_probe.py" else namespace()
+
+                with (
+                    patch("enge_spx.network_diagnostics._exec_json", side_effect=execute),
+                    patch("enge_spx.browser_security.validate_container"),
+                    patch("enge_spx.workspace_profiles.validate_mounts"),
+                ):
+                    report = self.engine.network_diagnostics()["objects"]
+                self.assertEqual(report["session"]["timezone"]["offset_seconds"], 0)
+                evidence = report["browser"]
+                self.assertEqual(evidence["workspace_timezone"], "Asia/Tokyo")
+                self.assertEqual(evidence["workspace_offset_seconds"], 32400)
+                self.assertIs(evidence["timezone_matches_workspace_offset"], offset == 540)
+                self.assertIs(evidence["timezone_matches_session_offset"], offset == 0)
+
     def test_browser_sandbox_or_identity_failure_stops_without_observation(self):
         self.engine.inspect.return_value = {"Id": "browser-id", "State": {"Running": True}}
         with patch("enge_spx.network_diagnostics._exec_json", return_value=namespace()) as execute, patch("enge_spx.browser_security.validate_container", side_effect=SPXError("bad sandbox")):
