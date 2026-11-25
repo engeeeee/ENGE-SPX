@@ -3,20 +3,20 @@ export type Theme = "dark" | "light";
 
 export const product = {
     name: "ENGE SPX",
-    version: "0.15.12",
-    published: "2026-11-24",
+    version: "0.15.13",
+    published: "2026-11-25",
     site: "https://enge1337.cn",
     repository: "https://github.com/engeeeee/ENGE-SPX",
     release:
-        "https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.12-windows",
+        "https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.13-windows",
     installer:
-        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.12-windows/ENGE-SPX-Windows-x64-0.15.12-Setup.exe",
+        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.13-windows/ENGE-SPX-Windows-x64-0.15.13-Setup.exe",
     portable:
-        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.12-windows/ENGE-SPX-Windows-x64-0.15.12-Portable.zip",
+        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.13-windows/ENGE-SPX-Windows-x64-0.15.13-Portable.zip",
     installerSha256:
-        "a74e5238edebcd619c93ce7ac4b24fc1c382427b0ac59eb95deb7e7baaf4d327",
+        "706f5b2a93bc3b7068c25be5040025eafc544e27bccad62daa9c7a62db52ea47",
     portableSha256:
-        "8462afbe8fa45b159495a3dad282e6f56d7af0352aaca8a49ed5de6005164947",
+        "bcbb8c7d3ba368ab340f76465903f5fa4f27f8a627e50622922336006cb38dd6",
     screenshotVersion: "0.15.9",
 } as const;
 
