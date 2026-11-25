@@ -1,5 +1,11 @@
 # Changes
 
+## 0.15.15 SSH terminal responsiveness — 2026-11-25
+
+- Reuse already painted rows while scrolling through SSH history.
+- Share retired rows in selection snapshots and copy only the live screen.
+- Capture synchronized terminal updates as row maps and expand cells only when a frame is painted.
+
 ## 0.15.14 SSH scrollback and saved sign-in — 2026-11-25
 
 - Preserve Codex's inline transcript over Windows OpenSSH and forward wheel events to its fullscreen transcript.
