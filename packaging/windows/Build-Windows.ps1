@@ -16,6 +16,8 @@ Write-Output "Building with the selected Python $spxBaseVersion"
 if ($LASTEXITCODE -ne 0) { throw 'Build dependencies failed to install.' }
 $spxVersion = & $spxPython -c "import sys; sys.path.insert(0, 'src'); from enge_spx import __version__; print(__version__)"
 if ($LASTEXITCODE -ne 0) { throw 'Unable to determine ENGE SPX version.' }
+& $spxPython tools/prepare_windows_conpty.py
+if ($LASTEXITCODE -ne 0) { throw 'Unable to prepare the pinned SSH console host.' }
 & $spxPython -m PyInstaller --noconfirm --clean --distpath dist --workpath build packaging/windows/SPX.spec
 if ($LASTEXITCODE -ne 0) { throw 'Executable build failed.' }
 foreach ($spxNotice in @('README.md','README.zh-CN.md','README.en.md','LICENSE','NOTICE.md','THIRD_PARTY_NOTICES.md','AUTHORS.md','CONTRIBUTING.md','SECURITY.md','SUPPORT.md','CHANGELOG.md')) {

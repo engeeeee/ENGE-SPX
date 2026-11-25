@@ -27,7 +27,7 @@ class SSHPage(Page):
         self.list.setAccessibleName("已保存的 SSH 机器")
         self.list.setMinimumHeight(190)
         self.list.currentItemChanged.connect(self.update_selection)
-        self.list.itemDoubleClicked.connect(self.connect_selected)
+        self.list.itemActivated.connect(self.connect_selected)
         saved.layout.addWidget(self.list)
         self.empty = label("还没有保存的机器。", "Muted", True)
         saved.layout.addWidget(self.empty)
@@ -86,7 +86,8 @@ class SSHPage(Page):
         self.title.setText(machine.title)
         self.address.setText(connection.label)
         self.address.setVisible(bool(machine.name))
-        self.authentication.setText("私钥文件登录" if connection.identity else "密码登录")
+        method = "私钥文件登录" if connection.identity else "密码登录"
+        self.authentication.setText(method + (" · 已加密保存凭据" if machine.has_password else ""))
         self.identity.setText(str(connection.identity) if connection.identity else "")
         self.identity.setVisible(connection.identity is not None)
 
@@ -95,10 +96,12 @@ class SSHPage(Page):
         if owner.c.exit_mode is not None:
             return
 
-        def save(name, connection):
-            return ssh_machines.save(owner.c.store, name, connection, machine)
+        def save(name, connection, password, clear_password):
+            return ssh_machines.save(owner.c.store, name, connection, machine,
+                                     password=password, clear_password=clear_password)
 
-        dialog = SSHDialog(owner, machine=machine, on_save=save)
+        dialog = SSHDialog(owner, machine=machine, on_save=save,
+                           can_store_password=owner.c.store.credentials.enabled)
         try:
             accepted = dialog.exec() == QDialog.DialogCode.Accepted
             self.reload(dialog.saved_machine.id if accepted else None)

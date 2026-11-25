@@ -1562,6 +1562,13 @@ class TerminalWindow(QMainWindow):
         self.connection = QLabel("●  SSH 会话" if self.is_ssh else "●  等待 CLI 输入区")
         self.connection.setObjectName("ConnectionState")
         header.addWidget(self.connection)
+        self.quick_input = QToolButton()
+        self.quick_input.setObjectName("QuickInputButton")
+        self.quick_input.setText("快捷输入")
+        self.quick_input.setToolTip("Ctrl+Shift+P 打开常用命令或提示词，Tab 填入输入区。")
+        self.quick_input.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.quick_input.clicked.connect(self.show_quick_input)
+        header.addWidget(self.quick_input)
         options = QToolButton()
         options.setObjectName("TerminalOptions")
         options.setText("⋯")
@@ -1757,6 +1764,7 @@ class TerminalWindow(QMainWindow):
 
     def connection_ended(self):
         self.view.stop()
+        self.quick_input.setEnabled(False)
         self.connection.setText("○  连接已结束")
         self.message.setText("SSH 连接已结束，可以关闭此窗口。" if self.is_ssh
                              else "终端连接已结束。工作区和持久资料按现有规则保留；可关闭此窗口。")

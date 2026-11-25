@@ -1088,12 +1088,25 @@ class Window(QMainWindow):
 
         if self.c.exit_mode is not None:
             return
-        dialog = SSHDialog(self, machine=machine)
+        if machine is not None:
+            from ..ssh_askpass import password_available
+            from ..ssh_machines import load_password
+
+            try:
+                password = load_password(self.c.store, machine) if password_available() else None
+            except (OSError, SPXError) as error:
+                notice(self, "无法读取 SSH 机器", str(error), error=True)
+                self.pages["ssh"].reload()
+                return
+            connection = machine.connection
+            title = f"{machine.name} · {connection.label}" if machine.name else connection.label
+            self.launch_ssh(connection, title, password=password)
+            return
+        dialog = SSHDialog(self)
         try:
             if dialog.exec() == QDialog.DialogCode.Accepted:
                 connection = dialog.connection
-                title = f"{machine.name} · {connection.label}" if machine and machine.name else connection.label
-                self.launch_ssh(connection, title, password=dialog.take_password())
+                self.launch_ssh(connection, password=dialog.take_password())
         finally:
             dialog.deleteLater()
 
@@ -1117,7 +1130,7 @@ class Window(QMainWindow):
                 session = PasswordSession(connection, password,
                                           lambda prompt: confirm(window or self, "核对 SSH 主机指纹", prompt), self)
                 env = session.start(env)
-            pty = start(command, env, home)
+            pty = start(command, env, home, ssh=True)
         except (OSError, SPXError) as error:
             if session is not None:
                 session.close()
@@ -1137,7 +1150,7 @@ class Window(QMainWindow):
                 session.close()
             raise
         if session is not None:
-            window.message.setText("正在使用本次填写的密码。首次连接请核对主机指纹。")
+            window.message.setText("正在使用已填写的凭据。首次连接请核对主机指纹。")
             window.view.ended.connect(session.close)
             window.destroyed.connect(session.close)
         window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)

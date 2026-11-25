@@ -1,5 +1,11 @@
 # Changes
 
+## 0.15.14 SSH scrollback and saved sign-in — 2026-11-25
+
+- Preserve Codex's inline transcript over Windows OpenSSH and forward wheel events to its fullscreen transcript.
+- Put Quick Input on the terminal toolbar. Tab or Enter fills the selected command or prompt into the draft.
+- Let Windows users save encrypted SSH passwords or key passphrases. Activate a saved machine to open its terminal directly.
+
 ## 0.15.13 SSH credentials, file paste and runtime cache — 2026-11-25
 
 - Enter a password or key passphrase in the SSH connection form and verify the host fingerprint on first connection.

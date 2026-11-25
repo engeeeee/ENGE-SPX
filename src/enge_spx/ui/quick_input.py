@@ -24,7 +24,7 @@ class QuickInput(Dialog):
         self.body.addWidget(self.items)
         self.preview = label("", "Muted", True)
         self.body.addWidget(self.preview)
-        self.body.addWidget(label("↑ ↓ 选择 · Tab 补全 · Enter 插入输入区", "Caption", True))
+        self.body.addWidget(label("↑ ↓ 选择 · Tab 或 Enter 填入输入区", "Caption", True))
         self.error = label("", "Muted", True)
         self.error.hide()
         self.body.addWidget(self.error)
@@ -59,11 +59,9 @@ class QuickInput(Dialog):
                 row = self.items.currentRow() + (1 if key == Qt.Key.Key_Down else -1)
                 self.items.setCurrentRow(row % self.items.count())
                 return True
-            if key == Qt.Key.Key_Tab and event.modifiers() == Qt.KeyboardModifier.NoModifier:
-                selected = self.selected()
-                if selected is not None:
-                    self.search.setText(selected.text)
-                    self.search.selectAll()
+            if (key == Qt.Key.Key_Tab and event.modifiers() == Qt.KeyboardModifier.NoModifier
+                    and self.selected() is not None):
+                self.accept()
                 return True
         return super().eventFilter(watched, event)
 

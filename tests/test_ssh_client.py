@@ -5,8 +5,10 @@ import unittest
 from unittest.mock import patch
 
 from enge_spx import ssh_machines
+from enge_spx.credentials import CredentialCodec
 from enge_spx.ssh_client import Connection, environment
 from enge_spx.state import SPXError, Store
+from test_credentials import MemoryProtector
 
 
 class SSHClientTests(unittest.TestCase):
@@ -92,3 +94,54 @@ class SavedSSHMachineTests(unittest.TestCase):
         with self.assertRaisesRegex(SPXError, "原文件已保留"):
             ssh_machines.save(self.store, "新机器", Connection.from_fields("example.invalid", "operator", 22))
         self.assertEqual(path.read_text(encoding="utf-8"), old)
+
+    def test_upgrade_catalog_and_bind_saved_secret_to_the_machine_and_destination(self):
+        legacy = Connection.from_fields("example.invalid", "operator", 22)
+        first = ssh_machines.save(self.store, "旧机器", legacy)
+        protector = CredentialCodec(self.store.instance, MemoryProtector())
+        self.store.credentials = protector
+        saved = ssh_machines.save(self.store, first.name, legacy, first, password=bytearray(b"fixture-secret"))
+        self.assertEqual(saved.id, first.id)
+        raw = (self.store.home / ssh_machines.FILE).read_text(encoding="utf-8")
+        self.assertNotIn("fixture-secret", raw)
+        self.assertNotIn(saved.protected_password, repr(saved))
+        reopened = Store(self.store.home)
+        reopened.credentials = protector
+        listed = ssh_machines.load(reopened)[saved.id]
+        self.assertEqual(ssh_machines.load_password(reopened, listed), bytearray(b"fixture-secret"))
+        renamed = ssh_machines.save(self.store, "新版名称", legacy, saved)
+        self.assertEqual(renamed.protected_password, saved.protected_password)
+
+        catalog = self.store.read(ssh_machines.FILE)
+        catalog["machines"][saved.id]["username"] = "changed"
+        self.store.write(ssh_machines.FILE, catalog)
+        changed = ssh_machines.load(self.store)[saved.id]
+        with self.assertRaisesRegex(SPXError, "无法读取已保存"):
+            ssh_machines.load_password(self.store, changed)
+        updated = ssh_machines.save(self.store, "新地址", legacy, changed)
+        self.assertIsNone(ssh_machines.load_password(self.store, updated))
+        self.assertEqual(self.store.read(ssh_machines.FILE)["schema"], 1)
+
+    def test_denied_protection_preserves_the_existing_catalog_and_clear_removes_ciphertext(self):
+        self.store.credentials = CredentialCodec(self.store.instance, MemoryProtector())
+        connection = Connection.from_fields("example.invalid", "operator", 22)
+        saved = ssh_machines.save(self.store, "开发机", connection, password=bytearray(b"fixture-secret"))
+        path = self.store.home / ssh_machines.FILE
+        before = path.read_bytes()
+        with patch.object(self.store.credentials.protector, "protect", side_effect=PermissionError):
+            with self.assertRaisesRegex(SPXError, "原连接已保留"):
+                ssh_machines.save(self.store, saved.name, connection, saved, password=bytearray(b"replacement"))
+        self.assertEqual(path.read_bytes(), before)
+        cleared = ssh_machines.save(self.store, saved.name, connection, saved, clear_password=True)
+        self.assertFalse(cleared.has_password)
+        self.assertNotIn(saved.protected_password, path.read_text(encoding="utf-8"))
+
+    @unittest.skipUnless(os.name == "nt", "Windows DPAPI required")
+    def test_real_dpapi_persists_secret_for_current_windows_user(self):
+        connection = Connection.from_fields("example.invalid", "operator", 22)
+        secret = bytearray("模拟口令", "utf-8")
+        saved = ssh_machines.save(self.store, "开发机", connection, password=secret)
+        reopened = Store(self.store.home)
+        machine = ssh_machines.load(reopened)[saved.id]
+        self.assertEqual(ssh_machines.load_password(reopened, machine), secret)
+        self.assertNotIn(secret, (self.store.home / ssh_machines.FILE).read_bytes())

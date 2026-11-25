@@ -25,6 +25,9 @@ QLabel#ProjectName { color: $session_foreground; font-size: 12px; }
 QLabel#ConnectionState { color: $connection_foreground; font-size: 11px; }
 QToolButton#TerminalOptions { color: $option_text; background: transparent; border: none; border-radius: 5px; font-size: 22px; }
 QToolButton#TerminalOptions:hover { color: $option_hover_text; background: $session_hover; }
+QToolButton#QuickInputButton { color: $option_text; background: transparent; border: 1px solid $divider; border-radius: 5px; padding: 4px 9px; font-size: 12px; }
+QToolButton#QuickInputButton:hover { color: $option_hover_text; background: $session_hover; }
+QToolButton#QuickInputButton:disabled { color: $footer_foreground; border-color: transparent; }
 QFrame#TerminalFooter { background: $footer_background; border-top: 1px solid $divider; }
 QLabel#TerminalMessage { color: $footer_foreground; font-size: 11px; }
 QLabel#FontSize { color: $font_size_text; font-size: 11px; }

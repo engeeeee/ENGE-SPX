@@ -1,4 +1,4 @@
-"""Reuse the immutable 0.15.12 runtime for the reviewed desktop release."""
+"""Reuse the immutable 0.15.13 runtime for the reviewed desktop release."""
 import argparse
 import hashlib
 import json
@@ -10,20 +10,18 @@ import sys
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE = 'eb13c921c0182c60a36d9d20a331ecd86945c0ab'
+BASE = '87c0a5dff85658ca98e8338d55a73a4c6dc541ec'
 PROJECT = 'https://github.com/engeeeee/ENGE-SPX'
-PREVIOUS = '0.15.12'
+PREVIOUS = '0.15.13'
 
 
 def check_scope():
     files = subprocess.check_output(['git', 'diff', '--name-only', BASE, 'HEAD', '--', 'src', 'requirements.txt', 'requirements-build.txt', 'pyproject.toml', 'packaging'], cwd=ROOT, text=True).splitlines()
     allowed = {
-        'src/enge_spx/__init__.py', 'src/enge_spx/__main__.py', 'src/enge_spx/engine.py',
-        'src/enge_spx/runtime_cache.py', 'src/enge_spx/smart_terminal.py', 'src/enge_spx/ssh_askpass.py',
-        'src/enge_spx/ssh_client.py', 'src/enge_spx/ssh_transfer.py', 'src/enge_spx/storage.py',
-        'src/enge_spx/terminal_pty.py', 'src/enge_spx/terminal_shortcuts.py', 'src/enge_spx/ui/controller.py',
+        'src/enge_spx/__init__.py', 'src/enge_spx/smart_terminal.py', 'src/enge_spx/ssh_machines.py',
+        'src/enge_spx/terminal_appearance.py', 'src/enge_spx/terminal_pty.py',
         'src/enge_spx/ui/quick_input.py', 'src/enge_spx/ui/ssh_dialog.py', 'src/enge_spx/ui/ssh_page.py', 'src/enge_spx/ui/window.py',
-        'packaging/windows/Installer.iss',
+        'packaging/windows/Build-Windows.ps1', 'packaging/windows/Installer.iss', 'packaging/windows/SPX.spec',
         'packaging/windows/version-info.txt', 'packaging/windows/cli-version-info.txt',
     }
     assert set(files) <= allowed, 'Core, dependencies or runtime changed; desktop hotfix reuse is forbidden'
@@ -93,7 +91,7 @@ def main(destination):
     check_scope()
     sys.path.insert(0, str(ROOT / 'src'))
     from enge_spx import __version__
-    assert __version__ == '0.15.13', 'This reuse gate is limited to the reviewed 0.15.13 desktop release'
+    assert __version__ == '0.15.14', 'This reuse gate is limited to the reviewed 0.15.14 desktop release'
     copy_runtime(destination, PREVIOUS, BASE, __version__, {'gateway': '9aa8a7818569', 'work': '6e3fcfa5633c', 'browser': '1bca0984bc51'})
 
 

@@ -110,6 +110,10 @@ class WorkspaceUITests(unittest.TestCase):
         self.assertFalse((self.store.home / ssh_machines.FILE).exists())
 
     def test_dedicated_ssh_page_saves_edits_connects_and_removes_machine(self):
+        from enge_spx.credentials import CredentialCodec
+        from test_credentials import MemoryProtector
+
+        self.store.credentials = CredentialCodec(self.store.instance, MemoryProtector())
         self.window.nav["ssh"].click()
         page = self.window.pages["ssh"]
         self.assertEqual(self.window.current_page, "ssh")
@@ -120,10 +124,15 @@ class WorkspaceUITests(unittest.TestCase):
             dialog.host.setText("ssh.example.invalid")
             dialog.username.setText("operator")
             dialog.port.setValue(2200)
+            self.assertTrue(dialog.password.isEnabled())
+            self.assertEqual(dialog.password.echoMode(), dialog.password.EchoMode.Password)
+            dialog.password.setText("fixture-only")
             dialog.accept()
+            self.assertEqual(dialog.password.text(), "")
             return dialog.result()
 
-        with patch("enge_spx.ui.ssh_dialog.SSHDialog.exec", create):
+        with patch("enge_spx.ui.ssh_dialog.password_available", return_value=True), \
+                patch("enge_spx.ui.ssh_dialog.SSHDialog.exec", create):
             page.add_machine.click()
         saved = page.selected()
         self.assertEqual(saved.title, "开发机")
@@ -131,19 +140,10 @@ class WorkspaceUITests(unittest.TestCase):
         self.assertEqual(ssh_machines.load(Store(self.store.home))[saved.id], saved)
         self.window.show_page("overview")
         self.window.nav["ssh"].click()
-        def connect(dialog):
-            self.assertEqual(dialog.host.text(), "ssh.example.invalid")
-            self.assertEqual(dialog.username.text(), "operator")
-            self.assertEqual(dialog.password.echoMode(), dialog.password.EchoMode.Password)
-            dialog.password.setText("fixture-only")
-            dialog.accept()
-            self.assertEqual(dialog.password.text(), "")
-            return dialog.result()
-
         with patch.object(self.window, "launch_ssh") as launch, \
                 patch("enge_spx.ssh_askpass.password_available", return_value=True), \
-                patch("enge_spx.ui.ssh_dialog.SSHDialog.exec", connect):
-            page.list.itemDoubleClicked.emit(page.list.currentItem())
+                patch("enge_spx.ui.ssh_dialog.SSHDialog.exec", side_effect=AssertionError("unexpected edit form")):
+            page.list.itemActivated.emit(page.list.currentItem())
             launch.assert_called_once_with(saved.connection, "开发机 · operator@ssh.example.invalid:2200",
                                            password=bytearray(b"fixture-only"))
         self.assertNotIn("fixture-only", (self.store.home / ssh_machines.FILE).read_text(encoding="utf-8"))
@@ -152,6 +152,8 @@ class WorkspaceUITests(unittest.TestCase):
             self.assertEqual(dialog.host.text(), "ssh.example.invalid")
             self.assertEqual(dialog.auth.currentData(), "password")
             dialog.name.setText("测试机")
+            self.assertEqual(dialog.password.text(), "")
+            dialog.clear_password.setChecked(True)
             dialog.accept()
             return dialog.result()
 
@@ -159,6 +161,11 @@ class WorkspaceUITests(unittest.TestCase):
             page.edit_selected()
         self.assertEqual(page.selected().id, saved.id)
         self.assertEqual(page.selected().name, "测试机")
+        self.assertFalse(page.selected().has_password)
+        with patch.object(self.window, "launch_ssh") as launch, \
+                patch("enge_spx.ui.ssh_dialog.SSHDialog.exec", side_effect=AssertionError("unexpected edit form")):
+            page.connect_selected()
+            launch.assert_called_once_with(saved.connection, "测试机 · operator@ssh.example.invalid:2200", password=None)
         with patch.object(self.controller, "ask", return_value=True):
             page.remove_selected()
         self.assertTrue(page.empty.isVisible())

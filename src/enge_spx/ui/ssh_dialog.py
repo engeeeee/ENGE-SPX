@@ -1,14 +1,15 @@
 """Remote login fields for the owned smart terminal."""
-from PySide6.QtWidgets import QFileDialog, QFormLayout, QHBoxLayout, QLineEdit, QSpinBox, QWidget
+from PySide6.QtWidgets import QCheckBox, QFileDialog, QFormLayout, QHBoxLayout, QLineEdit, QSpinBox, QWidget
 
+from ..ssh_askpass import erase, password_available, read_password
 from ..ssh_client import Connection
 from ..state import SPXError
 from .widgets import Combo, Dialog, button, label
 
 
 class SSHDialog(Dialog):
-    def __init__(self, parent, *, machine=None, on_save=None):
-        title = "连接 SSH 机器" if machine else "临时 SSH 连接"
+    def __init__(self, parent, *, machine=None, on_save=None, can_store_password=False):
+        title = "临时 SSH 连接"
         if on_save:
             title = "编辑 SSH 机器" if machine else "新建 SSH 机器"
         super().__init__(parent, title)
@@ -39,16 +40,15 @@ class SSHDialog(Dialog):
         for caption, field in (("服务器", self.host), ("端口", self.port), ("用户名", self.username), ("登录方式", self.auth)):
             form.addRow(caption, field)
 
-        self.password = None
-        if on_save is None:
-            from ..ssh_askpass import password_available
-            self.password = QLineEdit()
-            self.password.setEchoMode(QLineEdit.EchoMode.Password)
-            self.password.setMaxLength(1022)
-            self.password.setEnabled(password_available())
-            self.password.setPlaceholderText("选填，留空可在终端输入")
-            self.password.setAccessibleName("SSH 密码或私钥口令")
-            self.finished.connect(lambda result: self.password.setText(""))
+        self.password = QLineEdit()
+        self.password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.password.setMaxLength(1022)
+        can_enter_password = password_available() and (on_save is None or can_store_password)
+        self.password.setEnabled(can_enter_password)
+        has_password = bool(machine and machine.has_password)
+        self.password.setPlaceholderText("留空保留已保存的凭据" if has_password else "选填，留空可在终端输入")
+        self.password.setAccessibleName("SSH 密码或私钥口令")
+        self.finished.connect(lambda result: self.password.setText(""))
 
         self.identity = QLineEdit()
         self.identity.setReadOnly(True)
@@ -66,9 +66,15 @@ class SSHDialog(Dialog):
         row.addWidget(self.identity, 1)
         row.addWidget(button("选择文件", self.choose_identity))
         form.addRow("私钥", key_row)
-        if self.password is not None:
-            self.password_label = label("密码")
-            form.addRow(self.password_label, self.password)
+        self.password_label = label("密码")
+        form.addRow(self.password_label, self.password)
+        self.clear_password = QCheckBox("清除已保存的凭据", self)
+        if has_password:
+            form.addRow("", self.clear_password)
+            self.clear_password.toggled.connect(
+                lambda checked: self.password.setEnabled(can_enter_password and not checked))
+        else:
+            self.clear_password.hide()
         self.hint = label("", "Caption", True)
         self.body.addWidget(self.hint)
         self.error = label("", "Muted", True)
@@ -78,17 +84,16 @@ class SSHDialog(Dialog):
         def auth_changed():
             key_login = self.auth.currentData() == "identity"
             form.setRowVisible(key_row, key_login)
-            if self.password is not None:
-                caption = "私钥口令" if key_login else "密码"
-                if self.password_label.text() != caption:
-                    self.password_label.setText(caption)
-                    self.password.setText("")
-            if self.password is None:
-                hint = "连接时可填写本次登录密码或私钥口令。"
-            elif self.password.isEnabled():
+            caption = "私钥口令" if key_login else "密码"
+            if self.password_label.text() != caption:
+                self.password_label.setText(caption)
+                self.password.setText("")
+            if on_save is not None and can_enter_password:
+                hint = "凭据由当前 Windows 用户加密保存。更改服务器、端口、用户或私钥时，请重新填写。"
+            elif can_enter_password:
                 hint = "凭据仅保留到此 SSH 会话结束，用于登录和粘贴文件。需要多因素认证可留空。"
             else:
-                hint = "打包版支持在此填写凭据。当前可在终端提示时输入。"
+                hint = "Windows 打包版支持在此填写凭据。当前可在终端提示时输入。"
             self.hint.setText(hint)
             self.error.hide()
 
@@ -101,7 +106,7 @@ class SSHDialog(Dialog):
         submit.setDefault(True)
         actions.addWidget(submit)
         self.body.addLayout(actions)
-        focus = self.password if machine and self.password is not None and self.password.isEnabled() else self.host
+        focus = self.password if machine and self.password.isEnabled() else self.host
         focus.setFocus()
 
     def choose_identity(self):
@@ -111,18 +116,24 @@ class SSHDialog(Dialog):
 
     def accept(self):
         identity = self.identity.text() if self.auth.currentData() == "identity" else None
+        password = None
         try:
             connection = Connection.from_fields(self.host.text(), self.username.text(), self.port.value(), identity,
                                                 require_key_file=self.on_save is None)
+            entered = self.password.text() if self.password.isEnabled() else ""
+            if entered:
+                password = read_password(entered)
             if self.on_save is not None:
-                self.saved_machine = self.on_save(self.name.text(), connection)
-            elif self.password.isEnabled() and self.password.text():
-                from ..ssh_askpass import read_password
-                self.secret = read_password(self.password.text())
+                self.saved_machine = self.on_save(self.name.text(), connection, password, self.clear_password.isChecked())
+            else:
+                self.secret, password = password, None
         except (OSError, SPXError) as error:
             self.error.setText(str(error))
             self.error.show()
             return
+        finally:
+            if password is not None:
+                erase(password)
         self.connection = connection
         super().accept()
 

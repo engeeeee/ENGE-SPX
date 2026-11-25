@@ -262,17 +262,20 @@ class TerminalUsabilityTests(unittest.TestCase):
         def choose(dialog):
             dialog.search.setText("定位")
             QTest.keyClick(dialog.search, Qt.Key.Key_Tab)
-            self.assertIn("请先定位", dialog.search.text())
+            self.assertIn("请先定位", dialog.text)
             self.assertEqual(self.written, [b"\t"])
-            dialog.accept()
             return dialog.result()
 
         with patch.object(QuickInput, "exec", choose):
-            QTest.keyClick(self.view, Qt.Key.Key_P, Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier)
+            self.assertTrue(self.window.quick_input.isVisible())
+            self.window.quick_input.click()
         self.pump(lambda: len(self.written) == 2)
         self.assertTrue(self.written[1].startswith(b"\x1b[200~"))
         self.assertTrue(self.written[1].endswith(b"\x1b[201~"))
         self.assertNotIn(b"\r", self.written[1])
+        with patch.object(QuickInput, "exec", return_value=0) as palette:
+            QTest.keyClick(self.view, Qt.Key.Key_P, Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier)
+            palette.assert_called_once()
 
     def test_ctrl_click_opens_complete_wrapped_url_without_sending_mouse_input(self):
         url = "https://example.invalid/oauth?redirect_uri=http%3A%2F%2F127.0.0.1%3A1455"
