@@ -7,6 +7,8 @@ resources = root / 'src/enge_spx/resources'
 data = [(str(resources), 'enge_spx/resources')]
 data += collect_data_files('tzdata')
 data += collect_data_files('PySide6', includes=['**/LICENSES/**', '**/licenses/**'])
+data += [(str(root / 'build' / 'ssh-conpty' / filename), 'ssh-conpty')
+         for filename in ('conpty.dll', 'OpenConsole.exe')]
 a = Analysis([str(root / 'src/entry.py')], pathex=[str(root / 'src')], binaries=[], datas=data, hiddenimports=[], hookspath=[], runtime_hooks=[], module_collection_mode={'pyte': 'py'}, excludes=['PIL', 'cairosvg', 'pytest', 'tkinter', 'PySide6.QtWebEngineCore', 'PySide6.QtWebEngineWidgets', 'PySide6.QtQml', 'PySide6.QtQuick'])
 pyz = PYZ(a.pure)
 common = dict(exclude_binaries=True, debug=False, strip=False, upx=False,

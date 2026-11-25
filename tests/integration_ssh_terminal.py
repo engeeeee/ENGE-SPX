@@ -85,7 +85,7 @@ def exercise_transcript(app, root, host_key):
     connection = Connection.from_fields("127.0.0.1", "fixture", port)
     command = connection.command()
     command[-2:-2] = ["-o", f'UserKnownHostsFile="{known.as_posix()}"', "-o", "GlobalKnownHostsFile=none"]
-    child = start(command, {**environment(), "LC_ALL": "C"}, root, raw_output=True)
+    child = start(command, {**environment(), "LC_ALL": "C"}, root, ssh=True)
     window = TerminalWindow(child, "ssh", root, session_label=connection.label)
     window.show()
     view = window.view
@@ -231,7 +231,7 @@ def exercise(app, root, host_key, identity=None, public_key=None, *, prefilled=F
             env = login.start(env)
             login.server.newConnection.connect(lambda: helper_requests.append(1))
             assert all(bytes(secret).decode() not in value for value in (*command, *env.values()))
-        child = start(command, env, root, raw_output=True)
+        child = start(command, env, root, ssh=True)
         window = TerminalWindow(child, "ssh", root, session_label=connection.label)
         window.show()
         view = window.view

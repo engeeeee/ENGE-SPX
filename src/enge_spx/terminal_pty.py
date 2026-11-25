@@ -8,8 +8,10 @@ from __future__ import annotations
 import ctypes
 from ctypes import wintypes as w
 import os
+from pathlib import Path
 import subprocess
 import struct
+import sys
 import threading
 
 from .state import SPXError
@@ -115,12 +117,31 @@ class _PROCESSINFO(ctypes.Structure):
     _fields_ = [("hProcess", w.HANDLE), ("hThread", w.HANDLE), ("dwProcessId", w.DWORD), ("dwThreadId", w.DWORD)]
 
 
+def _ssh_console(kernel):
+    frozen = getattr(sys, "frozen", False)
+    directory = (Path(sys._MEIPASS) / "ssh-conpty" if frozen
+                 else Path(__file__).resolve().parents[2] / "build" / "ssh-conpty")
+    if not frozen and not directory.exists():
+        return kernel, ""
+    try:
+        if not (directory / "OpenConsole.exe").is_file():
+            raise FileNotFoundError("OpenConsole.exe")
+        return ctypes.WinDLL(str(directory / "conpty.dll"), winmode=0x00000900), "Conpty"
+    except OSError as error:
+        raise SPXError("无法加载 SSH 终端组件。请重新安装或完整解压 ENGE SPX。") from error
+
+
 class WindowsPTY:
-    def __init__(self, command, env, cwd, columns=110, rows=32, *, raw_output=False):
+    def __init__(self, command, env, cwd, columns=110, rows=32, *, ssh=False):
         if os.name != "nt":
             raise SPXError("ConPTY 需要 Windows 10 1809 或更新版本。")
         self.api = ctypes.WinDLL("kernel32", use_last_error=True)
         api = self.api
+        # Old conhost renders away the partial scrolls used by remote Codex.
+        # Use Microsoft's VT-preserving host while keeping console input and
+        # dimensions available to the system OpenSSH client.
+        console, prefix = _ssh_console(api) if ssh else (api, "")
+        console_functions = {"CreatePseudoConsole", "ResizePseudoConsole", "ClosePseudoConsole"}
         signatures = {
             "CreatePipe": ([ctypes.POINTER(w.HANDLE), ctypes.POINTER(w.HANDLE), ctypes.c_void_p, w.DWORD], w.BOOL),
             "CloseHandle": ([w.HANDLE], w.BOOL),
@@ -141,7 +162,11 @@ class WindowsPTY:
         }
         for name, (args, result) in signatures.items():
             try:
-                fn = getattr(api, name)
+                if name in console_functions:
+                    fn = getattr(console, prefix + name)
+                    setattr(self, name, fn)
+                else:
+                    fn = getattr(api, name)
             except AttributeError as error:
                 raise SPXError("系统不支持 ConPTY，请升级 Windows 或选择外部终端（仅原有粘贴）。") from error
             fn.argtypes, fn.restype = args, result
@@ -158,32 +183,18 @@ class WindowsPTY:
             if not api.CreatePipe(ctypes.byref(ore), ctypes.byref(ow), None, 0):
                 raise OSError("pipe")
             held.extend((ore, ow))
-            if api.CreatePseudoConsole(_COORD(columns, rows), ir, ow, 0, ctypes.byref(pc)) < 0:
+            if self.CreatePseudoConsole(_COORD(columns, rows), ir, ow, 0, ctypes.byref(pc)) < 0:
                 raise OSError("pseudoconsole")
             self.console = pc
-            output = w.HANDLE()
-            if raw_output:
-                # The SSH client already receives VT over the network. Let its
-                # standard output reach the renderer without a second conhost
-                # render. Keep the attached console for login and window size.
-                current = api.GetCurrentProcess()
-                if not api.DuplicateHandle(current, ow, current, ctypes.byref(output), 0, True, 2):
-                    raise OSError("SSH output pipe")
-                held.append(output)
-            attribute_count = 2 if raw_output else 1
             size = ctypes.c_size_t()
-            api.InitializeProcThreadAttributeList(None, attribute_count, 0, ctypes.byref(size))
+            api.InitializeProcThreadAttributeList(None, 1, 0, ctypes.byref(size))
             buffer = ctypes.create_string_buffer(size.value)
             attributes = ctypes.cast(buffer, ctypes.c_void_p)
-            if not api.InitializeProcThreadAttributeList(attributes, attribute_count, 0, ctypes.byref(size)):
+            if not api.InitializeProcThreadAttributeList(attributes, 1, 0, ctypes.byref(size)):
                 attributes = None
                 raise OSError("attributes")
             if not api.UpdateProcThreadAttribute(attributes, 0, 0x00020016, pc, ctypes.sizeof(w.HANDLE), None, None):
                 raise OSError("attributes")
-            if raw_output:
-                handles = (w.HANDLE * 1)(output)
-                if not api.UpdateProcThreadAttribute(attributes, 0, 0x00020002, handles, ctypes.sizeof(handles), None, None):
-                    raise OSError("SSH output handle list")
             startup, info = _STARTUPINFOEX(), _PROCESSINFO()
             startup.StartupInfo.cb = ctypes.sizeof(startup)
             # Match Windows Terminal's launcher. Without this, a parent whose
@@ -191,15 +202,12 @@ class WindowsPTY:
             # handles duplicated into the child instead of ConPTY handles.
             # Null standard handles are recreated for the attached console.
             startup.StartupInfo.dwFlags = 0x00000100  # STARTF_USESTDHANDLES
-            if raw_output:
-                startup.StartupInfo.hStdOutput = output
-                startup.StartupInfo.hStdError = output
             startup.lpAttributeList = attributes
             env_text = "\0".join(key + "=" + value for key, value in sorted(env.items(), key=lambda pair: pair[0].casefold())) + "\0\0"
             block = ctypes.create_unicode_buffer(env_text, len(env_text.encode("utf-16-le")) // 2 + 1)
             cmd_text = subprocess.list2cmdline(command)
             commandline = ctypes.create_unicode_buffer(cmd_text, len(cmd_text.encode("utf-16-le")) // 2 + 1)
-            if not api.CreateProcessW(command[0], commandline, None, None, raw_output, 0x00080000 | 0x00000400, block, str(cwd), ctypes.byref(startup), ctypes.byref(info)):
+            if not api.CreateProcessW(command[0], commandline, None, None, False, 0x00080000 | 0x00000400, block, str(cwd), ctypes.byref(startup), ctypes.byref(info)):
                 raise OSError("process")
             api.CloseHandle(info.hThread)
             self.process = info.hProcess
@@ -235,7 +243,7 @@ class WindowsPTY:
         with self.console_lock:
             console, self.console = self.console, None
         if console:
-            self.api.ClosePseudoConsole(console)
+            self.ClosePseudoConsole(console)
 
     def read(self, size=16384):
         handle = self.output
@@ -259,7 +267,7 @@ class WindowsPTY:
     def resize(self, columns, rows):
         with self.console_lock:
             if self.console and not self.closed.is_set():
-                self.api.ResizePseudoConsole(self.console, _COORD(columns, rows))
+                self.ResizePseudoConsole(self.console, _COORD(columns, rows))
 
     def poll(self):
         result = w.DWORD()
@@ -334,7 +342,7 @@ class PosixPTY:
             os.close(self.master)
 
 
-def start(command, env, cwd, columns=110, rows=32, *, raw_output=False):
+def start(command, env, cwd, columns=110, rows=32, *, ssh=False):
     if os.name == "nt":
-        return WindowsPTY(command, env, cwd, columns, rows, raw_output=raw_output)
+        return WindowsPTY(command, env, cwd, columns, rows, ssh=ssh)
     return PosixPTY(command, env, cwd, columns, rows)
