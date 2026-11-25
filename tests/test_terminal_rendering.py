@@ -1,7 +1,9 @@
+import math
 import os
 import queue
 import time
 import unittest
+from unittest.mock import patch
 
 if os.name != 'nt':
     os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
@@ -178,6 +180,44 @@ class TerminalRenderingTests(unittest.TestCase):
         self.image()
         cells, _ = self.view.surface_rows[1]
         self.assertEqual(''.join(char.data for char in cells).rstrip(), 'Following output')
+
+    def test_ssh_incremental_scroll_matches_a_full_redraw(self):
+        view = self.view
+        view.tool = 'ssh'
+        view.stream.feed(''.join(f'\x1b[38;5;{20 + index % 70}m{index:04d} 中文 output\r\n'
+                                 for index in range(160)))
+        view.scrollbar.setRange(0, len(view.screen.history.top))
+        end = view.scrollbar.maximum()
+        for glass in (False, True):
+            with self.subTest(glass=glass):
+                view.apply_display({**DEFAULTS, 'opacity': 60}, glass=glass)
+                view.scrollbar.setValue(end - 9)
+                self.image()
+                for offset in (12, 9, 0, 3):
+                    with patch.object(view.row_painter, 'draw', wraps=view.row_painter.draw) as draw:
+                        delta = abs(view.offset - offset)
+                        view.scrollbar.setValue(end - offset)
+                        shifted = self.image()
+                    top = view.PAD_Y * view.devicePixelRatioF()
+                    if math.isclose(top, round(top), abs_tol=1e-6):
+                        self.assertEqual(draw.call_count, delta)
+                    view.surface_signature = None
+                    self.assertEqual(self.image(), shifted)
+
+    def test_ssh_selection_keeps_retired_and_live_rows_when_output_changes(self):
+        view = self.view
+        view.tool = 'ssh'
+        lines = view.screen.lines
+        view.stream.feed('first archived row\r\n' + 'middle row\r\n' * (lines - 1) + 'last live row')
+        archived = view.screen.history.top[0]
+        view.snapshot_selection()
+        self.assertIs(view.selection_lines[0], archived)
+        self.assertIsNot(view.selection_lines[-1], view.screen.buffer[lines - 1])
+        view.stream.feed(f'\x1b[{lines};1Hdifferent row\x1b[3J')
+        self.assertFalse(view.screen.history.top)
+        first, last = view.selection_lines[0], view.selection_lines[-1]
+        self.assertEqual(''.join(char.data for char in first.values()), 'first archived row')
+        self.assertEqual(''.join(char.data for char in last.values()), 'last live row')
 
     def test_resize_during_synchronized_frame_does_not_use_old_grid_snapshot(self):
         self.view.stream.feed('\x1b[?2026hOld grid\x1b[?2026l')

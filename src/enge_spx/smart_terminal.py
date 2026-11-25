@@ -531,6 +531,7 @@ class TerminalView(QWidget):
         self.surface = QImage()
         self.surface_allocations = 0
         self.surface_signature = None
+        self.surface_offset = 0
         self.surface_rows = []
         self.surface_dirty = set()
         self.presented_cursor = (0, 0, True)
@@ -628,13 +629,12 @@ class TerminalView(QWidget):
         # Retain the newest complete VT frame, even if another begins in the
         # same pipe read. Never wait for a continuously busy pipe to go idle.
         screen = self.screen
-        blank, buffer, columns = screen.default_char, screen.buffer, range(screen.columns)
-        rows = []
-        for y in range(screen.lines):
-            get = buffer[y].get
-            rows.append(tuple(get(x, blank) for x in columns))
+        buffer = screen.buffer
+        # The cells are immutable. Copy the row maps and expand only the
+        # complete frame that is actually presented.
+        rows = [buffer[y].copy() for y in range(screen.lines)]
         cursor = screen.cursor
-        self.completed_frame = rows, (cursor.x, cursor.y, cursor.hidden)
+        self.completed_frame = rows, (cursor.x, cursor.y, cursor.hidden), screen.default_char
         self.completed_generation += 1
 
     def _frame_blocked(self):
@@ -757,12 +757,16 @@ class TerminalView(QWidget):
         if self.selection_lines is not None:
             start = self.selection_start()
             return self.selection_lines[start:start + self.screen.lines]
-        current = [self.screen.buffer[y] for y in range(self.screen.lines)]
+        screen = self.screen
         if not self.offset:
-            return current
-        lines = [*self.screen.history.top, *current]
-        end = len(lines) - self.offset
-        return lines[max(0, end - self.screen.lines):end]
+            return [screen.buffer[y] for y in range(screen.lines)]
+        history = screen.history.top
+        first = max(0, len(history) - self.offset)
+        end = first + screen.lines
+        history_end = min(end, len(history))
+        visible = [history[y] for y in range(first, history_end)]
+        visible.extend(screen.buffer[y] for y in range(end - history_end))
+        return visible
 
     def selection_start(self):
         return max(0, len(self.selection_lines) - self.offset - self.screen.lines) if self.selection_lines is not None else 0
@@ -789,9 +793,11 @@ class TerminalView(QWidget):
 
     def snapshot_selection(self):
         if self.selection_lines is None:
-            blank = self.screen.default_char
-            self.selection_lines = [defaultdict(lambda: blank, line) for line in
-                                    [*self.screen.history.top, *(self.screen.buffer[y] for y in range(self.screen.lines))]]
+            screen = self.screen
+            # The parser moves retired rows out of the live buffer. Holding
+            # their references keeps a selection stable through ring eviction.
+            self.selection_lines = list(screen.history.top)
+            self.selection_lines.extend(screen.buffer[y].copy() for y in range(screen.lines))
 
     def select_all(self):
         self.clear_selection()
@@ -896,12 +902,35 @@ class TerminalView(QWidget):
         self.colors[key] = result
         return result
 
+    def _shift_history_surface(self, dpr):
+        shift = self.offset - self.surface_offset
+        lines = self.screen.lines
+        height = round(self.cell_height * dpr)
+        top = self.PAD_Y * dpr
+        if (abs(shift) >= lines or not math.isclose(top, round(top), abs_tol=1e-6)
+                or round(top) + lines * height > self.surface.height()):
+            return None
+        source, target = max(0, -shift), max(0, shift)
+        count = lines - abs(shift)
+        stride = self.surface.bytesPerLine()
+        start = (round(top) + source * height) * stride
+        finish = (round(top) + target * height) * stride
+        size = count * height * stride
+        # Shift the committed pixel rows as a single overlapping buffer copy.
+        # Selection, colors and pixel geometry have already been matched.
+        pixels = self.surface.bits()
+        pixels[finish:finish + size] = pixels[start:start + size]
+        kept = self.surface_rows[source:source + count]
+        self.surface_rows = [None] * target + kept + [None] * source
+        return set(range(target)) if target else set(range(count, lines))
+
     def _compose_surface(self):
         self._check_render_environment()
         completed = self.completed_generation != self.presented_generation and self.selection_lines is None and not self.offset
         blocked = not completed and self._frame_blocked()
         dpr = self.devicePixelRatioF()
-        signature = (self.width(), self.height(), self.render_environment, id(self.row_painter), self.background.rgba(), self.offset,
+        signature = (self.width(), self.height(), self.screen.columns, self.screen.lines,
+                     self.render_environment, id(self.row_painter), self.background.rgba(),
                      self.selection if self.has_selection else None, id(self.selection_lines))
         complete = signature != self.surface_signature
         stable = self.surface_rows if blocked and not self.surface.isNull() else None
@@ -911,6 +940,14 @@ class TerminalView(QWidget):
                 self.frame_timer.start(8)
             return
         dirty = set(range(self.screen.lines)) if completed else self.surface_dirty | self.screen.dirty
+        if self.offset != self.surface_offset:
+            exposed = None
+            if self.tool == "ssh" and not (complete or blocked or dirty):
+                exposed = self._shift_history_surface(dpr)
+            if exposed is None:
+                complete = True
+            else:
+                dirty = exposed
         if not complete and not dirty:
             self.presented_cursor = self.screen.cursor.x, self.screen.cursor.y, self.screen.cursor.hidden
             return
@@ -933,7 +970,7 @@ class TerminalView(QWidget):
         p = QPainter(self.surface)
         selected = sorted(self.selection) if self.has_selection else None
         first = self.selection_start()
-        blank = self.presented_blank if stable else self.screen.default_char
+        blank = self.presented_blank if stable else self.completed_frame[2] if completed else self.screen.default_char
         rows = stable if stable else self.completed_frame[0] if completed else self.rows()
         composer = None
         if not stable:
@@ -956,8 +993,6 @@ class TerminalView(QWidget):
                 saved = rows[y] if y < len(rows) else None
                 cells, span = saved if saved is not None else ((), None)
                 cells = cells[:self.screen.columns] + (blank,) * max(0, self.screen.columns - len(cells))
-            elif completed:
-                cells = rows[y] if y < len(rows) else (blank,) * self.screen.columns
             else:
                 line = rows[y] if y < len(rows) else {}
                 cells = tuple(line.get(x, blank) for x in range(self.screen.columns))
@@ -982,6 +1017,7 @@ class TerminalView(QWidget):
             self.frame_timer.start(8)
             return
         self.presented_blank = blank
+        self.surface_offset = self.offset
         if completed:
             # Keep dirty rows for the next paint of the live buffer.
             self.presented_cursor = self.completed_frame[1]
@@ -1397,10 +1433,11 @@ class TerminalView(QWidget):
         y, x = self.cell(event)
         y += self.selection_start()
         line = self.selection_lines[y]
-        while x > 0 and not line[x].data:
+        blank = self.screen.default_char
+        while x > 0 and not line.get(x, blank).data:
             x -= 1
         def word(column):
-            value = line[column].data
+            value = line.get(column, blank).data
             return not value or all(c.isalnum() or c in "_./:~-@%+\\" for c in value)
         left = right = x
         if word(x):
@@ -1441,10 +1478,12 @@ class TerminalView(QWidget):
             return
         (y1, x1), (y2, x2) = sorted(self.selection)
         lines = self.selection_lines if self.selection_lines is not None else self.rows()
+        blank = self.screen.default_char
         text = []
         for y in range(y1, y2 + 1):
             left, right = (x1 if y == y1 else 0), (x2 + 1 if y == y2 else self.screen.columns)
-            text.append("".join(lines[y][x].data for x in range(left, right)).rstrip())
+            line = lines[y]
+            text.append("".join(line.get(x, blank).data for x in range(left, right)).rstrip())
         QGuiApplication.clipboard().setText("\n".join(text).rstrip("\n"))
         self.status.emit("已复制所选终端文字。")
 

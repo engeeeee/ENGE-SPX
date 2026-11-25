@@ -1,6 +1,7 @@
 """Reproducible full-size scrolling and split-frame proof, using synthetic VT only."""
 import argparse
 import json
+import math
 import os
 from pathlib import Path
 import platform
@@ -15,6 +16,7 @@ parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--width', type=int, default=1920)
 parser.add_argument('--height', type=int, default=1080)
 parser.add_argument('--frames', type=int, default=30)
+parser.add_argument('--ssh-history', action='store_true', help='Measure SSH scrollback, selection and synchronized output')
 args = parser.parse_args()
 if not 5 <= args.frames <= 120 or not 640 <= args.width <= 3840 or not 400 <= args.height <= 2160:
     parser.error('invalid bounded viewport/frame count')
@@ -38,7 +40,7 @@ class FixturePTY:
 
 app = QApplication([])
 pty = FixturePTY()
-view = TerminalView(pty)
+view = TerminalView(pty, tool='ssh') if args.ssh_history else TerminalView(pty)
 host = QWidget()
 host.resize(800, 600)
 view.setParent(host)
@@ -50,8 +52,10 @@ assert (view.width(), view.height()) == (args.width, args.height), 'requested vi
 view.blink_timer.stop()
 view.blink = False
 view.scrollbar.hide()
-canvas = QImage(view.size(), QImage.Format.Format_ARGB32_Premultiplied)
-canvas.setDevicePixelRatio(view.devicePixelRatioF())
+dpr = view.devicePixelRatioF()
+canvas = QImage(math.ceil(view.width() * dpr), math.ceil(view.height() * dpr),
+                QImage.Format.Format_ARGB32_Premultiplied)
+canvas.setDevicePixelRatio(dpr)
 
 
 def scene(index):
@@ -66,6 +70,56 @@ def scene(index):
 def render():
     view.render(canvas)
     return canvas
+
+
+def timing(values):
+    return {'median_ms': round(statistics.median(values), 3),
+            'p95_ms': round(sorted(values)[int(len(values) * .95) - 1], 3)}
+
+
+def measure(operation, count):
+    values = []
+    for index in range(count):
+        start = time.perf_counter()
+        operation(index)
+        values.append((time.perf_counter() - start) * 1000)
+    return timing(values)
+
+
+def ssh_history():
+    phrase = ('frontend/app.py: build output 中文日志 ✓ ' * 8)[:view.screen.columns - 14]
+    view.stream.feed('\x1b[H\x1b[3J' + ''.join(
+        f'\x1b[38;5;{25 + index % 90}m{index:05d} {phrase}\x1b[0m\r\n' for index in range(10500)
+    ))
+    length = len(view.screen.history.top)
+    assert length == 10000
+    view.scrollbar.setRange(0, length)
+
+    def scroll(index):
+        view.scrollbar.setValue(7000 - index * 3)
+        render()
+
+    scroll(0)
+    scrolled = measure(lambda index: scroll(index + 1), args.frames)
+
+    def select(_):
+        view.snapshot_selection()
+        view.clear_selection()
+
+    selected = measure(select, max(10, args.frames // 3))
+    view.scrollbar.setValue(length)
+    render()
+
+    def synchronized(index):
+        view.stream.feed(''.join(
+            f'\x1b[?2026h\x1b[{7 + row};1H\x1b[K\x1b[32m{index:05d}-{row} {phrase}\x1b[?2026l'
+            for row in range(6)
+        ))
+        render()
+        render()
+
+    return {'history_rows': length, 'scroll_three_rows': scrolled, 'selection_snapshot': selected,
+            'six_synchronized_updates': measure(synchronized, args.frames)}
 
 
 try:
@@ -103,11 +157,12 @@ try:
               'system': platform.system(), 'architecture': platform.machine(), 'python': platform.python_version(),
               'qt': qVersion(), 'viewport': [view.width(), view.height()], 'grid': [view.screen.columns, view.screen.lines],
               'dpr': view.devicePixelRatioF(), 'frames': args.frames,
-              'scroll_parse_and_present': {'median_ms': round(statistics.median(values), 3),
-                                            'p95_ms': round(sorted(values)[int(len(values)*.95)-1], 3)},
+              'scroll_parse_and_present': timing(values),
               'split_frame_paints': len(samples), 'premature_or_torn_paints': bad, 'final_frame_exact': True,
               'row_raster_bytes': getattr(view.row_painter, 'raster_bytes', None) if hasattr(view, 'row_painter') else None,
               'surface_bytes': view.surface.sizeInBytes() if hasattr(view, 'surface') else None}
+    if args.ssh_history:
+        report['ssh_history'] = ssh_history()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2), encoding='utf-8')
     print(json.dumps(report))
