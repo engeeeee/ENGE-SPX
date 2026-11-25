@@ -16,6 +16,8 @@ from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
 import paramiko
+from PySide6.QtCore import QPoint, QPointF, Qt
+from PySide6.QtGui import QWheelEvent
 from PySide6.QtWidgets import QApplication
 
 from enge_spx.smart_terminal import TerminalWindow
@@ -27,6 +29,102 @@ from enge_spx.terminal_pty import start
 
 PASSWORD = "spx-fixture-password"
 PASSPHRASE = "spx-fixture-key-passphrase"
+
+
+def exercise_transcript(app, root, host_key):
+    """Replay the partial scrolling region used by Codex inline mode."""
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(1)
+    listener.settimeout(12)
+    port = listener.getsockname()[1]
+    server = Server(None)
+    sent = threading.Event()
+    finish = threading.Event()
+    errors = []
+    received = []
+
+    def serve():
+        try:
+            client, _ = listener.accept()
+            with paramiko.Transport(client) as transport:
+                transport.add_server_key(host_key)
+                transport.start_server(server=server)
+                channel = transport.accept(15)
+                assert channel is not None and server.shell.wait(5)
+                assert sent.wait(10)
+                channel.sendall(b"\x1b[2J\x1b[10;1Hcomposer-kept\x1b[1;8r\x1b[8;1H")
+                for row in range(160):
+                    channel.sendall(f"\r\n\x1b[Kcodex-transcript-{row:03d}".encode())
+                channel.sendall(b"\x1b[r\x1b[11;1Hinline-finished")
+                assert finish.wait(10)
+                channel.sendall(b"\x1b[?1049h\x1b[?1000;1006h\x1b[Hfull-screen-current")
+                channel.settimeout(8)
+                received.append(channel.recv(4096))
+                channel.sendall(b"\x1b[2J\x1b[Hfull-screen-earlier\x1b[?1000;1006l\x1b[?1049l")
+                channel.send_exit_status(0)
+                channel.shutdown_write()
+        except Exception as error:
+            errors.append(type(error).__name__)
+
+    worker = threading.Thread(target=serve, daemon=True)
+    worker.start()
+    known = root / "known_transcript"
+    known.write_text(f"[127.0.0.1]:{port} {host_key.get_name()} {host_key.get_base64()}\n", encoding="ascii")
+    connection = Connection.from_fields("127.0.0.1", "fixture", port)
+    command = connection.command()
+    command[-2:-2] = ["-o", f'UserKnownHostsFile="{known.as_posix()}"', "-o", "GlobalKnownHostsFile=none"]
+    child = start(command, {**environment(), "LC_ALL": "C"}, root)
+    window = TerminalWindow(child, "ssh", root, session_label=connection.label)
+    window.show()
+    view = window.view
+
+    def rows_text(rows):
+        return "\n".join("".join(cell.data for _, cell in sorted(row.items())) for row in rows)
+
+    def wait(predicate):
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            app.processEvents()
+            if predicate():
+                return
+            time.sleep(.01)
+        raise AssertionError(f"SSH transcript fixture timed out; errors={errors}, output={rows_text(view.rows())[-700:]!r}")
+
+    try:
+        wait(lambda: "password:" in rows_text(view.rows()).casefold())
+        view.sender.put("keys", PASSWORD.encode() + b"\r")
+        wait(server.shell.is_set)
+        sent.set()
+        wait(lambda: "inline-finished" in rows_text(view.rows()))
+        history = rows_text(view.screen.history.top)
+        assert "composer-kept" in rows_text(view.rows())
+        assert "codex-transcript-159" in rows_text(view.rows())
+        assert "codex-transcript-000" in history and "codex-transcript-120" in history, (
+            f"SSH lost Codex's inline transcript; retained {len(view.screen.history.top)} rows"
+        )
+        view.scrollbar.setValue(view.scrollbar.minimum())
+        assert "codex-transcript-000" in rows_text(view.rows())
+        view.scrollbar.setValue(view.scrollbar.maximum())
+        finish.set()
+        wait(lambda: "full-screen-current" in rows_text(view.rows()))
+        position = QPointF(view.PAD_X + 20, view.PAD_Y + 20)
+        event = QWheelEvent(position, QPointF(view.mapToGlobal(QPoint(int(position.x()), int(position.y())))),
+                            QPoint(), QPoint(0, 120), Qt.MouseButton.NoButton,
+                            Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, False)
+        QApplication.sendEvent(view, event)
+        wait(lambda: bool(received))
+        assert received[0].startswith(b"\x1b[<64;"), "SSH did not pass the wheel to fullscreen Codex"
+        wait(lambda: view.output_drained)
+        assert "codex-transcript-000" in rows_text(view.screen.history.top)
+        assert not errors
+        print("PASS SSH keeps Codex inline transcript and forwards fullscreen mouse wheel", flush=True)
+    finally:
+        finish.set()
+        window.close()
+        view.reader.join(3)
+        listener.close()
+        worker.join(2)
 
 
 class Server(paramiko.ServerInterface):
@@ -295,6 +393,7 @@ def exercise_upload(app, root, host_key):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--helper", type=Path, help="Frozen Windows spx.exe for the native askpass tests")
+    parser.add_argument("--transcript-only", action="store_true", help="Run the terminal transcript regression")
     args = parser.parse_args()
     ssh = executable()
     probe = subprocess.run([ssh, "-V"], env=environment(), capture_output=True, timeout=8)
@@ -305,7 +404,10 @@ def main():
     app = QApplication([])
     host_key = paramiko.RSAKey.generate(2048)
     with tempfile.TemporaryDirectory(prefix="spx-ssh-loopback-") as folder:
-        root = Path(folder)
+        root = Path(folder).resolve()
+        exercise_transcript(app, root, host_key)
+        if args.transcript_only:
+            return
         exercise(app, root, host_key)
         key = root / "selected test key 100%.ed25519"
         keygen = Path(ssh).with_name("ssh-keygen.exe" if os.name == "nt" else "ssh-keygen")

@@ -1,0 +1,26 @@
+name: SSH VT transcript baseline
+
+on:
+  push:
+    branches: [test/ssh-vt-transcript-01514]
+
+permissions:
+  contents: read
+
+jobs:
+  transcript:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 9
+    env:
+      PYTHONPATH: src
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements.txt paramiko==4.0.0
+      - run: python -u tests/integration_ssh_terminal.py --transcript-only
