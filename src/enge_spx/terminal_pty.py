@@ -136,6 +136,8 @@ class WindowsPTY:
             "GetExitCodeProcess": ([w.HANDLE, ctypes.POINTER(w.DWORD)], w.BOOL),
             "TerminateProcess": ([w.HANDLE, w.UINT], w.BOOL),
             "WaitForSingleObject": ([w.HANDLE, w.DWORD], w.DWORD),
+            "GetCurrentProcess": ([], w.HANDLE),
+            "DuplicateHandle": ([w.HANDLE, w.HANDLE, w.HANDLE, ctypes.POINTER(w.HANDLE), w.DWORD, w.BOOL, w.DWORD], w.BOOL),
         }
         for name, (args, result) in signatures.items():
             try:
@@ -146,6 +148,7 @@ class WindowsPTY:
         self.input = self.output = self.console = self.process = None
         self.closed = threading.Event()
         self.write_lock = threading.Lock()
+        self.console_lock = threading.Lock()
         held, attributes = [], None
         try:
             ir, iw, ore, ow, pc = (w.HANDLE() for _ in range(5))
@@ -196,6 +199,27 @@ class WindowsPTY:
             for handle in held:
                 api.CloseHandle(handle)
 
+        # The ConPTY host can keep the output pipe open after ssh.exe exits.
+        # Wait on a separate handle so the reader can drain the final VT bytes
+        # while the pseudo console closes. There is no periodic polling.
+        waiter = w.HANDLE()
+        current = api.GetCurrentProcess()
+        if api.DuplicateHandle(current, self.process, current, ctypes.byref(waiter), 0, False, 2):
+            threading.Thread(target=self._wait_child, args=(waiter,), name="spx-conpty-exit", daemon=True).start()
+
+    def _wait_child(self, process):
+        try:
+            if self.api.WaitForSingleObject(process, 0xFFFFFFFF) == 0 and not self.closed.is_set():
+                self._close_console()
+        finally:
+            self.api.CloseHandle(process)
+
+    def _close_console(self):
+        with self.console_lock:
+            console, self.console = self.console, None
+        if console:
+            self.api.ClosePseudoConsole(console)
+
     def read(self, size=16384):
         handle = self.output
         if not handle:
@@ -216,8 +240,9 @@ class WindowsPTY:
                 offset += count.value
 
     def resize(self, columns, rows):
-        if not self.closed.is_set():
-            self.api.ResizePseudoConsole(self.console, _COORD(columns, rows))
+        with self.console_lock:
+            if self.console and not self.closed.is_set():
+                self.api.ResizePseudoConsole(self.console, _COORD(columns, rows))
 
     def poll(self):
         result = w.DWORD()
@@ -239,9 +264,7 @@ class WindowsPTY:
             self.api.CloseHandle(self.process)
             self.process = None
         # The output reader continues draining while ClosePseudoConsole runs.
-        if self.console:
-            self.api.ClosePseudoConsole(self.console)
-            self.console = None
+        self._close_console()
         if self.output:
             self.api.CloseHandle(self.output)
             self.output = None

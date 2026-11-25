@@ -932,6 +932,13 @@ class Window(QMainWindow):
         panel.layout.addWidget(progress(self.c.storage_progress))
         panel.layout.addWidget(bind_text(label(kind="Muted", wrap=True), self.c.storage_status))
         panel.layout.addWidget(label("迁移会停止工作区，校验成功后切换位置并清理已校验副本。项目文件仍在原项目目录。", "Caption", True))
+        panel = section("storage", "运行环境下载缓存", "镜像导入并核验后自动清理下载副本，可在这里回收旧版缓存。")
+        panel.layout.addWidget(bind_text(label(kind="Muted", wrap=True), self.c.runtime_cache_status))
+        row = panel.row()
+        responsive_rows.append(row)
+        row.addWidget(self.action("检查缓存", self.c.inspect_runtime_cache))
+        row.addWidget(self.action("清理缓存…", lambda: self.c.inspect_runtime_cache(clean=True)))
+        row.addStretch()
         panel = section("storage", "Docker 数据盘", "Docker Desktop 负责移动实际磁盘，软件记录资源并帮助核验。")
         panel.layout.addWidget(bind_text(label(kind="Muted", wrap=True), self.c.docker_location))
         row = panel.row()
@@ -1075,40 +1082,64 @@ class Window(QMainWindow):
         if self.c.project.get().strip():
             self.c.open_terminal(tool)
 
-    def open_ssh(self):
+    def open_ssh(self, *, machine=None):
         from PySide6.QtWidgets import QDialog
         from .ssh_dialog import SSHDialog
 
         if self.c.exit_mode is not None:
             return
-        dialog = SSHDialog(self)
+        dialog = SSHDialog(self, machine=machine)
         try:
             if dialog.exec() == QDialog.DialogCode.Accepted:
-                self.launch_ssh(dialog.connection)
+                connection = dialog.connection
+                title = f"{machine.name} · {connection.label}" if machine and machine.name else connection.label
+                self.launch_ssh(connection, title, password=dialog.take_password())
         finally:
             dialog.deleteLater()
 
-    def launch_ssh(self, connection, session_label=None):
+    def launch_ssh(self, connection, session_label=None, *, password=None):
+        from ..ssh_askpass import PasswordSession, erase
         from ..ssh_client import environment
+        from ..ssh_transfer import SSHTransfer
         from ..smart_terminal import TerminalWindow
         from ..terminal_pty import start
 
         if self.c.exit_mode is not None:
+            if password is not None:
+                erase(password)
             return
         home = Path.home()
+        session = window = None
         try:
-            pty = start(connection.command(), environment(), home)
+            command = connection.command(prefilled_password=bool(password))
+            env = environment()
+            if password:
+                session = PasswordSession(connection, password,
+                                          lambda prompt: confirm(window or self, "核对 SSH 主机指纹", prompt), self)
+                env = session.start(env)
+            pty = start(command, env, home)
         except (OSError, SPXError) as error:
+            if session is not None:
+                session.close()
+            elif password is not None:
+                erase(password)
             notice(self, "无法启动 SSH", str(error), error=True)
             return
         try:
             from ..clipboard import WindowsClipboard
             clipboard = WindowsClipboard() if os.name == "nt" else None
-            window = TerminalWindow(pty, "ssh", home, clipboard=clipboard,
+            transfer = SSHTransfer(connection, env, prefilled=session is not None)
+            window = TerminalWindow(pty, "ssh", home, transfer=transfer, clipboard=clipboard,
                                     preferences_store=self.c.store, session_label=session_label or connection.label)
         except Exception:
             pty.close()
+            if session is not None:
+                session.close()
             raise
+        if session is not None:
+            window.message.setText("正在使用本次填写的密码。首次连接请核对主机指纹。")
+            window.view.ended.connect(session.close)
+            window.destroyed.connect(session.close)
         window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.ssh_windows.add(window)
         window.destroyed.connect(lambda: self.ssh_windows.discard(window))

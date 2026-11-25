@@ -46,7 +46,7 @@ module.exports = async ({github, context, core}) => {
     `推荐：\`ENGE-SPX-Windows-x64-${version}-Setup.exe\`，当前用户安装，带开始菜单和桌面快捷方式。`,
     `免安装：\`ENGE-SPX-Windows-x64-${version}-Portable.zip\`，完整解压后运行 \`ENGE-SPX.exe\`。命令行入口是 \`spx.exe\`。`,
     '',
-    '无需另外安装 Python。需要 Docker Desktop / Linux containers，Engine 28 或更新版本。运行环境会在软件内下载、校验和导入，无需手工处理 runtime 文件。',
+    'Windows 版包含 Python 运行环境。AI 工作区需要 Docker Desktop 的 Linux 容器和 Docker Engine 28 或更新版本，运行环境在软件内下载、校验和导入。远程 SSH 使用系统 OpenSSH。',
     '',
     '### 核心用途',
     '',
@@ -61,7 +61,7 @@ module.exports = async ({github, context, core}) => {
     process.env.SPX_WORKSPACE_UPDATE === 'true'
       ? '本次检查验证了切换 SOCKS5 后的线路与落地出口核验、Antigravity 在工作区内安装、资料隔离，以及 Windows 终端材质和程序包。基础镜像沿用 0.15.2，归档 SHA-256 保持一致。'
       : process.env.SPX_UI_HOTFIX === 'true'
-      ? '本次验证了 SSH 机器管理、数据迁移和运行环境下载界面。Windows 原生终端通过密码与加密私钥登录检查，安装版和便携版通过更新交接检查。运行环境沿用 0.15.11 已验证的归档，SHA-256 保持一致。'
+      ? '本次构建验证了 Windows 表单登录、SSH 长输出、SFTP 文件传输、智能终端快捷输入，以及安装版和便携版的更新交接。运行环境沿用 0.15.12 的归档并复核 SHA-256，完成真实 Docker 导入和缓存回收验证。'
       : process.env.SPX_CLIENT_RELEASE === 'true'
       ? '本次客户端快速发布保留同一 CI 的 Linux 单元、Windows 重点回归、多档 Qt 布局、冻结更新／安装卸载、真实工作区／短时 guard／过期停机、中文 PTY、双跳故障和两种镜像存储导入验证。未改变的跨租期长时续期、完整协议矩阵和资源基准沿用0.14.6证据；生产监测不变。Windows 界面和更新结果见本次 CI Artifact。用户真实 Docker Desktop／WSL、v2ray、自定义终端和显示器仍需实机体验。Qt／PySide6／Shiboken6许可及来源随包提供。'
       : '本次发布要求同一 CI 的 Windows / Linux、真实文件共享锁、Qt 多档缩放、打包 GUI 手动启动、安装卸载、实际 Linux 长时续期、字体与中文 PTY、双跳故障阻断和两种镜像存储导入检查通过。Windows 界面结果保存在该次 CI 的 UI Artifact。假 Desktop 与 Linux Docker 测试不能代替用户真实 Docker Desktop / WSL、v2ray、自定义终端 和显示器组合验收。Qt / PySide6 / Shiboken6 的许可、上游声明与对应源码链接随包提供。',

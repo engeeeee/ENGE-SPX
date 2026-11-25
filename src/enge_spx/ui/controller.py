@@ -150,6 +150,7 @@ class Controller(QObject):
             "data_location": str(store.home), "data_target": "D:\\ENGE-SPX\\data" if os.name == "nt" and Path("D:/").exists() else "",
             "docker_target": store.read("docker-move.json", {}).get("target", "D:\\DockerData" if os.name == "nt" and Path("D:/").exists() else ""),
             "docker_location": "检测后显示 Docker 数据盘位置。", "storage_status": "配置、日志和下载缓存可迁移到自选目录。",
+            "runtime_cache_status": "检查应用的运行环境下载缓存。",
             "docker_move_status": "Docker Desktop 负责实际迁移，完成后回到这里核验。",
             "operation": "就绪", "startup_title": "准备你的工作环境", "startup_detail": "点击一键准备，启动 Docker 与运行环境，再核对代理出口。",
             "docker_text": "尚未检测 Docker", "runtime_text": "等待核验已有环境" if self.runtime_ok else "尚未安装运行环境",
@@ -1000,6 +1001,8 @@ class Controller(QObject):
         else:
             self.download_progress.set(100 if stage == "done" else -1)
             self.download_detail.set({"manifest": "通过所选下载代理读取环境清单。", "verify": "导入前检查 SHA-256 与文件大小。", "import": "下载已完成，正在导入 Docker。", "build": "构建输出显示在运行日志中。", "done": "运行环境已核验，可以继续。", "retry": "保留已有进度，正在重连。"}.get(stage, "正在处理…"))
+            if stage == "done" and value.get("cache_reclaimed"):
+                self.download_detail.set("运行环境已核验，已释放 " + size_text(value["cache_reclaimed"]) + " 下载缓存。")
 
     def check_docker(self, auto_start=False):
         if self.busy or self.exit_mode is not None:
@@ -1173,6 +1176,36 @@ class Controller(QObject):
             self.operation.set("等待性能记录收尾，再检查数据迁移…")
             return
         self._migrate_data(target)
+
+    def inspect_runtime_cache(self, clean=False):
+        from .. import runtime_cache
+
+        if self.busy or self.exit_mode is not None:
+            return
+        store = self.store
+        try:
+            with store.lock():
+                items, pending = runtime_cache.inspect(store)
+            total = sum(item.size for item in items)
+            message = f"可清理 {len(items)} 个完整下载包，共 {size_text(total)}。待导入或续传占用 {size_text(pending)}。"
+            self.runtime_cache_status.set(message)
+            if not clean or not items or not self.ask("清理运行环境下载缓存", message + "\n\n将删除这些下载副本。已安装的容器镜像、用户资料和续传文件会保留。"):
+                return
+            released, skipped = 0, 0
+            with store.lock():
+                for item in items:
+                    try:
+                        size = runtime_cache.remove(store, item)
+                    except OSError:
+                        size = 0
+                    released += size
+                    skipped += not size
+            summary = "已释放 " + size_text(released) + " 下载缓存。"
+            if skipped:
+                summary += f" {skipped} 个文件已变化或被占用，可稍后重试。"
+            self.runtime_cache_status.set(summary)
+        except (OSError, SPXError) as error:
+            self.runtime_cache_status.set(self.clean_message(error))
 
     def _migrate_data(self, target):
         def reviewed(plan):

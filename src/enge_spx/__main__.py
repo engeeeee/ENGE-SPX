@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -18,6 +19,9 @@ def record_number(value):
 
 
 def main():
+    if os.environ.get("SPX_SSH_ASKPASS_CHANNEL"):
+        from .ssh_askpass import helper_main
+        return helper_main(sys.argv[1:])
     # Frozen Windows CLI pipes may use a non-CJK code page. Keep machine JSON
     # ASCII-escaped and human error messages printable instead of crashing.
     for stream in (sys.stdout, sys.stderr):

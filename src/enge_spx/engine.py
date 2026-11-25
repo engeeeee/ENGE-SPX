@@ -246,6 +246,7 @@ class Engine:
     def install_prebuilt(self, progress=lambda data: None, cancel=None):
         from .downloads import manifest, download, RELEASE
         from .proxy import download_proxy
+        from . import runtime_cache
         with self.store.lock():
             info = self.doctor()
             available = {}
@@ -264,6 +265,10 @@ class Engine:
             progress({"stage": "manifest", "route": route})
             meta = manifest("linux/amd64", self.recipes, via)
             archive = download(RELEASE + meta["filename"], self.store.home / "cache" / meta["filename"], meta["sha256"], meta["bytes"], progress, cancel, via)
+            try:
+                cached = runtime_cache.snapshot(self.store, archive.name)
+            except (OSError, SPXError):
+                cached = None
             if cancel and cancel.is_set():
                 from .downloads import DownloadPaused
                 raise DownloadPaused("安装已暂停，环境包已保留。")
@@ -278,7 +283,15 @@ class Engine:
                 resolved[role] = obj["Id"]
             self.store.write("images.json", {**resolved, **available})
             self.store.write("runtime-bundle.json", {"version": meta["version"], "sha256": meta["sha256"], "bytes": meta["bytes"]})
-            progress({"stage": "done"})
+            try:
+                reclaimed = runtime_cache.remove(self.store, cached)
+            except (OSError, SPXError):
+                reclaimed = 0
+            if reclaimed:
+                self.log("已清理已导入的运行环境下载包。")
+            else:
+                self.log("运行环境已安装。下载包可在「偏好设置 → 存储」中清理。")
+            progress({"stage": "done", "cache_reclaimed": reclaimed})
 
     def image_ids(self):
         expected = self.store.read("images.json", {})

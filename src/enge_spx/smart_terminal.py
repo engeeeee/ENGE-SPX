@@ -6,8 +6,8 @@ The CLI owns its input buffer, editing, history, attachments and submission.
 from __future__ import annotations
 
 from concurrent.futures import Future
-from collections import Counter, defaultdict
-from copy import deepcopy
+from collections import Counter, defaultdict, deque
+from copy import copy, deepcopy
 import codecs
 import math
 import os
@@ -76,7 +76,7 @@ def _web_url(address):
 class TerminalScreen(pyte.HistoryScreen):
     TEXT_RUNS = re.compile(r'[ -~]+|[^ -~]+')
 
-    def __init__(self, columns, lines, respond=lambda data: None):
+    def __init__(self, columns, lines, respond=lambda data: None, *, preserve_scrollback=False):
         self.respond = respond
         self.primary = None
         self.ascii_tables = {}
@@ -84,7 +84,15 @@ class TerminalScreen(pyte.HistoryScreen):
         self.hyperlinks = {}
         self.hyperlink_ids = {}
         self.next_hyperlink = 0
-        super().__init__(columns, lines, history=2000)
+        self.preserve_scrollback = preserve_scrollback
+        super().__init__(columns, lines, history=10000 if preserve_scrollback else 2000)
+
+    def resize(self, lines=None, columns=None):
+        if self.preserve_scrollback and self.primary is None and lines is not None and lines < self.lines:
+            # pyte drops rows at the top when the viewport gets shorter. Move
+            # them to SSH scrollback before changing the active screen.
+            self.history.top.extend(copy(self.buffer[index]) for index in range(self.lines - lines))
+        super().resize(lines, columns)
 
     def draw(self, data):
         # pyte's history dispatcher intercepts every attribute access. Bulk
@@ -197,8 +205,18 @@ class TerminalScreen(pyte.HistoryScreen):
 
     def set_mode(self, *modes, **kwargs):
         if kwargs.get("private") and any(m in (47, 1047, 1049) for m in modes) and self.primary is None:
-            self.primary = deepcopy((self.buffer, self.cursor, self.history, self.margins))
-            self.buffer.clear()
+            if self.preserve_scrollback:
+                # Swap the SSH scrollback instead of copying up to 10,000
+                # rows whenever a full-screen remote program opens.
+                self.primary = self.buffer, self.cursor, self.history, self.margins
+                self.primary_size = self.lines, self.columns
+                self.buffer = defaultdict(self.buffer.default_factory)
+                self.cursor = copy(self.cursor)
+                self.history = self.history._replace(top=deque(maxlen=self.history.top.maxlen),
+                                                     bottom=deque(maxlen=self.history.bottom.maxlen))
+            else:
+                self.primary = deepcopy((self.buffer, self.cursor, self.history, self.margins))
+                self.buffer.clear()
             self.cursor_position()
             self.dirty.update(range(self.lines))
         super().set_mode(*modes, **kwargs)
@@ -208,6 +226,10 @@ class TerminalScreen(pyte.HistoryScreen):
         if kwargs.get("private") and any(m in (47, 1047, 1049) for m in modes) and self.primary is not None:
             self.buffer, self.cursor, self.history, self.margins = self.primary
             self.primary = None
+            if self.preserve_scrollback:
+                lines, columns = self.lines, self.columns
+                self.lines, self.columns = self.primary_size
+                self.resize(lines, columns)
             self.dirty.update(range(self.lines))
 
 
@@ -282,13 +304,14 @@ class ImageAcknowledgement:
 
 class OrderedInput:
     """One writer preserves typing/paste/Enter order even during a large copy."""
-    def __init__(self, pty, transfer, report, ready, images=None):
+    def __init__(self, pty, transfer, report, ready, images=None, *, tool=None):
         self.pty, self.transfer, self.report, self.ready = pty, transfer, report, ready
         self.queue = queue.Queue(maxsize=2048)
         self.replies = queue.Queue(maxsize=64)
         self.sequence_lock = threading.Lock()
         self.sequence = 0
         self.images = images
+        self.tool = tool
         self.draft_nonempty = False
         self.closed = threading.Event()
         self.pastes = threading.BoundedSemaphore(8)
@@ -336,6 +359,17 @@ class OrderedInput:
                 return
             self.pty.write(reply)
 
+    def write_text(self, value):
+        if self.ready.is_set():
+            self.pty.write(text_frame(value))
+        elif self.tool == "ssh":
+            # Some remote shells or ConPTY versions do not expose bracketed
+            # paste. Send a single literal line, including no Enter or Tab keys.
+            line = " ".join(value.replace("\t", " ").splitlines())
+            self.pty.write("".join(c for c in line if c.isprintable()).encode("utf-8"))
+        else:
+            raise SPXError("请等工具输入区就绪后再粘贴或插入。")
+
     def _run(self):
         failed_sequence = 0
         while not self.closed.is_set():
@@ -362,17 +396,27 @@ class OrderedInput:
                         self.draft_nonempty = False
                     else:
                         self.report("当前没有确认可删除的 Codex 草稿，未发送取消或退出快捷键。")
+                elif kind == "quick_text":
+                    self.write_text(value)
+                    self.draft_nonempty = True
                 elif kind == "paste":
                     snapshot = value.result(timeout=2)
                     if snapshot.kind == "empty":
                         self.report("剪贴板为空或没有支持的内容。")
                         continue
-                    if not self.ready.is_set():
-                        raise SPXError("工具输入区尚未启用安全粘贴，请等待 CLI 就绪后重试。")
                     if snapshot.kind == "text":
-                        self.pty.write(text_frame(snapshot.value))
+                        self.write_text(snapshot.value)
                         self.draft_nonempty |= bool(snapshot.value.strip())
+                    elif self.tool == "ssh" and self.transfer is not None:
+                        self.report("正在通过 SFTP 上传所复制的文件…")
+                        paths = self.transfer.upload(snapshot)
+                        if not self.closed.is_set():
+                            self.write_text(paths)
+                            self.draft_nonempty = True
+                            self.report("文件已上传，远端路径已填入。请检查后自行发送。")
                     else:
+                        if not self.ready.is_set():
+                            raise SPXError("工具输入区尚未启用安全粘贴，请等待 CLI 就绪后重试。")
                         if self.transfer is None or self.transfer.tool not in ("claude", "codex"):
                             raise SPXError("当前终端只支持文字粘贴；请在 Claude Code / Codex 输入区粘贴附件。")
                         self.report("正在导入附件…可以继续输入，操作会按顺序完成。")
@@ -458,6 +502,7 @@ class TerminalView(QWidget):
     font_changed = Signal(int)
     readiness_changed = Signal(bool)
     option_changed = Signal(str, object)
+    quick_input_requested = Signal()
     PAD_X, PAD_Y = 16, 12
 
     def __init__(self, pty, transfer=None, clipboard=None, tool=None):
@@ -471,8 +516,8 @@ class TerminalView(QWidget):
         self.tool = tool or getattr(transfer, 'tool', None)
         self.ready = threading.Event()
         self.images = ImageAcknowledgement()
-        self.sender = OrderedInput(pty, transfer, self.status.emit, self.ready, self.images)
-        self.screen = TerminalScreen(110, 32, self.sender.respond)
+        self.sender = OrderedInput(pty, transfer, self.status.emit, self.ready, self.images, tool=self.tool)
+        self.screen = TerminalScreen(110, 32, self.sender.respond, preserve_scrollback=self.tool == "ssh")
         self.completed_frame = None
         self.painted_composer = None
         self.completed_generation = self.presented_generation = 0
@@ -651,7 +696,7 @@ class TerminalView(QWidget):
             dirty = self.screen.dirty.copy()
             self.screen.dirty.clear()
             self.surface_dirty.update(dirty)
-            if self.tool in ("claude", "codex") or self.sender.transfer is not None:
+            if self.tool in ("claude", "codex") or self.sender.transfer is not None and self.tool != "ssh":
                 if len(self.line_text) != self.screen.lines:
                     self.line_text = [""] * self.screen.lines
                     dirty.update(range(self.screen.lines))
@@ -1008,6 +1053,11 @@ class TerminalView(QWidget):
             self.update_input_method()
             return
         self.screen.resize(lines=rows, columns=columns)
+        if self.tool == "ssh":
+            live = self.offset == 0
+            self.scrollbar.setRange(0, len(self.screen.history.top))
+            if live:
+                self.scrollbar.setValue(self.scrollbar.maximum())
         self.completed_frame = None
         self.presented_generation = self.completed_generation
         if not self.stopping.is_set():
@@ -1030,6 +1080,10 @@ class TerminalView(QWidget):
 
     def keyPressEvent(self, event):
         modifiers = event.modifiers()
+        if event.key() == Qt.Key.Key_P and modifiers == (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier):
+            self.quick_input_requested.emit()
+            event.accept()
+            return
         if event.key() == Qt.Key.Key_Menu or (event.key() == Qt.Key.Key_F10 and modifiers & Qt.KeyboardModifier.ShiftModifier):
             event.accept()
             return
@@ -1402,7 +1456,7 @@ class TerminalView(QWidget):
         copy.setEnabled(self.has_selection)
         paste = menu.addAction("粘贴文字、截图或文件\tCtrl+V", self.paste)
         paste.setObjectName("TerminalPaste")
-        paste.setEnabled(not self.stopping.is_set() and self.clipboard is not None and self.ready.is_set())
+        paste.setEnabled(not self.stopping.is_set() and self.clipboard is not None and (self.ready.is_set() or self.tool == "ssh"))
         menu.addAction("全选输出\tCtrl+Shift+A", self.select_all)
         clear = menu.addAction("取消选择\tEsc", self.clear_selection)
         clear.setEnabled(self.has_selection)
@@ -1455,6 +1509,7 @@ class TerminalWindow(QMainWindow):
         super().__init__(None, Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
         from .terminal_preferences import Preferences
         self.preferences = Preferences(preferences_store, self)
+        self.shortcut_store = preferences_store
         self.interaction_active = False
         self.interaction_guard = QTimer(self)
         self.interaction_guard.setInterval(120)
@@ -1535,6 +1590,7 @@ class TerminalWindow(QMainWindow):
         self.view.font_changed.connect(lambda size: self.font_size.setText(str(size) + " pt  ·  UTF-8"))
         self.view.font_changed.connect(lambda size: self.preferences.set("font_size", size))
         self.view.option_changed.connect(self.preferences.set)
+        self.view.quick_input_requested.connect(self.show_quick_input)
         self.view.status.connect(self.message.setText)
         if not self.is_ssh:
             self.view.readiness_changed.connect(lambda ready: self.connection.setText("●  输入区就绪" if ready else "●  等待 CLI 输入区"))
@@ -1660,10 +1716,26 @@ class TerminalWindow(QMainWindow):
     def show_options(self, button):
         menu = self.view.create_context_menu()
         menu.addSeparator()
+        menu.addAction("快捷输入…\tCtrl+Shift+P", self.show_quick_input).setEnabled(not self.view.stopping.is_set())
         menu.addAction("终端外观…", self.show_appearance)
         menu.addAction("恢复终端默认设置", self.preferences.reset)
         menu.aboutToHide.connect(menu.deleteLater)
         menu.popup(button.mapToGlobal(button.rect().bottomLeft()))
+
+    def show_quick_input(self):
+        from .ui.quick_input import QuickInput
+
+        if self.view.stopping.is_set():
+            return
+        dialog = QuickInput(self, self.shortcut_store, self.view.tool)
+        try:
+            if dialog.exec() and dialog.text:
+                self.view.clear_selection()
+                self.view.scrollbar.setValue(self.view.scrollbar.maximum())
+                self.view.sender.put("quick_text", dialog.text)
+        finally:
+            dialog.deleteLater()
+            self.view.setFocus()
 
     def show_appearance(self):
         from .terminal_appearance import AppearanceDialog

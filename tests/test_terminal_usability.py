@@ -22,6 +22,20 @@ from enge_spx.terminal_render import BACKGROUND, FOREGROUND
 
 
 class AdapterCompatibilityTests(unittest.TestCase):
+    def test_ssh_file_reference_is_inserted_without_enter_or_bracketed_mode(self):
+        pty, transfer, clipboard = Mock(), Mock(tool="ssh"), Mock()
+        clipboard.read.return_value = Snapshot("files", ("fixture.txt",))
+        transfer.upload.return_value = "'/home/fixture user/.enge-spx-paste/file.txt'"
+        written = threading.Event()
+        pty.write.side_effect = lambda data: written.set()
+        sender = OrderedInput(pty, transfer, lambda message: None, threading.Event(), tool="ssh")
+        try:
+            sender.paste(clipboard)
+            self.assertTrue(written.wait(3))
+            pty.write.assert_called_once_with(transfer.upload.return_value.encode())
+        finally:
+            sender.close()
+
     def test_new_enter_after_failure_is_not_blocked_when_clock_values_are_identical(self):
         started, release, cancelled, delivered = (threading.Event() for _ in range(4))
         messages, written = [], []
@@ -145,6 +159,20 @@ class AdapterCompatibilityTests(unittest.TestCase):
 
 
 class ColourProtocolTests(unittest.TestCase):
+    def test_ssh_alternate_screen_resize_restores_main_scrollback(self):
+        screen = TerminalScreen(30, 6, preserve_scrollback=True)
+        stream = TerminalStream(screen)
+        stream.feed("\r\n".join(f"fixture-{row}" for row in range(6)))
+        stream.feed("\x1b[?1049h")
+        self.assertFalse(screen.history.top)
+        screen.resize(lines=3, columns=30)
+        stream.feed("remote pager\x1b[?1049l")
+        prior = ["".join(cell.data for _, cell in sorted(row.items())) for row in screen.history.top]
+        self.assertEqual(prior, ["fixture-0", "fixture-1", "fixture-2"])
+        live = " ".join("".join(cell.data for _, cell in sorted(row.items())) for row in screen.buffer.values())
+        self.assertIn("fixture-5", live)
+        self.assertNotIn("remote pager", live)
+
     def setUp(self):
         self.responses = []
         self.screen = TerminalScreen(80, 8, self.responses.append)
@@ -224,6 +252,27 @@ class TerminalUsabilityTests(unittest.TestCase):
     def preedit(self, text, attributes=()):
         QApplication.sendEvent(self.view, QInputMethodEvent(text, list(attributes)))
         self.app.processEvents()
+
+    def test_native_tab_and_palette_completion_preserve_the_draft(self):
+        from enge_spx.ui.quick_input import QuickInput
+
+        QTest.keyClick(self.view, Qt.Key.Key_Tab)
+        self.pump(lambda: self.written == [b"\t"])
+
+        def choose(dialog):
+            dialog.search.setText("定位")
+            QTest.keyClick(dialog.search, Qt.Key.Key_Tab)
+            self.assertIn("请先定位", dialog.search.text())
+            self.assertEqual(self.written, [b"\t"])
+            dialog.accept()
+            return dialog.result()
+
+        with patch.object(QuickInput, "exec", choose):
+            QTest.keyClick(self.view, Qt.Key.Key_P, Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier)
+        self.pump(lambda: len(self.written) == 2)
+        self.assertTrue(self.written[1].startswith(b"\x1b[200~"))
+        self.assertTrue(self.written[1].endswith(b"\x1b[201~"))
+        self.assertNotIn(b"\r", self.written[1])
 
     def test_ctrl_click_opens_complete_wrapped_url_without_sending_mouse_input(self):
         url = "https://example.invalid/oauth?redirect_uri=http%3A%2F%2F127.0.0.1%3A1455"

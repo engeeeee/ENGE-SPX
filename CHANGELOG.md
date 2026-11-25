@@ -1,5 +1,12 @@
 # Changes
 
+## 0.15.13 SSH credentials, file paste and runtime cache — 2026-11-25
+
+- Enter a password or key passphrase in the SSH connection form and verify the host fingerprint on first connection.
+- Paste files or screenshots into SSH through SFTP and insert their remote paths. Preserve 10,000 lines of scrollback, including rows moved out of view on resize.
+- Open Quick Input with Ctrl+Shift+P, complete a suggestion with Tab, and insert saved commands or prompts into the live draft.
+- Reclaim the runtime download after a verified Docker import. Check and clean eligible older archives from Storage.
+
 ## 0.15.12 saved SSH machines and workspace preparation — 2026-11-24
 
 - Add a dedicated SSH page to save, edit, remove, and connect to machines. Keep temporary connections available.

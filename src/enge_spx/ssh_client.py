@@ -91,15 +91,35 @@ class Connection:
         host = f"[{self.host}]" if ":" in self.host else self.host
         return f"{self.username}@{host}:{self.port}"
 
-    def command(self):
+    def options(self, *, prefilled_password=False, strict="ask"):
         identity = _key_path(self.identity, require_file=True)
-        args = [executable(), "-F", "none", "-tt", "-o", "StrictHostKeyChecking=ask",
+        args = ["-F", "none", "-o", "StrictHostKeyChecking=" + strict,
                 "-o", "ConnectTimeout=15", "-o", "ServerAliveInterval=30", "-o", "ServerAliveCountMax=3",
                 "-o", "IdentityAgent=none"]
         if identity is None:
-            args += ["-o", "PreferredAuthentications=password,keyboard-interactive", "-o", "PubkeyAuthentication=no"]
+            authentication = "password" if prefilled_password else "password,keyboard-interactive"
+            args += ["-o", "PreferredAuthentications=" + authentication, "-o", "PubkeyAuthentication=no"]
         else:
             path = identity.as_posix().replace("\\", "\\\\").replace('"', '\\"').replace("%", "%%")
             args += ["-o", f'IdentityFile="{path}"', "-o", "IdentitiesOnly=yes",
                      "-o", "PreferredAuthentications=publickey"]
-        return [*args, "-l", self.username, "-p", str(self.port), "--", self.host]
+        if prefilled_password:
+            args += ["-o", "NumberOfPasswordPrompts=1"]
+        return args
+
+    def command(self, *, prefilled_password=False):
+        options = self.options(prefilled_password=prefilled_password)
+        return [executable(), *options[:2], "-tt", *options[2:], "-l", self.username, "-p", str(self.port), "--", self.host]
+
+    def sftp_command(self, *, prefilled_password=False):
+        ssh = Path(executable())
+        sftp = ssh.with_name("sftp.exe" if os.name == "nt" else "sftp")
+        if not sftp.is_file():
+            raise SPXError("未找到系统 OpenSSH 的 SFTP 客户端。")
+        options = self.options(prefilled_password=prefilled_password, strict="yes")
+        host = f"[{self.host}]" if ":" in self.host else self.host
+        # sftp adds BatchMode=yes when it processes -b. The first SSH option
+        # wins, so the current session's askpass broker can authenticate.
+        batch = "no" if prefilled_password else "yes"
+        return [str(sftp), "-S", str(ssh), "-o", "BatchMode=" + batch, *options,
+                "-P", str(self.port), "-b", "-", "--", f"{self.username}@{host}"]

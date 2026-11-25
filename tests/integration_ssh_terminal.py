@@ -3,6 +3,7 @@
 Paramiko is a test-only server. Authentication, key loading, prompts and input
 travel through the same system client and terminal transport as a real session.
 """
+import argparse
 import base64
 import os
 from pathlib import Path
@@ -11,12 +12,17 @@ import subprocess
 import tempfile
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
+from unittest.mock import patch
 
 import paramiko
 from PySide6.QtWidgets import QApplication
 
 from enge_spx.smart_terminal import TerminalWindow
+from enge_spx.clipboard import Snapshot
+from enge_spx.ssh_askpass import PasswordSession, read_password
 from enge_spx.ssh_client import Connection, environment, executable
+from enge_spx.ssh_transfer import SSHTransfer
 from enge_spx.terminal_pty import start
 
 PASSWORD = "spx-fixture-password"
@@ -57,7 +63,7 @@ class Server(paramiko.ServerInterface):
         return True
 
 
-def exercise(app, root, host_key, identity=None, public_key=None):
+def exercise(app, root, host_key, identity=None, public_key=None, *, prefilled=False):
     errors = []
     listener = socket.socket()
     listener.bind(("127.0.0.1", 0))
@@ -74,6 +80,8 @@ def exercise(app, root, host_key, identity=None, public_key=None):
                 transport.start_server(server=server)
                 channel = transport.accept(15)
                 assert channel is not None and server.shell.wait(5)
+                if prefilled:
+                    channel.sendall(b"".join(f"record-{row:04d}\r\n".encode() for row in range(2510)))
                 channel.sendall(b"SPX-SSH-LOGIN-OK\r\n")
                 channel.send_exit_status(0)
                 channel.shutdown_write()
@@ -86,11 +94,25 @@ def exercise(app, root, host_key, identity=None, public_key=None):
     known = root / f"known_{port}"
     known.touch()
     connection = Connection.from_fields("127.0.0.1", "fixture", port, identity)
-    command = connection.command()
+    command = connection.command(prefilled_password=prefilled)
     command[-2:-2] = ["-o", f'UserKnownHostsFile="{known.as_posix()}"', "-o", "GlobalKnownHostsFile=none"]
-    window = None
+    window = login = None
+    secret = read_password(PASSPHRASE if identity else PASSWORD)
+    confirmations = []
+    helper_requests = []
     try:
-        child = start(command, {**environment(), "LC_ALL": "C"}, root)
+        env = {**environment(), "LC_ALL": "C"}
+        if prefilled:
+            def confirm(prompt):
+                assert server.auth is None
+                assert "SHA256:" in prompt
+                confirmations.append(prompt)
+                return True
+            login = PasswordSession(connection, secret, confirm)
+            env = login.start(env)
+            login.server.newConnection.connect(lambda: helper_requests.append(1))
+            assert all(bytes(secret).decode() not in value for value in (*command, *env.values()))
+        child = start(command, env, root)
         window = TerminalWindow(child, "ssh", root, session_label=connection.label)
         window.show()
         view = window.view
@@ -110,33 +132,176 @@ def exercise(app, root, host_key, identity=None, public_key=None):
                     break
                 time.sleep(.01)
             lines = content().replace(PASSWORD, "[fixture]").replace(PASSPHRASE, "[fixture]")
-            raise AssertionError(f"Missing {marker!r}. Server errors: {errors}. Terminal: {lines.strip()[-1200:]}")
+            raise AssertionError(f"Missing {marker!r}. Helper requests: {len(helper_requests)}. "
+                                 f"Confirmations: {len(confirmations)}. Server errors: {errors}. Terminal: {lines.strip()[-1200:]}")
 
-        first = wait("Are you sure you want to continue connecting")
-        assert "password:" not in first.casefold() and server.auth is None
-        assert view.sender.put("keys", b"yes\r")
-        prompt, credential = ("password:", PASSWORD) if identity is None else ("Enter passphrase for key", PASSPHRASE)
-        wait(prompt)
-        assert view.sender.put("keys", credential.encode() + b"\r")
+        if not prefilled:
+            first = wait("Are you sure you want to continue connecting")
+            assert "password:" not in first.casefold() and server.auth is None
+            assert view.sender.put("keys", b"yes\r")
+            prompt, credential = ("password:", PASSWORD) if identity is None else ("Enter passphrase for key", PASSPHRASE)
+            wait(prompt)
+            assert view.sender.put("keys", credential.encode() + b"\r")
         output = wait("SPX-SSH-LOGIN-OK")
         assert PASSWORD not in output and PASSPHRASE not in output
         assert known.read_text().strip() and not errors
         assert server.auth == ("private key" if public_key else "password")
-        print(f"PASS {server.auth} through OpenSSH and the smart terminal", flush=True)
+        if prefilled:
+            assert len(confirmations) == 1
+            history = "\n".join("".join(cell.data for _, cell in sorted(row.items())) for row in view.screen.history.top)
+            assert "record-0000" in history and "record-2100" in history, "SSH scrollback lost long output"
+            assert "record-2509" in output
+            deadline = time.monotonic() + 5
+            while not view.output_drained and time.monotonic() < deadline:
+                app.processEvents()
+                time.sleep(.01)
+            assert view.output_drained, "SSH exit did not deliver the final output and EOF"
+        print(f"PASS {'prefilled ' if prefilled else ''}{server.auth} through OpenSSH and the smart terminal", flush=True)
     finally:
         if window is not None:
             window.close()
             window.view.reader.join(3)
+        if login is not None:
+            login.close()
+            assert not secret, "Session credential survived connection close"
+        listener.close()
+        worker.join(2)
+
+
+class FixtureSFTP(paramiko.SFTPServerInterface):
+    """A localhost-only SFTP root for the native client integration."""
+
+    def __init__(self, server, root):
+        super().__init__(server)
+        self.root = root.resolve(strict=True)
+
+    def canonicalize(self, path):
+        return "/fixture home"
+
+    def local(self, path):
+        relative = path.removeprefix("/fixture home/") if path.startswith("/fixture home/") else path.lstrip("/")
+        resolved = (self.root / relative).resolve()
+        assert resolved.is_relative_to(self.root)
+        return resolved
+
+    def stat(self, path):
+        try:
+            return paramiko.SFTPAttributes.from_stat(self.local(path).stat())
+        except FileNotFoundError:
+            return paramiko.SFTP_NO_SUCH_FILE
+
+    lstat = stat
+
+    def mkdir(self, path, attr):
+        self.local(path).mkdir()
+        return paramiko.SFTP_OK
+
+    def chattr(self, path, attr):
+        if attr.st_mode is not None:
+            self.local(path).chmod(attr.st_mode)
+        return paramiko.SFTP_OK
+
+    def open(self, path, flags, attr):
+        descriptor = os.open(self.local(path), flags | getattr(os, "O_BINARY", 0), 0o600)
+        handle = paramiko.SFTPHandle(flags)
+        handle.writefile = os.fdopen(descriptor, "wb")
+        return handle
+
+    def rename(self, oldpath, newpath):
+        self.local(oldpath).rename(self.local(newpath))
+        return paramiko.SFTP_OK
+
+
+def exercise_upload(app, root, host_key):
+    remote = root / "remote-files"
+    remote.mkdir()
+    source = root / "中文 log.txt"
+    source.write_text("synthetic clipboard file 写入\n", encoding="utf-8")
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(1)
+    listener.settimeout(10)
+    port = listener.getsockname()[1]
+    server = Server(None)
+
+    def serve():
+        client, _ = listener.accept()
+        with paramiko.Transport(client) as transport:
+            transport.add_server_key(host_key)
+            transport.set_subsystem_handler("sftp", paramiko.SFTPServer, FixtureSFTP, remote)
+            transport.start_server(server=server)
+            deadline = time.monotonic() + 20
+            while transport.is_active() and time.monotonic() < deadline:
+                time.sleep(.02)
+
+    worker = threading.Thread(target=serve, daemon=True)
+    worker.start()
+    known = root / "sftp_known_hosts"
+    known.write_text(f"[127.0.0.1]:{port} {host_key.get_name()} {host_key.get_base64()}\n", encoding="utf-8")
+    connection = Connection.from_fields("127.0.0.1", "fixture", port)
+    options = Connection.options
+
+    def isolated_hosts(value, **kwargs):
+        return options(value, **kwargs) + ["-o", f'UserKnownHostsFile="{known.as_posix()}"', "-o", "GlobalKnownHostsFile=none"]
+
+    secret = read_password(PASSWORD)
+    login = PasswordSession(connection, secret, lambda value: False)
+    transfer = SSHTransfer(connection, login.start(environment()), prefilled=True)
+    processes = []
+    popen = subprocess.Popen
+
+    def capture(*args, **kwargs):
+        # Test diagnostics only. This fixture has public synthetic credentials.
+        kwargs["stderr"] = subprocess.PIPE
+        process = popen(*args, **kwargs)
+        communicate = process.communicate
+
+        def report(*values, **options):
+            output, error = communicate(*values, **options)
+            processes.append((process.returncode, (output or b"")[-1000:], (error or b"")[-1000:]))
+            return output, error
+
+        process.communicate = report
+        return process
+
+    try:
+        with patch.object(Connection, "options", isolated_hosts), patch("enge_spx.ssh_transfer.subprocess.Popen", capture), \
+                ThreadPoolExecutor(max_workers=1) as executor:
+            pending = executor.submit(transfer.upload, Snapshot("files", (str(source),)))
+            deadline = time.monotonic() + 20
+            while not pending.done() and time.monotonic() < deadline:
+                app.processEvents()
+                time.sleep(.005)
+            if not pending.done():
+                transfer.close()
+                raise AssertionError("Native SFTP did not finish")
+            try:
+                paths = pending.result()
+            except Exception as error:
+                diagnostics = repr(processes).replace(PASSWORD, "[fixture]")
+                raise AssertionError(f"Native SFTP failed. Authenticated: {server.auth}. Output: {diagnostics}") from error
+        uploaded, = remote.glob("*/*")
+        assert uploaded.read_bytes() == source.read_bytes()
+        assert paths == f"'/fixture home/{uploaded.parent.name}/{uploaded.name}'"
+        assert not uploaded.parent.name.endswith(".part") and server.auth == "password"
+        print("PASS authenticated native SFTP and exact remote clipboard file bytes", flush=True)
+    finally:
+        transfer.close()
+        login.close()
         listener.close()
         worker.join(2)
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--helper", type=Path, help="Frozen Windows spx.exe for the native askpass tests")
+    args = parser.parse_args()
     ssh = executable()
     probe = subprocess.run([ssh, "-V"], env=environment(), capture_output=True, timeout=8)
     assert probe.returncode == 0 and b"OpenSSH" in probe.stdout + probe.stderr, (
         f"OpenSSH did not start with the session environment (exit {probe.returncode})"
     )
+    print((probe.stdout + probe.stderr).decode("ascii", errors="replace").strip(), flush=True)
     app = QApplication([])
     host_key = paramiko.RSAKey.generate(2048)
     with tempfile.TemporaryDirectory(prefix="spx-ssh-loopback-") as folder:
@@ -148,6 +313,11 @@ def main():
         kind, encoded, *_ = key.with_suffix(".ed25519.pub").read_text().split()
         public_key = paramiko.PKey.from_type_string(kind, base64.b64decode(encoded))
         exercise(app, root, host_key, key, public_key)
+        if args.helper is not None or os.name != "nt":
+            with patch("enge_spx.ssh_askpass.packaged_helper", return_value=args.helper.resolve(strict=True) if args.helper else None):
+                exercise(app, root, host_key, prefilled=True)
+                exercise(app, root, host_key, key, public_key, prefilled=True)
+                exercise_upload(app, root, host_key)
 
 
 if __name__ == "__main__":

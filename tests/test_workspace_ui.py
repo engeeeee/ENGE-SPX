@@ -131,9 +131,22 @@ class WorkspaceUITests(unittest.TestCase):
         self.assertEqual(ssh_machines.load(Store(self.store.home))[saved.id], saved)
         self.window.show_page("overview")
         self.window.nav["ssh"].click()
-        with patch.object(self.window, "launch_ssh") as launch:
+        def connect(dialog):
+            self.assertEqual(dialog.host.text(), "ssh.example.invalid")
+            self.assertEqual(dialog.username.text(), "operator")
+            self.assertEqual(dialog.password.echoMode(), dialog.password.EchoMode.Password)
+            dialog.password.setText("fixture-only")
+            dialog.accept()
+            self.assertEqual(dialog.password.text(), "")
+            return dialog.result()
+
+        with patch.object(self.window, "launch_ssh") as launch, \
+                patch("enge_spx.ssh_askpass.password_available", return_value=True), \
+                patch("enge_spx.ui.ssh_dialog.SSHDialog.exec", connect):
             page.list.itemDoubleClicked.emit(page.list.currentItem())
-            launch.assert_called_once_with(saved.connection, "开发机 · operator@ssh.example.invalid:2200")
+            launch.assert_called_once_with(saved.connection, "开发机 · operator@ssh.example.invalid:2200",
+                                           password=bytearray(b"fixture-only"))
+        self.assertNotIn("fixture-only", (self.store.home / ssh_machines.FILE).read_text(encoding="utf-8"))
 
         def edit(dialog):
             self.assertEqual(dialog.host.text(), "ssh.example.invalid")

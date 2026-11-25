@@ -51,6 +51,7 @@ def main():
                 engine.install_prebuilt(lambda value: stages.append(value["stage"]))
             assert engine.image_ids() == resolved
             assert all(stage in stages for stage in ("manifest", "download", "verify", "import", "done"))
+            assert not (store.home / "cache" / meta["filename"]).exists(), "Imported archive was retained"
             # Repeat installation must use verified local images without any network.
             with patch.object(downloads, "client", side_effect=AssertionError("Unexpected repeat download")):
                 engine.install_prebuilt()

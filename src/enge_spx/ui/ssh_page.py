@@ -113,9 +113,7 @@ class SSHPage(Page):
     def connect_selected(self):
         machine = self.selected()
         if machine is not None:
-            connection = machine.connection
-            title = f"{machine.name} · {connection.label}" if machine.name else connection.label
-            self.window_owner.launch_ssh(connection, title)
+            self.window_owner.open_ssh(machine=machine)
 
     def remove_selected(self):
         machine = self.selected()
