@@ -18,6 +18,7 @@ from unittest.mock import patch
 import paramiko
 from PySide6.QtCore import QPoint, QPointF, Qt
 from PySide6.QtGui import QWheelEvent
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 from enge_spx.smart_terminal import TerminalWindow
@@ -41,6 +42,7 @@ def exercise_transcript(app, root, host_key):
     server = Server(None)
     sent = threading.Event()
     finish = threading.Event()
+    close_transcript = threading.Event()
     errors = []
     received = []
 
@@ -57,11 +59,20 @@ def exercise_transcript(app, root, host_key):
                 for row in range(160):
                     channel.sendall(f"\r\n\x1b[Kcodex-transcript-{row:03d}".encode())
                 channel.sendall(b"\x1b[r\x1b[11;1Hinline-finished")
+                channel.settimeout(8)
+                assert channel.recv(4096) == b"\t"
                 assert finish.wait(10)
                 channel.sendall(b"\x1b[?1049h\x1b[?1000;1006h\x1b[Hfull-screen-current")
-                channel.settimeout(8)
-                received.append(channel.recv(4096))
-                channel.sendall(b"\x1b[2J\x1b[Hfull-screen-earlier\x1b[?1000;1006l\x1b[?1049l")
+                packet = channel.recv(4096)
+                while len(packet) < 32 and not packet.endswith(b"M"):
+                    more = channel.recv(32)
+                    if not more:
+                        break
+                    packet += more
+                received.append(packet)
+                channel.sendall(b"\x1b[2J\x1b[Hfull-screen-earlier")
+                assert close_transcript.wait(10)
+                channel.sendall(b"\x1b[?1000;1006l\x1b[?1049l")
                 channel.send_exit_status(0)
                 channel.shutdown_write()
         except Exception as error:
@@ -95,6 +106,8 @@ def exercise_transcript(app, root, host_key):
         wait(lambda: "password:" in rows_text(view.rows()).casefold())
         view.sender.put("keys", PASSWORD.encode() + b"\r")
         wait(server.shell.is_set)
+        window.resize(window.width() - 100, window.height() - 100)
+        wait(lambda: server.size is not None and server.size == (view.screen.columns, view.screen.lines))
         sent.set()
         wait(lambda: "inline-finished" in rows_text(view.rows()))
         history = rows_text(view.screen.history.top)
@@ -106,6 +119,7 @@ def exercise_transcript(app, root, host_key):
         view.scrollbar.setValue(view.scrollbar.minimum())
         assert "codex-transcript-000" in rows_text(view.rows())
         view.scrollbar.setValue(view.scrollbar.maximum())
+        QTest.keyClick(view, Qt.Key.Key_Tab)
         finish.set()
         wait(lambda: "full-screen-current" in rows_text(view.rows()))
         position = QPointF(view.PAD_X + 20, view.PAD_Y + 20)
@@ -113,14 +127,16 @@ def exercise_transcript(app, root, host_key):
                             QPoint(), QPoint(0, 120), Qt.MouseButton.NoButton,
                             Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, False)
         QApplication.sendEvent(view, event)
-        wait(lambda: bool(received))
+        wait(lambda: "full-screen-earlier" in rows_text(view.rows()))
         assert received[0].startswith(b"\x1b[<64;"), "SSH did not pass the wheel to fullscreen Codex"
+        close_transcript.set()
         wait(lambda: view.output_drained)
         assert "codex-transcript-000" in rows_text(view.screen.history.top)
         assert not errors
         print("PASS SSH keeps Codex inline transcript and forwards fullscreen mouse wheel", flush=True)
     finally:
         finish.set()
+        close_transcript.set()
         window.close()
         view.reader.join(3)
         listener.close()
@@ -132,6 +148,7 @@ class Server(paramiko.ServerInterface):
         self.public_key = public_key
         self.shell = threading.Event()
         self.auth = None
+        self.size = None
 
     def get_allowed_auths(self, username):
         return "publickey" if self.public_key else "password"
@@ -154,6 +171,10 @@ class Server(paramiko.ServerInterface):
         return paramiko.OPEN_FAILED_ADMINISTRATIVELY_PROHIBITED
 
     def check_channel_pty_request(self, *unused):
+        return True
+
+    def check_channel_window_change_request(self, channel, width, height, pixel_width, pixel_height):
+        self.size = width, height
         return True
 
     def check_channel_shell_request(self, channel):

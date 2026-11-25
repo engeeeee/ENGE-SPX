@@ -1,4 +1,4 @@
-name: SSH raw VT compatibility
+name: SSH Windows authentication and scrolling
 
 on:
   push:
@@ -14,7 +14,7 @@ jobs:
       matrix:
         os: [windows-2022, windows-2025]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 9
+    timeout-minutes: 12
     env:
       PYTHONPATH: src
     steps:
@@ -22,5 +22,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install -r requirements.txt paramiko==4.0.0
+      - run: python -m pip install -r requirements-build.txt paramiko==4.0.0
       - run: python -u tests/integration_ssh_terminal.py --transcript-only
+      - name: Native Windows DPAPI for saved SSH credentials
+        env:
+          PYTHONPATH: src;tests
+        run: python -m unittest -v test_ssh_client
+      - name: Freeze the Windows OpenSSH credential helper
+        run: python -m PyInstaller --noconfirm --clean --distpath dist --workpath build packaging/windows/SPX.spec
+      - name: OpenSSH login, transcript, input, and SFTP
+        run: python -u tests/integration_ssh_terminal.py --helper dist/ENGE-SPX/spx.exe
