@@ -116,7 +116,7 @@ class _PROCESSINFO(ctypes.Structure):
 
 
 class WindowsPTY:
-    def __init__(self, command, env, cwd, columns=110, rows=32):
+    def __init__(self, command, env, cwd, columns=110, rows=32, *, raw_output=False):
         if os.name != "nt":
             raise SPXError("ConPTY 需要 Windows 10 1809 或更新版本。")
         self.api = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -161,15 +161,29 @@ class WindowsPTY:
             if api.CreatePseudoConsole(_COORD(columns, rows), ir, ow, 0, ctypes.byref(pc)) < 0:
                 raise OSError("pseudoconsole")
             self.console = pc
+            output = w.HANDLE()
+            if raw_output:
+                # The SSH client already receives VT over the network. Let its
+                # standard output reach the renderer without a second conhost
+                # render. Keep the attached console for login and window size.
+                current = api.GetCurrentProcess()
+                if not api.DuplicateHandle(current, ow, current, ctypes.byref(output), 0, True, 2):
+                    raise OSError("SSH output pipe")
+                held.append(output)
+            attribute_count = 2 if raw_output else 1
             size = ctypes.c_size_t()
-            api.InitializeProcThreadAttributeList(None, 1, 0, ctypes.byref(size))
+            api.InitializeProcThreadAttributeList(None, attribute_count, 0, ctypes.byref(size))
             buffer = ctypes.create_string_buffer(size.value)
             attributes = ctypes.cast(buffer, ctypes.c_void_p)
-            if not api.InitializeProcThreadAttributeList(attributes, 1, 0, ctypes.byref(size)):
+            if not api.InitializeProcThreadAttributeList(attributes, attribute_count, 0, ctypes.byref(size)):
                 attributes = None
                 raise OSError("attributes")
             if not api.UpdateProcThreadAttribute(attributes, 0, 0x00020016, pc, ctypes.sizeof(w.HANDLE), None, None):
                 raise OSError("attributes")
+            if raw_output:
+                handles = (w.HANDLE * 1)(output)
+                if not api.UpdateProcThreadAttribute(attributes, 0, 0x00020002, handles, ctypes.sizeof(handles), None, None):
+                    raise OSError("SSH output handle list")
             startup, info = _STARTUPINFOEX(), _PROCESSINFO()
             startup.StartupInfo.cb = ctypes.sizeof(startup)
             # Match Windows Terminal's launcher. Without this, a parent whose
@@ -177,12 +191,15 @@ class WindowsPTY:
             # handles duplicated into the child instead of ConPTY handles.
             # Null standard handles are recreated for the attached console.
             startup.StartupInfo.dwFlags = 0x00000100  # STARTF_USESTDHANDLES
+            if raw_output:
+                startup.StartupInfo.hStdOutput = output
+                startup.StartupInfo.hStdError = output
             startup.lpAttributeList = attributes
             env_text = "\0".join(key + "=" + value for key, value in sorted(env.items(), key=lambda pair: pair[0].casefold())) + "\0\0"
             block = ctypes.create_unicode_buffer(env_text, len(env_text.encode("utf-16-le")) // 2 + 1)
             cmd_text = subprocess.list2cmdline(command)
             commandline = ctypes.create_unicode_buffer(cmd_text, len(cmd_text.encode("utf-16-le")) // 2 + 1)
-            if not api.CreateProcessW(command[0], commandline, None, None, False, 0x00080000 | 0x00000400, block, str(cwd), ctypes.byref(startup), ctypes.byref(info)):
+            if not api.CreateProcessW(command[0], commandline, None, None, raw_output, 0x00080000 | 0x00000400, block, str(cwd), ctypes.byref(startup), ctypes.byref(info)):
                 raise OSError("process")
             api.CloseHandle(info.hThread)
             self.process = info.hProcess
@@ -317,5 +334,7 @@ class PosixPTY:
             os.close(self.master)
 
 
-def start(command, env, cwd, columns=110, rows=32):
-    return (WindowsPTY if os.name == "nt" else PosixPTY)(command, env, cwd, columns, rows)
+def start(command, env, cwd, columns=110, rows=32, *, raw_output=False):
+    if os.name == "nt":
+        return WindowsPTY(command, env, cwd, columns, rows, raw_output=raw_output)
+    return PosixPTY(command, env, cwd, columns, rows)

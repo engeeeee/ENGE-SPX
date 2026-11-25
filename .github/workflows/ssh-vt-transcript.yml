@@ -1,4 +1,4 @@
-name: SSH VT transcript baseline
+name: SSH raw VT compatibility
 
 on:
   push:
