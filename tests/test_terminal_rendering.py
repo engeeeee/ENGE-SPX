@@ -9,6 +9,7 @@ if os.name != 'nt':
     os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QColor, QImage
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 from enge_spx.smart_terminal import TerminalView
 from enge_spx.terminal_preferences import DEFAULTS
@@ -234,28 +235,36 @@ class TerminalRenderingTests(unittest.TestCase):
         self.view.close()
         self.view.reader.join(2)
         self.pty = FixturePTY()
-        self.view = view = TerminalView(self.pty, tool="antigravity")
+        # A manually started AGY runs inside a normal SSH terminal.
+        self.view = view = TerminalView(self.pty, tool="ssh")
         view.resize(1000, 620)
         view.show()
         self.app.processEvents()
-        view.stream.feed("Current AGY input")
+        view.stream.feed(f"\x1b[{view.screen.lines - 1};1HCurrent AGY input")
         self.image()
         resize_count = len(self.pty.resizes)
         for width in (940, 880, 1050):
             view.resize(width, 580)
         self.assertEqual(len(self.pty.resizes), resize_count)
-        self.pump(lambda: len(self.pty.resizes) == resize_count + 1)
-        self.assertEqual(self.pty.resizes[-1], (view.screen.columns, view.screen.lines))
-
         def displayed():
             self.image()
             return "".join(char.data for record in view.surface_rows if record for char in record[0])
 
-        self.pty.queue.put(b"\x1b[?2026h\x1b[2J\x1b[HFirst conversation row\x1b[?2026l")
+        self.assertIn("Current AGY input", displayed())
+        self.pump(lambda: len(self.pty.resizes) == resize_count + 1)
+        self.assertEqual(self.pty.resizes[-1], (view.screen.columns, view.screen.lines))
+        # Trace shape from real AGY. The first complete frame hides the cursor
+        # and clears its old prompt, then a second frame redraws the transcript.
+        self.pty.queue.put(b"\x1b[?2026h\x1b[?25l\x1b[2J\x1b[?2026l")
+        self.pump(lambda: view.screen.cursor.hidden)
+        QTest.qWait(180)
+        self.assertIn("Current AGY input", displayed())
+        self.pty.queue.put(b"\x1b[2J\x1b[3J\x1b[H\x1b[?2026hFirst conversation row")
         self.pump(lambda: "First conversation row" in view.screen.display[0])
+        QTest.qWait(450)
         self.assertIn("Current AGY input", displayed())
         self.assertNotIn("First conversation row", displayed())
-        self.pty.queue.put(b"\x1b[2J\x1b[HLatest AGY input")
+        self.pty.queue.put(b"\x1b[2J\x1b[HLatest AGY input\x1b[?25h\x1b[?2026l")
         self.pump(lambda: "Latest AGY input" in displayed())
         self.assertEqual(len(self.pty.resizes), resize_count + 1)
 

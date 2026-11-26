@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from enge_spx import ssh_machines
 from enge_spx.credentials import CredentialCodec
-from enge_spx.ssh_client import Connection, environment
+from enge_spx.ssh_client import Connection, environment, retryable_disconnect
 from enge_spx.state import SPXError, Store
 from test_credentials import MemoryProtector
 
@@ -22,6 +22,32 @@ class SSHClientTests(unittest.TestCase):
         self.assertIn("StrictHostKeyChecking=ask", command)
         self.assertIn("PreferredAuthentications=password,keyboard-interactive", command)
         self.assertIn("PubkeyAuthentication=no", command)
+
+    @patch("enge_spx.ssh_client.executable", return_value="system-ssh")
+    def test_reconnect_requires_known_host_and_uses_shorter_keepalive(self, _executable):
+        connection = Connection.from_fields("localhost", "operator", 22)
+        command = connection.command(reconnect=True, prefilled_password=True)
+        self.assertIn("StrictHostKeyChecking=yes", command)
+        self.assertIn("ServerAliveInterval=10", command)
+        self.assertIn("ServerAliveCountMax=2", command)
+        self.assertIn("NumberOfPasswordPrompts=1", command)
+        self.assertNotIn("StrictHostKeyChecking=ask", command)
+
+    def test_only_transport_errors_are_retried(self):
+        errors = (
+            b"client_loop: send disconnect: Broken pipe",
+            b"Timeout, server 127.0.0.1 not responding.",
+            b"fixture@server:~$ Connection closed by 127.0.0.1 port 22",
+            b"current-draftConnection to 127.0.0.1 closed by remote host.\r\n",
+            b"\x1b[31mssh: connect to host localhost port 22: Connection refused\x1b[0m\r\n",
+            b"ssh: Could not resolve hostname localhost: Temporary failure in name resolution",
+        )
+        for error in errors:
+            self.assertTrue(retryable_disconnect(255, error), error)
+        self.assertFalse(retryable_disconnect(0, b"Connection to 127.0.0.1 closed."))
+        self.assertFalse(retryable_disconnect(255, b"Host key verification failed."))
+        self.assertFalse(retryable_disconnect(255, b"fixture@localhost: Permission denied (password)."))
+        self.assertFalse(retryable_disconnect(255, b"ssh: Bad configuration option: connect"))
 
     @patch("enge_spx.ssh_client.executable", return_value="system-ssh")
     def test_private_key_uses_selected_path_without_other_identities(self, _executable):

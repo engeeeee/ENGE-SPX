@@ -16,12 +16,12 @@ spec.loader.exec_module(agy)
 
 
 class AntigravityTests(unittest.TestCase):
-    def test_smart_terminal_uses_session_only_native_rendering(self):
-        args = command(['agy'], smart_terminal=True, keep_open=True)
+    def test_interactive_agy_uses_session_only_native_rendering(self):
+        args = command(['agy'], antigravity_fullscreen=True, keep_open=True)
         self.assertEqual(args[-2], '--settings')
         self.assertEqual(json.loads(args[-1]), {'altScreenMode': 'always'})
         self.assertNotIn('--settings', command(['agy'], keep_open=True))
-        self.assertEqual(command(['agy', '--spx-update'], smart_terminal=True)[-1], '--spx-update')
+        self.assertEqual(command(['agy', '--spx-update'], antigravity_fullscreen=True)[-1], '--spx-update')
 
     def test_verified_source_and_literal_arguments(self):
         url = 'https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.14-5302690847260672/linux-x64/cli_linux_x64.tar.gz'

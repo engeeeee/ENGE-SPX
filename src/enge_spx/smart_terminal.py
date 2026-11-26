@@ -98,6 +98,19 @@ class TerminalScreen(pyte.HistoryScreen):
             self.history.top.extend(copy(self.buffer[index]) for index in range(self.lines - lines))
         super().resize(lines, columns)
 
+    def archive(self, history):
+        def append_screen(buffer, lines):
+            last = max((y for y, row in buffer.items() if y < lines and any(cell.data.strip() for cell in row.values())),
+                       default=-1)
+            history.extend(copy(buffer[y]) for y in range(last + 1))
+
+        if self.primary is not None:
+            buffer, _, primary_history, _ = self.primary
+            history.extend(primary_history.top)
+            append_screen(buffer, self.primary_size[0])
+        history.extend(self.history.top)
+        append_screen(self.buffer, self.lines)
+
     def draw(self, data):
         # pyte's history dispatcher intercepts every attribute access. Bulk
         # ordinary in-row ASCII writes avoid doing that for every character;
@@ -517,9 +530,10 @@ class TerminalView(QWidget):
     option_changed = Signal(str, object)
     quick_input_requested = Signal()
     PAD_X, PAD_Y = 16, 12
-    AGY_RESIZE_DELAY_MS = 75
-    AGY_REDRAW_QUIET = .065
-    AGY_REDRAW_LIMIT = .40
+    RESIZE_DELAY_MS = 75
+    RESIZE_RESPONSE_TIMEOUT = .8
+    RESIZE_REPLAY_IDLE = 1.2
+    RESIZE_REPLAY_LIMIT = 8
 
     def __init__(self, pty, transfer=None, clipboard=None, tool=None):
         super().__init__()
@@ -532,7 +546,8 @@ class TerminalView(QWidget):
         self.tool = tool or getattr(transfer, 'tool', None)
         self.resize_timer = None
         self.resize_redraw_started = None
-        if self.tool == "antigravity":
+        self.resize_snapshot = None
+        if self.tool in ("antigravity", "ssh", "shell"):
             self.resize_timer = QTimer(self)
             self.resize_timer.setSingleShot(True)
             self.resize_timer.timeout.connect(lambda: self._resize_grid(settled=True))
@@ -549,6 +564,7 @@ class TerminalView(QWidget):
         self.decoder = codecs.getincrementaldecoder("utf-8")("replace")
         self.output = queue.Queue(maxsize=64)
         self.pending = threading.Event()
+        self.ssh_output_tail = bytearray() if self.tool == "ssh" else None
         self.output_finished = False
         self.output_drained = False
         self.line_text = []
@@ -643,14 +659,14 @@ class TerminalView(QWidget):
 
     def flush_frame(self):
         if self.completed_generation == self.presented_generation and self._frame_blocked():
-            self.frame_timer.start(8)
+            self.frame_timer.start(25 if self.resize_snapshot is not None else 8)
             return
         region, self.frame_region = self.frame_region, QRegion()
         if not region.isEmpty():
             self.update(region)
 
     def _capture_frame(self):
-        if self.resize_redraw_started is not None:
+        if self.resize_snapshot is not None:
             return
         # Retain the newest complete VT frame, even if another begins in the
         # same pipe read. Never wait for a continuously busy pipe to go idle.
@@ -665,15 +681,25 @@ class TerminalView(QWidget):
 
     def _frame_blocked(self):
         now = time.monotonic()
-        if self.resize_redraw_started is not None:
-            started = self.resize_redraw_started
-            # AGY clears and replays the viewport after SIGWINCH. Publish the
-            # resulting screen once the replay settles, including split reads.
-            if (not self.output_finished and now - started < self.AGY_REDRAW_LIMIT
-                    and (now - max(started, self.last_output) < self.AGY_REDRAW_QUIET
-                         or not self.output.empty() or self.stream.pending)):
+        if self.resize_snapshot is not None:
+            if self.resize_timer.isActive() and not self.output_finished:
                 return True
-            self.resize_redraw_started = None
+            started = self.resize_redraw_started
+            if started is not None and not self.output_finished:
+                # Inline AGY ends a synchronized cursor-hide frame before
+                # clearing and replaying history in a second frame. SSH can
+                # split those frames across reads with much longer gaps.
+                synchronized = self.stream.synchronized_at is not None
+                replaying = synchronized or self.stream.pending or not self.output.empty()
+                replaying = replaying or self.screen.cursor.hidden and not self.resize_snapshot[1][2]
+                idle_limit = (self.RESIZE_REPLAY_IDLE if replaying else
+                              self.RESIZE_RESPONSE_TIMEOUT if self.last_output <= started else .065)
+                # A long synchronized replay may outlive the fallback
+                # deadline, as long as bytes continue arriving.
+                if ((synchronized or now - started < self.RESIZE_REPLAY_LIMIT)
+                        and now - max(started, self.last_output) < idle_limit):
+                    return True
+            self._finish_resize()
         if self.stream.synchronized_at is not None:
             if now - self.stream.synchronized_at < .15 and not self.output_finished:
                 return True
@@ -706,6 +732,9 @@ class TerminalView(QWidget):
                 data = self.output.get_nowait()
             except queue.Empty:
                 break
+            if self.ssh_output_tail is not None:
+                self.ssh_output_tail.extend(data)
+                del self.ssh_output_tail[:-8192]
             self.stream.feed(self.decoder.decode(data))
             changed = True
             self.last_output = time.monotonic()
@@ -752,16 +781,8 @@ class TerminalView(QWidget):
                                  QRectF(self.PAD_X + x * self.cell_width - 1, self.PAD_Y + y * self.cell_height - 1, self.cell_width + 2, self.cell_height + 2))
                     region |= QRegion(rectangle.toAlignedRect())
             self.schedule_frame(region)
-        maximum = max(0, len(self.selection_lines) - self.screen.lines) if self.selection_lines is not None else len(self.screen.history.top)
-        if self.scrollbar.maximum() != maximum:
-            self.scrollbar.setRange(0, maximum)
-        if self.offset == 0:
-            self.scrollbar.setValue(self.scrollbar.maximum())
-        # A full-screen application owns its transcript and its scroll range.
-        # The host's small screen cache is not that application's scrollbar.
-        visible = not (self.screen.mouse and self.screen.primary is not None and self.offset == 0)
-        if self.scrollbar.isHidden() == visible:
-            self.scrollbar.setVisible(visible)
+        if self.resize_snapshot is None:
+            self._sync_scrollbar()
         if changed:
             self.refresh_inline()
             if self.preedit or before != (self.screen.cursor.x, self.screen.cursor.y):
@@ -778,6 +799,17 @@ class TerminalView(QWidget):
             if not self.output.empty() and not self.pending.is_set():
                 self.pending.set()
                 self.wake.emit()
+
+    def _sync_scrollbar(self):
+        maximum = max(0, len(self.selection_lines) - self.screen.lines) if self.selection_lines is not None else len(self.screen.history.top)
+        if self.scrollbar.maximum() != maximum:
+            self.scrollbar.setRange(0, maximum)
+        if self.offset == 0:
+            self.scrollbar.setValue(maximum)
+        # A full-screen application owns its transcript and its scroll range.
+        visible = not (self.screen.mouse and self.screen.primary is not None and self.offset == 0)
+        if self.scrollbar.isHidden() == visible:
+            self.scrollbar.setVisible(visible)
 
     def _blink(self):
         if self.hasFocus() and self.isVisible():
@@ -963,20 +995,30 @@ class TerminalView(QWidget):
 
     def _compose_surface(self):
         self._check_render_environment()
-        completed = self.completed_generation != self.presented_generation and self.selection_lines is None and not self.offset
+        completed = (self.resize_snapshot is None and self.completed_generation != self.presented_generation
+                     and self.selection_lines is None and not self.offset)
         blocked = not completed and self._frame_blocked()
+        resize = self.resize_snapshot if blocked else None
+        columns, lines = self._grid_size() if resize else (self.screen.columns, self.screen.lines)
         dpr = self.devicePixelRatioF()
-        signature = (self.width(), self.height(), self.screen.columns, self.screen.lines,
+        signature = (self.width(), self.height(), columns, lines, resize is not None,
                      self.render_environment, id(self.row_painter), self.background.rgba(),
                      self.selection if self.has_selection else None, id(self.selection_lines))
         complete = signature != self.surface_signature
         stable = self.surface_rows if blocked and not self.surface.isNull() else None
+        if resize:
+            saved_rows, (x, y, hidden), _ = resize
+            # Keep the live prompt visible when the frozen viewport gets
+            # shorter. When browsing history, keep its top row in view.
+            first_row = min(y, max(0, len(saved_rows) - lines)) if not self.offset else 0
+            stable = saved_rows[first_row:]
+            self.presented_cursor = x, y - first_row, hidden or x >= columns or y - first_row >= lines
         if blocked and stable and not complete:
             if not self.frame_timer.isActive():
                 self.frame_region |= QRegion(self.rect())
-                self.frame_timer.start(8)
+                self.frame_timer.start(25 if resize else 8)
             return
-        dirty = set(range(self.screen.lines)) if completed else self.surface_dirty | self.screen.dirty
+        dirty = set(range(lines)) if completed else self.surface_dirty | self.screen.dirty
         if self.offset != self.surface_offset:
             exposed = None
             if self.tool == "ssh" and not (complete or blocked or dirty):
@@ -1002,12 +1044,12 @@ class TerminalView(QWidget):
             self.surface.setDotsPerMeterX(round(self.logicalDpiX() / .0254))
             self.surface.setDotsPerMeterY(round(self.logicalDpiY() / .0254))
             self.surface.fill(self.background)
-            dirty = set(range(self.screen.lines))
-            self.surface_rows = [None] * self.screen.lines
+            dirty = set(range(lines))
+            self.surface_rows = [None] * lines
         p = QPainter(self.surface)
         selected = sorted(self.selection) if self.has_selection else None
         first = self.selection_start()
-        blank = self.presented_blank if stable else self.completed_frame[2] if completed else self.screen.default_char
+        blank = resize[2] if resize else self.presented_blank if stable else self.completed_frame[2] if completed else self.screen.default_char
         rows = stable if stable else self.completed_frame[0] if completed else self.rows()
         composer = None
         if not stable:
@@ -1019,7 +1061,7 @@ class TerminalView(QWidget):
                     if band:
                         dirty.update(range(band[0], band[1] + 1))
                 self.painted_composer = composer
-        for y in range(self.screen.lines):
+        for y in range(lines):
             if y not in dirty:
                 continue
             span = None
@@ -1029,7 +1071,7 @@ class TerminalView(QWidget):
             if stable:
                 saved = rows[y] if y < len(rows) else None
                 cells, span = saved if saved is not None else ((), None)
-                cells = cells[:self.screen.columns] + (blank,) * max(0, self.screen.columns - len(cells))
+                cells = cells[:columns] + (blank,) * max(0, columns - len(cells))
             else:
                 line = rows[y] if y < len(rows) else {}
                 cells = tuple(line.get(x, blank) for x in range(self.screen.columns))
@@ -1051,7 +1093,7 @@ class TerminalView(QWidget):
             # Re-rasterize the last committed cells at the new device scale or
             # geometry, rather than stretching an obsolete bitmap while held.
             self.frame_region |= QRegion(self.rect())
-            self.frame_timer.start(8)
+            self.frame_timer.start(25 if resize else 8)
             return
         self.presented_blank = blank
         self.surface_offset = self.offset
@@ -1126,27 +1168,39 @@ class TerminalView(QWidget):
         self._resize_grid()
         self.update_input_method()
 
-    def _resize_grid(self, *, settled=False):
-        self.scrollbar.setGeometry(self.width() - 12, 4, 10, self.height() - 8)
+    def _grid_size(self):
         columns = max(20, int((self.width() - 12 - 2 * self.PAD_X) / self.cell_width))
         rows = max(5, int((self.height() - 2 * self.PAD_Y) / self.cell_height))
+        return columns, rows
+
+    def _finish_resize(self):
+        self.resize_redraw_started = self.resize_snapshot = None
+        self._sync_scrollbar()
+        self.frame_region |= QRegion(self.rect())
+
+    def _resize_grid(self, *, settled=False):
+        self.scrollbar.setGeometry(self.width() - 12, 4, 10, self.height() - 8)
+        columns, rows = self._grid_size()
         if (self.screen.columns, self.screen.lines) == (columns, rows):
             if self.resize_timer is not None:
                 self.resize_timer.stop()
+                if self.resize_snapshot is not None and self.resize_redraw_started is None:
+                    self._finish_resize()
+                    self.update()
             self.update_input_method()
             return
-        if self.resize_timer is not None and not self.stopping.is_set() and not self.surface.isNull():
+        if self.resize_timer is not None and not self.stopping.is_set() and self.surface_rows:
+            if self.resize_snapshot is None:
+                self.resize_snapshot = tuple(self.surface_rows), self.presented_cursor, self.presented_blank
+                self.presented_generation = self.completed_generation
             if not settled:
-                self.resize_timer.start(self.AGY_RESIZE_DELAY_MS)
+                self.resize_timer.start(self.RESIZE_DELAY_MS)
                 return
             self.resize_redraw_started = time.monotonic()
         self.clear_inline()
         self.screen.resize(lines=rows, columns=columns)
-        if self.tool == "ssh":
-            live = self.offset == 0
-            self.scrollbar.setRange(0, len(self.screen.history.top))
-            if live:
-                self.scrollbar.setValue(self.scrollbar.maximum())
+        if self.resize_snapshot is None and self.tool == "ssh":
+            self._sync_scrollbar()
         self.completed_frame = None
         self.presented_generation = self.completed_generation
         if not self.stopping.is_set():
@@ -1623,12 +1677,46 @@ class TerminalView(QWidget):
 
     def stop(self):
         self.stopping.set()
+        self.ready.clear()
         self.blink_timer.stop()
         self.frame_timer.stop()
         if self.resize_timer is not None:
             self.resize_timer.stop()
-        self.resize_redraw_started = None
+        self.resize_redraw_started = self.resize_snapshot = None
         self.sender.close(daemon=self.tool != "ssh")
+
+    def restart_ssh(self, pty, transfer):
+        # The old writer still owns its old PTY. Its queued keys and SFTP
+        # operations can never cross into this connection.
+        old = self.screen
+        self.clear_selection()
+        self.clear_inline()
+        self.pty = pty
+        self.ready = threading.Event()
+        self.sender = OrderedInput(pty, transfer, self.status.emit, self.ready, self.images, tool=self.tool)
+        columns, lines = self._grid_size()
+        self.screen = TerminalScreen(columns, lines, self.sender.respond, preserve_scrollback=True)
+        old.archive(self.screen.history.top)
+        self.screen.terminal_background = self.background.name()
+        self.screen.terminal_foreground = self.foreground.name()
+        self.screen.hyperlinks, self.screen.hyperlink_ids = old.hyperlinks, old.hyperlink_ids
+        self.screen.next_hyperlink = old.next_hyperlink
+        self.stream = TerminalStream(self.screen, self._capture_frame)
+        self.decoder.reset()
+        self.ssh_output_tail.clear()
+        self.output_finished = self.output_drained = False
+        self.pending.clear()
+        self.completed_frame = self.frame_started = self.draft_anchor = None
+        self.presented_generation = self.completed_generation
+        self.surface_signature = None
+        self.offset = 0
+        self._sync_scrollbar()
+        self.preedit = ""
+        self.stopping.clear()
+        self.blink_timer.start()
+        self.reader = threading.Thread(target=self._read, name="spx-terminal-output", daemon=True)
+        self.reader.start()
+        self.update()
 
 
 class TerminalResizeEdge(QWidget):
@@ -1646,14 +1734,22 @@ class TerminalResizeEdge(QWidget):
 
 class TerminalSession(QWidget):
     """The live PTY, draft and controls move together between window hosts."""
+    finished = Signal()
 
-    def __init__(self, pty, tool, project, preferences, transfer=None, clipboard=None, *, session_label=None):
+    def __init__(self, pty, tool, project, preferences, transfer=None, clipboard=None, *, session_label=None, reconnect=None):
         super().__init__()
         self.preferences = preferences
         self.icon_key = None
         self.sftp_dialog = None
         self.files_button = None
         self.is_ssh = tool == "ssh"
+        self.reconnect = reconnect
+        self.closed = False
+        self.reconnect_delay = 1
+        self.transport_started = time.monotonic()
+        self.reconnect_timer = QTimer(self)
+        self.reconnect_timer.setSingleShot(True)
+        self.reconnect_timer.timeout.connect(self._try_reconnect)
         self.tool_name = {"codex": "Codex", "claude": "Claude Code", "antigravity": "Antigravity",
                           "shell": "Linux 终端", "ssh": "SSH"}.get(tool, tool)
         name = session_label or project.name or str(project)
@@ -1774,20 +1870,76 @@ class TerminalSession(QWidget):
         self.sftp_dialog.destroyed.connect(lambda: setattr(self, "sftp_dialog", None))
         self.sftp_dialog.open_browser()
 
-    def stop(self):
+    def _close_sftp(self):
         if self.sftp_dialog is not None:
             self.sftp_dialog.close()
+
+    def stop(self):
+        if self.closed:
+            return
+        self.closed = True
+        self.reconnect_timer.stop()
+        self._close_sftp()
         self.view.stop()
+        if self.view.ssh_output_tail is not None:
+            self.view.ssh_output_tail.clear()
+        self.finished.emit()
 
     def connection_ended(self):
-        self.stop()
+        if self.closed:
+            return
         if self.files_button is not None:
             self.files_button.setEnabled(False)
         self.quick_input.setEnabled(False)
+        if self.reconnect is not None and self.view.pty.poll() is None:
+            # On POSIX an EOF can arrive just before the child exit status.
+            QTimer.singleShot(40, self, self._after_transport_exit)
+        else:
+            self._after_transport_exit()
+
+    def _after_transport_exit(self):
+        from .ssh_client import retryable_disconnect
+
+        if self.closed:
+            return
+        if self.reconnect is not None and retryable_disconnect(self.view.pty.poll(), self.view.ssh_output_tail):
+            self._close_sftp()
+            self.view.stop()
+            if time.monotonic() - self.transport_started >= 30:
+                self.reconnect_delay = 1
+            delay = self.reconnect_delay
+            self.reconnect_delay = min(30, delay * 2)
+            self.connection.setText("○  SSH 正在重连")
+            self._set_connection_state("waiting")
+            self.message.setText(f"SSH 网络连接中断，{delay} 秒后重试。关闭此会话可取消。")
+            self.reconnect_timer.start(delay * 1000)
+            return
+        self.stop()
         self.connection.setText("○  连接已结束")
         self._set_connection_state("ended")
         self.message.setText("SSH 连接已结束，可以关闭此窗口。" if self.is_ssh
                              else "终端连接已结束，可以关闭此会话。")
+
+    def _try_reconnect(self):
+        child = None
+        try:
+            child, transfer = self.reconnect(*self.view._grid_size())
+            self.view.restart_ssh(child, transfer)
+        except (OSError, SPXError) as error:
+            if child is not None:
+                child.close()
+            self.stop()
+            self.connection.setText("○  重连已停止")
+            self._set_connection_state("ended")
+            self.message.setText(str(error))
+            return
+        self.transport_started = time.monotonic()
+        self.quick_input.setEnabled(True)
+        if self.files_button is not None:
+            self.files_button.setEnabled(True)
+        self.connection.setText("●  SSH 会话")
+        self._set_connection_state("ready")
+        self.message.setText("已发起 SSH 重连。远端提示符出现后可继续输入。")
 
 
 class TerminalWindow(QMainWindow):

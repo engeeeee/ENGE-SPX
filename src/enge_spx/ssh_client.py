@@ -16,6 +16,28 @@ _ENVIRONMENT = {
     "HOMEDRIVE", "HOMEPATH", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "TMPDIR",
     "LANG", "LC_ALL", "LC_CTYPE",
 }
+_VT_CONTROL = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
+_SSH_DIAGNOSTIC = re.compile(
+    r"(?:ssh:|client_loop:|ssh_dispatch_run_fatal:|packet_write_wait:|kex_exchange_identification:|"
+    r"connection (?:to|closed by|reset by) |read from remote host |write to remote host |timeout, server )"
+)
+_NETWORK_END = re.compile(
+    r"timed out|network is (?:unreachable|down)|no route to host|host is down|broken pipe|"
+    r"connection (?:refused|reset|closed|aborted)|closed by remote host|reset by peer|"
+    r"software caused connection abort|could not resolve hostname|not responding",
+)
+
+
+def retryable_disconnect(status, output):
+    if status != 255:
+        return False
+    text = _VT_CONTROL.sub("", output.decode("utf-8", errors="replace")).lower()
+    if re.search(r"host key verification failed|remote host identification has changed|"
+                 r"permission denied(?:,| \()|authentication failed", text):
+        return False
+    # OpenSSH may print its error directly after an unsubmitted prompt.
+    return any(_NETWORK_END.search(line, origin.start()) for line in text.splitlines()
+               if (origin := _SSH_DIAGNOSTIC.search(line)))
 
 
 def normalize_host(host):
@@ -91,10 +113,13 @@ class Connection:
         host = f"[{self.host}]" if ":" in self.host else self.host
         return f"{self.username}@{host}:{self.port}"
 
-    def options(self, *, prefilled_password=False, strict="ask"):
+    def options(self, *, prefilled_password=False, strict="ask", interactive=False):
         identity = _key_path(self.identity, require_file=True)
+        connect_timeout = 10 if interactive and strict == "yes" else 15
+        interval, count = (10, 2) if interactive else (30, 3)
         args = ["-F", "none", "-o", "StrictHostKeyChecking=" + strict,
-                "-o", "ConnectTimeout=15", "-o", "ServerAliveInterval=30", "-o", "ServerAliveCountMax=3",
+                "-o", f"ConnectTimeout={connect_timeout}", "-o", f"ServerAliveInterval={interval}",
+                "-o", f"ServerAliveCountMax={count}",
                 "-o", "IdentityAgent=none"]
         if identity is None:
             authentication = "password" if prefilled_password else "password,keyboard-interactive"
@@ -107,8 +132,9 @@ class Connection:
             args += ["-o", "NumberOfPasswordPrompts=1"]
         return args
 
-    def command(self, *, prefilled_password=False):
-        options = self.options(prefilled_password=prefilled_password)
+    def command(self, *, prefilled_password=False, reconnect=False):
+        options = self.options(prefilled_password=prefilled_password,
+                               strict="yes" if reconnect else "ask", interactive=True)
         return [executable(), *options[:2], "-tt", *options[2:], "-l", self.username, "-p", str(self.port), "--", self.host]
 
     def sftp_command(self, *, prefilled_password=False):

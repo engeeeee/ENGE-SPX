@@ -1322,8 +1322,15 @@ class Window(QMainWindow):
             from ..clipboard import WindowsClipboard
             clipboard = WindowsClipboard() if os.name == "nt" else None
             transfer = SSHTransfer(connection, env, prefilled=session is not None)
+
+            def reconnect(columns, rows):
+                command = connection.command(prefilled_password=session is not None, reconnect=True)
+                child = start(command, env, home, columns, rows, ssh=True)
+                return child, SSHTransfer(connection, env, prefilled=session is not None)
+
             terminal_session = self.terminal_sessions().open(pty, "ssh", home, transfer=transfer, clipboard=clipboard,
-                                                              session_label=session_label or connection.label)
+                                                              session_label=session_label or connection.label,
+                                                              reconnect=reconnect)
         except Exception:
             pty.close()
             if session is not None:
@@ -1331,8 +1338,8 @@ class Window(QMainWindow):
             raise
         if session is not None:
             terminal_session.message.setText("正在使用已填写的凭据。首次连接请核对主机指纹。")
-            terminal_session.view.ended.connect(session.close)
-            terminal_session.destroyed.connect(session.close)
+            session.setParent(terminal_session)
+            terminal_session.finished.connect(session.close)
 
     def launch_sftp(self, connection, *, password=None):
         from .sftp_dialog import SFTPDialog

@@ -37,8 +37,9 @@ class TerminalWorkspace(QObject):
             self.group.add_session(session)
         return self.group
 
-    def open(self, pty, tool, project, *, transfer=None, clipboard=None, session_label=None):
-        session = TerminalSession(pty, tool, project, self.preferences, transfer, clipboard, session_label=session_label)
+    def open(self, pty, tool, project, *, transfer=None, clipboard=None, session_label=None, reconnect=None):
+        session = TerminalSession(pty, tool, project, self.preferences, transfer, clipboard,
+                                  session_label=session_label, reconnect=reconnect)
         window = self._put_in_group(session)
         if not session.is_ssh:
             session.view.ended.connect(lambda: self._workspace_session_ended(session))

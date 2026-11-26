@@ -227,6 +227,139 @@ class Server(paramiko.ServerInterface):
         return True
 
 
+def exercise_reconnect(app, root, host_key):
+    from enge_spx.state import Store
+    from enge_spx.ui.controller import Controller
+    from enge_spx.ui.window import Window
+
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(1)
+    listener.settimeout(12)
+    port = listener.getsockname()[1]
+    lost, refused, restored, done = (threading.Event() for _ in range(4))
+    resize = threading.Event()
+    errors, authenticated, received = [], [], []
+
+    def serve():
+        for label in (b"before-outage", b"after-outage"):
+            client, _ = listener.accept()
+            if label == b"after-outage":
+                # A real TCP connection fails during the outage before the
+                # retry that succeeds against the original verified host.
+                client.close()
+                refused.set()
+                assert restored.wait(5)
+                client, _ = listener.accept()
+            server = Server(None)
+            with paramiko.Transport(client) as transport:
+                transport.add_server_key(host_key)
+                transport.start_server(server=server)
+                channel = transport.accept(10)
+                assert channel is not None and server.shell.wait(3)
+                authenticated.append(server.auth)
+                channel.sendall(label + b"\r\nfixture@server:~$ ")
+                if label == b"before-outage":
+                    channel.sendall(b"\x1b[999;1Hresize-draft")
+                    assert resize.wait(8)
+                    # Replay the two synchronized frames AGY sends on
+                    # SIGWINCH, with separate pauses in the SSH transport.
+                    channel.sendall(b"\x1b[?2026h\x1b[?25l\x1b[2J\x1b[?2026l")
+                    time.sleep(.22)
+                    channel.sendall(b"\x1b[2J\x1b[3J\x1b[H\x1b[?2026hearlier-conversation")
+                    time.sleep(.45)
+                    channel.sendall(b"\x1b[2J\x1b[Hbefore-outage\r\n\x1b[999;1Hresize-draft-complete\x1b[?25h\x1b[?2026l")
+                    assert lost.wait(8)
+                    client.shutdown(socket.SHUT_RDWR)
+                    continue
+                channel.settimeout(5)
+                command = b""
+                while not command.endswith(b"\r") and len(command) < 1024:
+                    data = channel.recv(1024)
+                    if not data:
+                        break
+                    command += data
+                received.append(command)
+                channel.send_exit_status(0)
+                channel.shutdown_write()
+                break
+        done.set()
+
+    def run_server():
+        try:
+            serve()
+        except Exception as error:
+            errors.append(type(error).__name__)
+
+    worker = threading.Thread(target=run_server, daemon=True)
+    worker.start()
+    known = root / "known_reconnect"
+    known.write_text(f"[127.0.0.1]:{port} {host_key.get_name()} {host_key.get_base64()}\n", encoding="ascii")
+    connection = Connection.from_fields("127.0.0.1", "fixture", port)
+    options = Connection.options
+
+    def isolated_hosts(value, **kwargs):
+        return options(value, **kwargs) + ["-o", f'UserKnownHostsFile="{known.as_posix()}"', "-o", "GlobalKnownHostsFile=none"]
+
+    def wait(predicate, label):
+        deadline = time.monotonic() + 12
+        while time.monotonic() < deadline:
+            app.processEvents()
+            if predicate():
+                return
+            time.sleep(.01)
+        raise AssertionError(f"{label}. Server errors={errors}, screen={view.screen.display[-5:]}")
+
+    window = Window(Controller(Store(root / "reconnect-state")))
+    secret = read_password(PASSWORD)
+    view = None
+    try:
+        with patch.object(Connection, "options", isolated_hosts):
+            window.launch_ssh(connection, password=secret)
+            session, = window.terminal_workspace.sessions
+            view = session.view
+            wait(lambda: any("resize-draft" in row for row in view.screen.display), "Initial SSH connection")
+            original_child = view.pty
+            view.grab()
+            terminal = session.window()
+            terminal.resize(terminal.width() - 60, terminal.height() - 110)
+            wait(lambda: view.resize_redraw_started is not None, "The narrowed grid should reach OpenSSH")
+            resize.set()
+
+            def committed_resize():
+                view.grab()
+                content = "\n".join("".join(cell.data for cell in row[0]) for row in view.surface_rows if row)
+                assert "resize-draft" in content and "earlier-conversation" not in content, content[-600:]
+                return "resize-draft-complete" in content
+
+            wait(committed_resize, "The working viewport should stay visible through AGY replay")
+            lost.set()
+            wait(lambda: session.reconnect_timer.isActive(), "Disconnect should schedule a retry")
+            wait(refused.is_set, "Automatic retry should occur during the outage")
+            wait(lambda: session.reconnect_timer.isActive(), "Network failure should schedule another retry")
+            assert not view.sender.put("keys", b"do-not-replay\r")
+            restored.set()
+            wait(lambda: any("after-outage" in row for row in view.screen.display), "SSH should reconnect")
+            assert session.view is view and view.pty is not original_child
+            history = "\n".join("".join(cell.data for _, cell in sorted(row.items())) for row in view.screen.history.top)
+            assert "before-outage" in history and authenticated == ["password", "password"]
+            view.sender.put("keys", b"explicit-input\r")
+            wait(done.is_set, "Recovered SSH should receive fresh input")
+            assert received == [b"explicit-input\r"], received
+            wait(lambda: session.closed, "A normal remote exit should stop reconnecting")
+            assert not session.reconnect_timer.isActive() and not secret
+            print("PASS native OpenSSH delayed AGY resize, outage, password reauthentication, transcript and clean exit", flush=True)
+    finally:
+        resize.set()
+        lost.set()
+        restored.set()
+        window.finish_close()
+        if view is not None:
+            view.reader.join(3)
+        listener.close()
+        worker.join(2)
+
+
 def exercise(app, root, host_key, identity=None, public_key=None, *, prefilled=False):
     errors = []
     listener = socket.socket()
@@ -583,6 +716,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--helper", type=Path, help="Frozen Windows spx.exe for the native askpass tests")
     parser.add_argument("--transcript-only", action="store_true", help="Run the terminal transcript regression")
+    parser.add_argument("--reconnect-only", action="store_true", help="Run the SSH outage and recovery regression")
     args = parser.parse_args()
     helper = args.helper.resolve(strict=True) if args.helper else None
     if os.name == "nt" and helper is not None:
@@ -600,6 +734,10 @@ def main():
     host_key = paramiko.RSAKey.generate(2048)
     with tempfile.TemporaryDirectory(prefix="spx-ssh-loopback-") as folder:
         root = Path(folder).resolve()
+        if args.reconnect_only:
+            with patch("enge_spx.ssh_askpass.packaged_helper", return_value=helper):
+                exercise_reconnect(app, root, host_key)
+            return
         exercise_transcript(app, root, host_key)
         if args.transcript_only:
             return
@@ -616,6 +754,7 @@ def main():
                 exercise(app, root, host_key, key, public_key, prefilled=True)
                 exercise_upload(app, root, host_key)
                 exercise_file_browser(app, root, host_key)
+                exercise_reconnect(app, root, host_key)
 
 
 if __name__ == "__main__":

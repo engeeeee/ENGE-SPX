@@ -21,11 +21,11 @@ exec bash --noprofile -i
 '''
 
 
-def command(arguments, *, keep_open=False, smart_terminal=False):
+def command(arguments, *, keep_open=False, antigravity_fullscreen=False):
     # All tool arguments remain separate argv elements, including arbitrary
     # user-supplied CLI arguments. No interpolation into executable shell text.
     if arguments and arguments[0] == 'agy':
-        if smart_terminal and len(arguments) == 1:
+        if antigravity_fullscreen and len(arguments) == 1:
             # In inline mode AGY replays the conversation on SIGWINCH. Let
             # its alternate screen own the transcript, viewport and wheel.
             arguments = [*arguments, '--settings', '{"altScreenMode":"always"}']

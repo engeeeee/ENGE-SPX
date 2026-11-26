@@ -1215,7 +1215,8 @@ class Engine:
             self.prepared_session, self.prepared_container = state["session"], obj["Id"]
             flags = ["-it"] if interactive else ["-i"]
             from .tool_session import command as tool_command
-            return self.docker.command("exec", *flags, "--workdir", "/workspace/" + key, *self.proxy_env(state), *self.control_env(state), obj["Id"], *tool_command(command)), url
+            arguments = tool_command(command, antigravity_fullscreen=interactive)
+            return self.docker.command("exec", *flags, "--workdir", "/workspace/" + key, *self.proxy_env(state), *self.control_env(state), obj["Id"], *arguments), url
 
     def terminal(self, path, tool, expected_workspace=None, *, desktop_session=False):
         from .terminal import launch, resolve
@@ -1262,7 +1263,7 @@ class Engine:
             from .tool_session import command as tool_command
             colour_env = ["--env", "TERM=xterm-256color", "--env", "COLORTERM=truecolor", "--env", "TERM_PROGRAM=ENGE-SPX"] if terminal_capabilities else []
             arguments = tool_command(TOOLS[tool], keep_open=interactive and tool != "shell",
-                                     smart_terminal=terminal_relay)
+                                     antigravity_fullscreen=interactive)
             if terminal_relay:
                 code = (PACKAGE_RESOURCES / "checks/terminal_relay.py").read_text(encoding="utf-8")
                 arguments = ["python3", "-I", "-c", code, "110", "32", *arguments]
