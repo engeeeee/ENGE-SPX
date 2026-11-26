@@ -171,6 +171,8 @@ QComboBox QAbstractItemView { background: @paper@; border: 1px solid @edge@; sel
 QListWidget#SSHMachineList { background: @field@; border: 1px solid @line@; border-radius: 8px; padding: 4px; }
 QListWidget#SSHMachineList::item { padding: 10px 8px; border-radius: 5px; }
 QListWidget#SSHMachineList::item:selected { background: @wash@; color: @ink@; }
+QTableView#SFTPDirectory { border: 1px solid @line@; border-radius: 8px; }
+QTableView#SFTPDirectory QHeaderView::section { background: @paper@; color: @muted@; border: none; border-bottom: 1px solid @line@; padding: 8px; }
 QCheckBox { spacing: 9px; color: @muted@; font-size: 13px; }
 QCheckBox::indicator { width: 16px; height: 16px; border: 1px solid @edge@; border-radius: 4px; background: @field@; }
 QCheckBox::indicator:checked { background: #E4AF92; border: 1px solid @hero_line@; image: url("@check_icon@"); }

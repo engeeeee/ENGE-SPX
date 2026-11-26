@@ -147,6 +147,11 @@ class WorkspaceUITests(unittest.TestCase):
             launch.assert_called_once_with(saved.connection, "开发机 · operator@ssh.example.invalid:2200",
                                            password=bytearray(b"fixture-only"))
         self.assertNotIn("fixture-only", (self.store.home / ssh_machines.FILE).read_text(encoding="utf-8"))
+        with patch.object(self.window, "launch_sftp") as files, \
+                patch("enge_spx.ssh_askpass.password_available", return_value=True), \
+                patch("enge_spx.ui.ssh_dialog.SSHDialog.exec", side_effect=AssertionError("unexpected edit form")):
+            page.files_selected()
+            files.assert_called_once_with(saved.connection, password=bytearray(b"fixture-only"))
 
         def edit(dialog):
             self.assertEqual(dialog.host.text(), "ssh.example.invalid")

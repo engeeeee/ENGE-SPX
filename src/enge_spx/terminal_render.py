@@ -125,6 +125,10 @@ class TerminalStream:
             _, separator, address = payload[2:].partition(";")
             if separator:
                 self.screen.set_hyperlink(address)
+        elif payload.startswith(("133;", "633;")):
+            marker = payload.split(";", 2)[1]
+            if marker in ("A", "B", "C", "D"):
+                self.screen.mark_shell_prompt(marker)
         # Other OSC, including clipboard writes/reads, are intentionally ignored.
 
     @staticmethod

@@ -1,5 +1,11 @@
 # Changes
 
+## 0.15.16 Inline shell completion and SFTP file manager — 2026-11-26
+
+- Show an inline suffix for built-in or saved Shell shortcuts after the active prompt echoes the typed prefix. Tab fills the suffix into the input.
+- Browse, upload, download and create folders in a modeless SFTP window from a saved SSH machine, a temporary connection, or the SSH terminal toolbar.
+- Reuse system OpenSSH trust and the existing credential broker for file management. Stream file data with progress, cooperative cancellation and collision checks.
+
 ## 0.15.15 SSH terminal responsiveness — 2026-11-25
 
 - Reuse already painted rows while scrolling through SSH history.

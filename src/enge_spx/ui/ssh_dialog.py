@@ -8,8 +8,8 @@ from .widgets import Combo, Dialog, button, label
 
 
 class SSHDialog(Dialog):
-    def __init__(self, parent, *, machine=None, on_save=None, can_store_password=False):
-        title = "临时 SSH 连接"
+    def __init__(self, parent, *, machine=None, on_save=None, can_store_password=False, file_browser=False):
+        title = "临时 SFTP 连接" if file_browser else "临时 SSH 连接"
         if on_save:
             title = "编辑 SSH 机器" if machine else "新建 SSH 机器"
         super().__init__(parent, title)

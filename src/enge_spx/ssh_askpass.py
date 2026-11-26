@@ -47,10 +47,11 @@ def erase(secret):
 
 
 class PasswordSession(QObject):
-    def __init__(self, connection, secret, confirm, parent=None):
+    def __init__(self, connection, secret, confirm, parent=None, *, request_secret=None):
         super().__init__(parent)
         self.secret = secret
         self.confirm = confirm
+        self.request_secret = request_secret
         self.key_login = connection.identity is not None
         self.prompts = {f"{connection.username}@{connection.host}'s password:",
                         f"{connection.username[:30]}@{connection.host[:128]}'s password:"}
@@ -111,9 +112,18 @@ class PasswordSession(QObject):
         peer.disconnected.connect(note_disconnect)
         answer = None
         key_prompt = self.key_login and prompt.startswith("Enter passphrase for key ")
-        if self.secret and (key_prompt or (not self.key_login and prompt.strip() in self.prompts)):
-            answer = bytes(self.secret)
-        elif self.secret and "Are you sure you want to continue connecting" in prompt and HOST_FINGERPRINT.search(prompt):
+        password_prompt = not self.key_login and prompt.strip() in self.prompts
+        if key_prompt or password_prompt:
+            if not self.secret and self.request_secret is not None:
+                supplied = self.request_secret(self.key_login)
+                if supplied is not None:
+                    if self.closed or disconnected:
+                        erase(supplied)
+                    else:
+                        self.secret = supplied
+            if self.secret:
+                answer = bytes(self.secret)
+        elif self.confirm is not None and "Are you sure you want to continue connecting" in prompt and HOST_FINGERPRINT.search(prompt):
             answer = b"yes" if self.confirm(prompt.strip()) else b"no"
         if disconnected or self.closed:
             return

@@ -1,4 +1,4 @@
-"""Reuse the immutable 0.15.14 runtime for the reviewed desktop release."""
+"""Reuse the immutable 0.15.15 runtime for the reviewed desktop release."""
 import argparse
 import hashlib
 import json
@@ -10,15 +10,20 @@ import sys
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE = '36d63473026a1b29558dd8d1e87b119c43110737'
+BASE = '84a14479a3e6ea8337a7e1bd61b4c9de4004839b'
 PROJECT = 'https://github.com/engeeeee/ENGE-SPX'
-PREVIOUS = '0.15.14'
+PREVIOUS = '0.15.15'
 
 
 def check_scope():
     files = subprocess.check_output(['git', 'diff', '--name-only', BASE, 'HEAD', '--', 'src', 'requirements.txt', 'requirements-build.txt', 'pyproject.toml', 'packaging'], cwd=ROOT, text=True).splitlines()
     allowed = {
-        'src/enge_spx/__init__.py', 'src/enge_spx/smart_terminal.py',
+        'src/enge_spx/__init__.py', 'src/enge_spx/clipboard_transfer.py', 'src/enge_spx/sftp_client.py',
+        'src/enge_spx/smart_terminal.py', 'src/enge_spx/ssh_askpass.py', 'src/enge_spx/ssh_client.py',
+        'src/enge_spx/terminal_appearance.py', 'src/enge_spx/terminal_completion.py',
+        'src/enge_spx/terminal_render.py', 'src/enge_spx/terminal_shortcuts.py',
+        'src/enge_spx/ui/sftp_dialog.py', 'src/enge_spx/ui/ssh_dialog.py', 'src/enge_spx/ui/ssh_page.py',
+        'src/enge_spx/ui/style.py', 'src/enge_spx/ui/window.py',
         'packaging/windows/Installer.iss',
         'packaging/windows/version-info.txt', 'packaging/windows/cli-version-info.txt',
     }
@@ -89,7 +94,7 @@ def main(destination):
     check_scope()
     sys.path.insert(0, str(ROOT / 'src'))
     from enge_spx import __version__
-    assert __version__ == '0.15.15', 'This reuse gate is limited to the reviewed 0.15.15 desktop release'
+    assert __version__ == '0.15.16', 'This reuse gate is limited to the reviewed 0.15.16 desktop release'
     copy_runtime(destination, PREVIOUS, BASE, __version__, {'gateway': '9aa8a7818569', 'work': '6e3fcfa5633c', 'browser': '1bca0984bc51'})
 
 

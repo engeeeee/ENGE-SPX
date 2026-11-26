@@ -123,3 +123,8 @@ class Connection:
         batch = "no" if prefilled_password else "yes"
         return [str(sftp), "-S", str(ssh), "-o", "BatchMode=" + batch, *options,
                 "-P", str(self.port), "-b", "-", "--", f"{self.username}@{host}"]
+
+    def sftp_subsystem(self, *, askpass=False, confirm_host=False):
+        options = self.options(prefilled_password=askpass, strict="ask" if confirm_host else "yes")
+        return [executable(), "-T", "-s", "-o", "BatchMode=" + ("no" if askpass else "yes"), *options,
+                "-l", self.username, "-p", str(self.port), "--", self.host, "sftp"]

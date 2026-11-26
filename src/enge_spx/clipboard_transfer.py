@@ -73,7 +73,7 @@ class InputAdapter:
 
 
 @contextmanager
-def open_source(path):
+def open_source(path, *, limit=MAX_FILE):
     """Hold a regular source file for the entire transfer, never follow its link."""
     path = Path(path)
     if os.name == "nt":
@@ -83,8 +83,10 @@ def open_source(path):
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
         info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400 or not 0 <= info.st_size <= MAX_FILE:
-            raise SPXError("只接受不超过 128 MiB 的普通文件；目录、链接和设备不导入。")
+        if not stat.S_ISREG(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+            raise SPXError("请选择普通文件，目录、链接和设备不导入。")
+        if limit is not None and not 0 <= info.st_size <= limit:
+            raise SPXError(f"普通文件不能超过 {limit // (1024 * 1024)} MiB。")
         with os.fdopen(fd, "rb") as stream:
             fd = None
             yield stream, info.st_size
