@@ -41,6 +41,7 @@ class SSHClientTests(unittest.TestCase):
             b"current-draftConnection to 127.0.0.1 closed by remote host.\r\n",
             b"\x1b[31mssh: connect to host localhost port 22: Connection refused\x1b[0m\r\n",
             b"ssh: Could not resolve hostname localhost: Temporary failure in name resolution",
+            b"kex_exchange_identification: read: Unknown error",
         )
         for error in errors:
             self.assertTrue(retryable_disconnect(255, error), error)

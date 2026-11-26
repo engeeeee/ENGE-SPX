@@ -26,6 +26,8 @@ _NETWORK_END = re.compile(
     r"connection (?:refused|reset|closed|aborted)|closed by remote host|reset by peer|"
     r"software caused connection abort|could not resolve hostname|not responding",
 )
+_SSH_IO_UNKNOWN = re.compile(r"(?:kex_exchange_identification: (?:read|write):|"
+                             r"(?:read from|write to) remote host [^\r\n]*:) unknown error")
 
 
 def retryable_disconnect(status, output):
@@ -38,8 +40,10 @@ def retryable_disconnect(status, output):
                  r"permission denied(?:,| \()|authentication failed", text):
         return False
     # OpenSSH may print its error directly after an unsubmitted prompt.
-    return any(_NETWORK_END.search(line, origin.start()) for line in text.splitlines()
-               if (origin := _SSH_DIAGNOSTIC.search(line)))
+    return _SSH_IO_UNKNOWN.search(text) is not None or any(
+        _NETWORK_END.search(line, origin.start()) for line in text.splitlines()
+        if (origin := _SSH_DIAGNOSTIC.search(line))
+    )
 
 
 def normalize_host(host):

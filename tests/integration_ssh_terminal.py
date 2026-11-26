@@ -228,6 +228,7 @@ class Server(paramiko.ServerInterface):
 
 
 def exercise_reconnect(app, root, host_key):
+    from enge_spx import ssh_client
     from enge_spx.state import Store
     from enge_spx.ui.controller import Controller
     from enge_spx.ui.window import Window
@@ -239,7 +240,7 @@ def exercise_reconnect(app, root, host_key):
     port = listener.getsockname()[1]
     lost, refused, restored, done = (threading.Event() for _ in range(4))
     resize = threading.Event()
-    errors, authenticated, received = [], [], []
+    errors, authenticated, received, exit_reports = [], [], [], []
 
     def serve():
         for label in (b"before-outage", b"after-outage"):
@@ -301,6 +302,15 @@ def exercise_reconnect(app, root, host_key):
     def isolated_hosts(value, **kwargs):
         return options(value, **kwargs) + ["-o", f'UserKnownHostsFile="{known.as_posix()}"', "-o", "GlobalKnownHostsFile=none"]
 
+    classify = ssh_client.retryable_disconnect
+
+    def record_exit(status, output):
+        retry = classify(status, output)
+        if status not in (0, None):
+            tail = bytes(output[-512:]).replace(PASSWORD.encode(), b"[fixture]")
+            exit_reports.append((status, retry, tail))
+        return retry
+
     def wait(predicate, label):
         deadline = time.monotonic() + 12
         while time.monotonic() < deadline:
@@ -308,7 +318,7 @@ def exercise_reconnect(app, root, host_key):
             if predicate():
                 return
             time.sleep(.01)
-        raise AssertionError(f"{label}. Server errors={errors}, client={view.pty.poll()}, "
+        raise AssertionError(f"{label}. Server errors={errors}, SSH exit reports={exit_reports}, "
                              f"drained={view.output_drained}, status={session.message.text()}, "
                              f"screen={view.screen.display[-5:]}")
 
@@ -316,7 +326,7 @@ def exercise_reconnect(app, root, host_key):
     secret = read_password(PASSWORD)
     view = None
     try:
-        with patch.object(Connection, "options", isolated_hosts):
+        with patch.object(Connection, "options", isolated_hosts), patch.object(ssh_client, "retryable_disconnect", record_exit):
             window.launch_ssh(connection, password=secret)
             session, = window.terminal_workspace.sessions
             view = session.view
