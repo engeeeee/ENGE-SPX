@@ -15,8 +15,6 @@
     --selected: #0f1d3a;
     --selected-border: #284678;
     --stage: #080c14;
-    --stage-glow: #1d4b9e45;
-    --stage-grid: #779bdd13;
     --download-surface: #0b111e;
     --route-line: #384a70;
     --section-surface: #07090e;
@@ -43,8 +41,6 @@
     --selected: #e9f6ee;
     --selected-border: #c2dfcc;
     --stage: #f2f7f4;
-    --stage-glow: #b1dfc362;
-    --stage-grid: #7a9f851c;
     --download-surface: #eff7f2;
     --route-line: #a1c9ae;
     --section-surface: #f5f8f6;
@@ -177,11 +173,7 @@ small { font-size: .8125rem; color: var(--muted); }
 .hero-stage {
     padding: clamp(.65rem, 2vw, 1.75rem);
     border-radius: 0 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px);
-    background-color: var(--stage);
-    background-image: radial-gradient(ellipse at 75% 5%, var(--stage-glow), transparent 75%),
-        linear-gradient(var(--stage-grid) 1px, transparent 1px),
-        linear-gradient(90deg, var(--stage-grid) 1px, transparent 1px);
-    background-size: auto, 26px 26px, 26px 26px;
+    background: var(--stage);
 }
 .hero-stage .shot-button { aspect-ratio: 4 / 3; box-shadow: 0 14px 36px var(--shadow); }
 .hero-stage .shot-button img { position: absolute; inset: 0 0 auto; }

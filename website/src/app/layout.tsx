@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { GeistSans } from "geist/font/sans";
-import { product, themeStorageKey } from "@/lib/content";
+import { brand, product, themeStorageKey } from "@/lib/content";
 import { SiteInteractions } from "@/components/interactions";
 import "./globals.css";
 
@@ -33,7 +33,10 @@ export const metadata: Metadata = {
         title: "ENGE SPX — Windows AI 编程隔离工作台",
         images: ["/og.png"],
     },
-    icons: { icon: "/brand/logo.svg", apple: "/apple-touch-icon.png" },
+    icons: {
+        icon: [brand.icon, { url: brand.logo, type: "image/svg+xml", sizes: "any" }],
+        apple: { url: brand.touchIcon, sizes: "180x180" },
+    },
     robots: { index: true, follow: true },
 };
 

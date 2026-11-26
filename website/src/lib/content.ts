@@ -120,6 +120,12 @@ export type ScreenshotId = (typeof screenshots)[number]["id"];
 export const asset = (path: string) =>
     `${process.env.NEXT_PUBLIC_BASE_PATH || ""}${path}`;
 
+export const brand = {
+    logo: asset(`/brand/logo.svg?v=${product.version}`),
+    icon: asset(`/favicon.ico?v=${product.version}`),
+    touchIcon: asset(`/apple-touch-icon.png?v=${product.version}`),
+} as const;
+
 export const screenshotPath = (item: { source: string; lightSource?: string }, theme: Theme) =>
     asset(theme === "light" ? item.lightSource ?? item.source : item.source);
 

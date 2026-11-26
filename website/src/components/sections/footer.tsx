@@ -1,11 +1,11 @@
-import { asset, docs, product } from "@/lib/content";
+import { brand, docs, product } from "@/lib/content";
 
 export function Footer() {
     return (
         <footer className="site-footer">
             <div className="container footer-inner">
                 <a href="#" className="brand">
-                    <img src={asset("/brand/logo.svg")} alt="" width="32" height="32" />
+                    <img src={brand.logo} alt="" width="32" height="32" />
                     <span>{product.name}</span>
                 </a>
                 <nav className="footer-links" aria-label="页脚导航">

@@ -1,9 +1,9 @@
-import { asset } from "@/lib/content";
+import { asset, brand } from "@/lib/content";
 export default function NotFound() {
     return (
         <main className="not-found">
             <img
-                src={asset("/brand/logo.svg")}
+                src={brand.logo}
                 width="64"
                 height="64"
                 alt="ENGE SPX"

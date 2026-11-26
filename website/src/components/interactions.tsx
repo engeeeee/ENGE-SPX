@@ -24,7 +24,7 @@ import {
     ZoomOut,
 } from "lucide-react";
 import {
-    asset,
+    brand,
     docs,
     navigation,
     product,
@@ -291,7 +291,7 @@ export function Navigation() {
                 <div className="nav-inner">
                     <a href="#" className="brand" aria-label="ENGE SPX 首页">
                         <img
-                            src={asset("/brand/logo.svg")}
+                            src={brand.logo}
                             alt=""
                             width="35"
                             height="35"
@@ -356,7 +356,7 @@ export function Navigation() {
                         onClick={() => dialog.current?.close()}
                     >
                         <img
-                            src={asset("/brand/logo.svg")}
+                            src={brand.logo}
                             alt=""
                             width="35"
                             height="35"
