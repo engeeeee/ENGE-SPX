@@ -125,8 +125,8 @@ class Panel(QFrame):
         if surface == "Section":
             self.layout.setContentsMargins(0, 16, 0, 4)
         else:
-            self.layout.setContentsMargins(22, 20, 22, 20)
-        self.layout.setSpacing(12)
+            self.layout.setContentsMargins(20, 18, 20, 18)
+        self.layout.setSpacing(11)
         if title:
             self.layout.addWidget(label(title, "SectionTitle"))
         if caption:
@@ -160,8 +160,8 @@ class Page(QScrollArea):
         self.content = QWidget()
         self.content.setObjectName("Page")
         self.layout = QVBoxLayout(self.content)
-        self.layout.setContentsMargins(32, 26, 32, 24)
-        self.layout.setSpacing(22)
+        self.layout.setContentsMargins(30, 24, 30, 24)
+        self.layout.setSpacing(20)
         if title:
             header = QVBoxLayout()
             header.setSpacing(5)
@@ -220,10 +220,10 @@ class Page(QScrollArea):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         compact = self.viewport().height() < 350
-        spacing = 14 if compact else 22
+        spacing = 14 if compact else 20
         if self.layout.spacing() != spacing:
             self.layout.setSpacing(spacing)
-            margins = (24, 16, 24, 20) if compact else (32, 26, 32, 24)
+            margins = (22, 14, 22, 18) if compact else (30, 24, 30, 24)
             self.layout.setContentsMargins(*margins)
         self.resized.emit(self.viewport().width(), self.viewport().height())
 

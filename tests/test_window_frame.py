@@ -86,12 +86,13 @@ class NativeWindowTests(unittest.TestCase):
         self.assertEqual(self.window.render_count, count)
         self.assertFalse(self.controller.delivery.isActive())
 
-    def test_top_navigation_adapts_without_cropping_the_name(self):
+    def test_sidebar_navigation_adapts_without_cropping_the_name(self):
         self.window.resize(810, 620)
         QTest.qWait(40)
         self.assertTrue(self.window.compact)
-        self.assertIn("ENGE SPX", self.window.titlebar.caption.text())
-        self.assertEqual(self.window.nav["workspace"].text(), "项目")
+        self.assertTrue(self.window.titlebar.caption.text().startswith("ENGE SPX"))
+        self.assertEqual(self.window.sidebar.width(), 72)
+        self.assertEqual(self.window.nav["workspace"].text(), "")
         self.assertTrue(self.window.next_button.isVisible())
         self.window.resize(1200, 820)
         QTest.qWait(40)
@@ -101,13 +102,20 @@ class NativeWindowTests(unittest.TestCase):
         self.assertEqual(self.window.nav["workspace"].text(), "项目工作区")
 
     def test_navigation_and_settings_groups_keep_actions_reachable(self):
+        for key in ("overview", "workspace", "ssh", "connection", "network", "resources", "downloads", "logs", "settings"):
+            self.assertGreaterEqual(self.window.nav_layout.indexOf(self.window.nav[key]), 0)
         self.window.nav["workspace"].click()
         self.assertEqual(self.window.current_page, "workspace")
         self.assertTrue(self.window.workspace_apply_button.isVisible())
+        self.window.nav["downloads"].click()
+        self.assertEqual(self.window.current_page, "downloads")
+        self.window.nav["resources"].click()
+        self.assertTrue(self.window.resource_subnav.isVisible())
+        self.window.resource_view_buttons["budget"].click()
+        self.assertTrue(self.window.resource_save_button.isVisible())
         settings = self.window.nav["settings"]
-        self.assertGreaterEqual(self.window.nav_layout.indexOf(settings), 0)
-        self.assertNotIn("偏好设置", [action.text() for action in self.window.management_menu.actions()])
         settings.click()
+        self.assertTrue(self.window.settings_subnav.isVisible())
         self.assertTrue(self.window.settings_tabs["general"].isChecked())
         self.window.settings_tabs["terminal"].click()
         self.assertTrue(self.window.terminal_path.isVisible())
@@ -117,21 +125,24 @@ class NativeWindowTests(unittest.TestCase):
         settings.click()
         self.assertTrue(self.window.settings_tabs["general"].isChecked())
 
-    def test_update_indicator_fits_narrow_top_navigation(self):
+    def test_update_indicator_fits_sidebar_navigation(self):
         self.window.setMinimumSize(400, 320)
         self.controller.update_available.set(True)
         settings = self.window.nav["settings"]
-        for width, title in ((400, "设置·"), (840, "设置·"), (920, "偏好设置 · 有更新")):
+        for width, title in ((400, ""), (810, ""), (920, "偏好设置 · 有更新")):
             with self.subTest(width=width):
                 self.window.resize(width, 520)
                 QTest.qWait(40)
                 self.assertEqual(self.window.width(), width)
                 self.assertEqual(settings.text(), title)
+                self.assertIn("有可用更新", settings.toolTip())
                 self.assertGreaterEqual(settings.width(), settings.minimumSizeHint().width())
-                ssh = self.window.nav["ssh"]
-                self.assertGreaterEqual(ssh.width(), ssh.minimumSizeHint().width())
-                manage = self.window.management_button
-                self.assertLessEqual(manage.geometry().right(), manage.parentWidget().rect().right())
+                self.assertLessEqual(settings.geometry().right(), settings.parentWidget().rect().right())
+                if self.window.compact:
+                    self.assertGreaterEqual(self.window.titlebar.caption.width(), self.window.titlebar.caption.sizeHint().width())
+                else:
+                    self.assertGreaterEqual(self.window.brand_label.width(), self.window.brand_label.sizeHint().width())
+                self.assertLessEqual(self.window.theme_button.geometry().right(), self.window.titlebar.rect().right())
 
     def test_long_project_name_does_not_push_workbench_controls_out_of_view(self):
         self.window.resize(810, 620)

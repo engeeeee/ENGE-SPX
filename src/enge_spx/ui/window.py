@@ -9,7 +9,8 @@ from PySide6.QtGui import QIcon, QFont, QAction, QKeySequence
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QFrame, QLabel,
                              QVBoxLayout, QHBoxLayout, QGridLayout, QStackedWidget,
                              QPushButton, QPlainTextEdit, QFileDialog, QLineEdit,
-                             QSizePolicy, QSizeGrip, QBoxLayout, QSystemTrayIcon, QMenu)
+                             QScrollArea, QSizePolicy, QSizeGrip, QBoxLayout,
+                             QSystemTrayIcon, QMenu)
 
 from .. import __version__, terminal
 from ..brand import APP_NAME, ICONS, PROJECT_URL
@@ -26,16 +27,37 @@ from .widgets import (Page, Panel, TitleBar, Dialog, Combo, label, bind_text,
 
 NAMES = {"overview": "工作台", "connection": "连接与代理", "workspace": "项目工作区", "ssh": "远程 SSH", "network": "网络检查", "downloads": "下载与安装", "resources": "资源与性能", "logs": "运行日志", "settings": "偏好设置"}
 
-NAVIGATION = (
-    ("overview", "工作台", "工作台"),
-    ("workspace", "项目工作区", "项目"),
-    ("ssh", "SSH", "SSH"),
-    ("connection", "连接与代理", "代理"),
-    ("network", "网络检查", "检测"),
-    ("resources", "资源管理", "资源"),
-    ("settings", "偏好设置", "设置"),
+SIDEBAR_GROUPS = (
+    ("工作区", (
+        ("overview", "工作台", "工作台"),
+        ("workspace", "项目工作区", "项目"),
+        ("ssh", "远程 SSH", "SSH"),
+    )),
+    ("网络与算力", (
+        ("connection", "连接与代理", "代理"),
+        ("network", "网络检查", "检测"),
+        ("resources", "资源与性能", "资源"),
+    )),
+    ("系统管理", (
+        ("downloads", "下载与安装", "下载"),
+        ("logs", "运行日志", "日志"),
+        ("settings", "偏好设置", "设置"),
+    )),
 )
-MANAGEMENT = ("downloads", "logs")
+
+RESOURCE_VIEWS = (
+    ("usage", "占用概览", "概览"),
+    ("budget", "预算设置", "预算"),
+    ("record", "实机记录", "记录"),
+)
+
+SETTINGS_VIEWS = (
+    ("general", "常规", "常规"),
+    ("terminal", "终端", "终端"),
+    ("environment", "环境", "环境"),
+    ("storage", "存储", "存储"),
+    ("exit", "退出", "退出"),
+)
 
 
 class ResizeEdge(QWidget):
@@ -90,63 +112,143 @@ class Window(QMainWindow):
         outer.setContentsMargins(1, 1, 1, 1)
         outer.setSpacing(0)
         self.titlebar = TitleBar(self, APP_NAME)
-        self.brand_label = self.titlebar.caption
-        self.brand_label.setObjectName("Brand")
-        self.brand_label.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
-        mark = QLabel()
-        mark.setPixmap(QIcon(str(ICONS / "logo-64.png")).pixmap(QSize(26, 26)))
-        mark.setFixedSize(26, 26)
-        mark.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.titlebar.layout().insertWidget(0, mark)
         self.theme_choices = {}
         self.theme_button = button("", self.toggle_theme)
         self.theme_button.setObjectName("WindowTheme")
-        self.theme_button.setFixedSize(42, 30)
-        self.titlebar.layout().insertWidget(3, self.theme_button)
-        self.update_theme_button()
+        self.theme_button.setFixedHeight(28)
+        self.titlebar.layout().insertWidget(2, self.theme_button)
         outer.addWidget(self.titlebar)
 
-        nav_band = QFrame()
-        nav_band.setObjectName("WorkbenchNav")
-        self.nav_layout = QHBoxLayout(nav_band)
-        self.nav_layout.setContentsMargins(26, 4, 20, 4)
-        self.nav_layout.setSpacing(6)
-        for key, title, _short in NAVIGATION:
-            nav = button(title, lambda page=key: self.navigate(page))
-            nav.setObjectName("Nav")
-            nav.setCheckable(True)
-            nav.setIconSize(QSize(17, 17))
-            description = NAMES[key] if key == "ssh" else title
-            nav.setAccessibleName(description)
-            nav.setToolTip(description)
-            self.nav_layout.addWidget(nav)
-            self.nav[key] = nav
-        self.nav_layout.addStretch()
-        self.management_button = QPushButton("管理")
-        self.management_button.setObjectName("Manage")
-        self.management_button.setAccessibleName("管理菜单")
-        self.management_button.setToolTip("下载和日志")
-        self.management_menu = QMenu(self)
-        for key in MANAGEMENT:
-            item = self.management_menu.addAction(NAMES[key])
-            item.setCheckable(True)
-            item.triggered.connect(lambda _checked, page=key: self.navigate(page))
-            self.nav[key] = item
-        self.management_button.setMenu(self.management_menu)
-        self.nav_layout.addWidget(self.management_button)
-        outer.addWidget(nav_band)
+        body = QHBoxLayout()
+        body.setContentsMargins(0, 0, 0, 0)
+        body.setSpacing(0)
+        outer.addLayout(body, 1)
 
+        self.sidebar = QFrame()
+        self.sidebar.setObjectName("Sidebar")
+        side = QVBoxLayout(self.sidebar)
+        self.side_layout = side
+        side.setContentsMargins(0, 0, 0, 0)
+        side.setSpacing(0)
+
+        brand_wrap = QWidget()
+        self.brand_header_layout = QHBoxLayout(brand_wrap)
+        self.brand_header_layout.setContentsMargins(16, 16, 14, 14)
+        self.brand_header_layout.setSpacing(10)
+        mark = QLabel()
+        mark.setPixmap(QIcon(str(ICONS / "logo-64.png")).pixmap(QSize(28, 28)))
+        mark.setFixedSize(28, 28)
+        mark.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.brand_header_layout.addWidget(mark, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.brand_names_widget = QWidget()
+        names = QVBoxLayout(self.brand_names_widget)
+        names.setContentsMargins(0, 0, 0, 0)
+        names.setSpacing(2)
+        self.brand_label = label(APP_NAME, "Brand")
+        self.brand_label.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
+        names.addWidget(self.brand_label)
+        self.brand_subtitle = label("AI 编程隔离工作台", "Caption")
+        names.addWidget(self.brand_subtitle)
+        self.brand_header_layout.addWidget(self.brand_names_widget, 1)
+        side.addWidget(brand_wrap)
+
+        top_rule = QFrame()
+        top_rule.setObjectName("SidebarRule")
+        side.addWidget(top_rule)
+
+        self.expanded_sidebar_width = max(
+            232,
+            max(self.brand_label.sizeHint().width(), self.brand_subtitle.sizeHint().width()) + 16 + 14 + 28 + 10 + 16,
+        )
+        self.sidebar.setFixedWidth(self.expanded_sidebar_width)
+
+        nav_scroll = QScrollArea()
+        nav_scroll.setObjectName("SidebarScroll")
+        nav_scroll.setWidgetResizable(True)
+        nav_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        nav_body = QWidget()
+        nav_body.setObjectName("SidebarScrollBody")
+        self.nav_layout = QVBoxLayout(nav_body)
+        self.nav_layout.setContentsMargins(12, 10, 12, 12)
+        self.nav_layout.setSpacing(4)
+        self.group_labels, self.group_rules = [], []
+        self.settings_tabs = {}
+        self.resource_subnav = self.settings_subnav = None
+
+        for index, (group_title, items) in enumerate(SIDEBAR_GROUPS):
+            if index > 0:
+                rule = QFrame()
+                rule.setObjectName("SidebarRule")
+                self.nav_layout.addSpacing(4)
+                self.nav_layout.addWidget(rule)
+                self.nav_layout.addSpacing(2)
+                self.group_rules.append(rule)
+            heading = label(group_title, "SidebarGroup")
+            heading.setContentsMargins(10, 8 if index > 0 else 4, 4, 2)
+            self.nav_layout.addWidget(heading)
+            self.group_labels.append(heading)
+            for key, title, _short in items:
+                nav = button(title, lambda page=key: self.navigate(page))
+                nav.setObjectName("Nav")
+                nav.setCheckable(True)
+                nav.setIconSize(QSize(17, 17))
+                nav.setAccessibleName(title)
+                nav.setToolTip(title)
+                self.nav_layout.addWidget(nav)
+                self.nav[key] = nav
+                if key == "resources":
+                    self.resource_subnav, self.resource_view_buttons = self._subnav_panel(
+                        RESOURCE_VIEWS, lambda view: (self.show_page("resources"), self.select_resource_view(view))
+                    )
+                    self.nav_layout.addWidget(self.resource_subnav)
+                    self.resource_subnav.setVisible(False)
+                elif key == "settings":
+                    self.settings_subnav, self.settings_tabs = self._subnav_panel(
+                        SETTINGS_VIEWS, self.show_settings
+                    )
+                    self.nav_layout.addWidget(self.settings_subnav)
+                    self.settings_subnav.setVisible(False)
+        self.nav_layout.addStretch()
+        nav_scroll.setWidget(nav_body)
+        side.addWidget(nav_scroll, 1)
+
+        footer = QFrame()
+        footer.setObjectName("SidebarFooter")
+        self.sidebar_footer_layout = QHBoxLayout(footer)
+        self.sidebar_footer_layout.setContentsMargins(18, 11, 14, 11)
+        self.sidebar_footer_layout.setSpacing(9)
+        self.sidebar_status_dot = QLabel()
+        self.sidebar_status_dot.setObjectName("StatusDot")
+        self.sidebar_status_dot.setFixedSize(8, 8)
+        self.sidebar_status_dot.setProperty("state", "idle")
+        self.sidebar_footer_layout.addWidget(self.sidebar_status_dot, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.sidebar_footer_text = QWidget()
+        footer_text_layout = QHBoxLayout(self.sidebar_footer_text)
+        footer_text_layout.setContentsMargins(0, 0, 0, 0)
+        footer_text_layout.setSpacing(6)
+        self.sidebar_status_label = label("尚未启用", "Muted")
+        footer_text_layout.addWidget(self.sidebar_status_label, 1)
+        self.sidebar_footer_layout.addWidget(self.sidebar_footer_text, 1)
+        side.addWidget(footer)
+        body.addWidget(self.sidebar)
+
+        main = QWidget()
+        main_layout = QVBoxLayout(main)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
         self.stack = QStackedWidget()
-        outer.addWidget(self.stack, 1)
+        main_layout.addWidget(self.stack, 1)
         status = QFrame()
         status.setObjectName("StatusStrip")
         row = QHBoxLayout(status)
-        row.setContentsMargins(25, 5, 12, 5)
+        row.setContentsMargins(24, 6, 12, 6)
         self.operation = bind_text(label(kind="Caption", wrap=True), self.c.operation)
         row.addWidget(self.operation, 1)
         row.addWidget(label(__version__, "Caption"))
         row.addWidget(QSizeGrip(self))
-        outer.addWidget(status)
+        main_layout.addWidget(status)
+        body.addWidget(main, 1)
+        self.update_theme_button()
         self._create_edges()
         self.c.ask = lambda title, text: confirm(self, title, text)
         self.c.notice.connect(lambda title, text, error: notice(self, title, text, error))
@@ -173,6 +275,37 @@ class Window(QMainWindow):
             widget.setEnabled(not self.c.busy and (not ready or self.c.view["ready"]))
         return widget
 
+    def _subnav_panel(self, choices, select):
+        branch = QFrame()
+        branch.setObjectName("SubNavBranch")
+        column = QVBoxLayout(branch)
+        column.setContentsMargins(0, 2, 0, 4)
+        column.setSpacing(2)
+        buttons = {}
+        for key, title, _short in choices:
+            item = button(title, lambda value=key: select(value))
+            item.setObjectName("SubNavItem")
+            item.setCheckable(True)
+            item.setAccessibleName(title)
+            item.setToolTip(title)
+            column.addWidget(item)
+            buttons[key] = item
+        return branch, buttons
+
+    def _caption_route(self):
+        name = NAMES.get(self.current_page, "工作台")
+        if self.current_page == "resources":
+            sub = next((title for key, title, _ in RESOURCE_VIEWS if key == self.resource_view), "")
+            return f"{name}  /  {sub}" if sub else name
+        if self.current_page == "settings" and hasattr(self, "settings_tabs"):
+            sub = next((title for key, title, _ in SETTINGS_VIEWS if self.settings_tabs[key].isChecked()), "")
+            return f"{name}  /  {sub}" if sub else name
+        return name
+
+    def update_caption(self):
+        prefix = APP_NAME if self.compact else "本机工作空间"
+        self.titlebar.caption.setText(f"{prefix}  ·  {self._caption_route()}")
+
     def show_page(self, name):
         if name == self.current_page:
             return
@@ -193,19 +326,21 @@ class Window(QMainWindow):
         for key, widget in self.nav.items():
             selected = key == self.current_page
             widget.setChecked(selected)
-            if key not in MANAGEMENT:
-                color = colors["clay"] if selected else colors["muted"]
-                widget.setIcon(QIcon() if self.compact else style.icon(key, color, 17))
-        title = NAMES[self.current_page] if self.current_page in MANAGEMENT else "管理"
-        self.management_button.setText("管理" if self.compact else title)
+            color = colors["accent"] if selected else colors["muted"]
+            widget.setIcon(style.icon(key, color, 18 if self.compact else 17))
+        if self.resource_subnav is not None:
+            self.resource_subnav.setVisible(self.current_page == "resources")
+        if self.settings_subnav is not None:
+            self.settings_subnav.setVisible(self.current_page == "settings")
         self.update_settings_label(self.c.update_available.get())
+        self.update_caption()
 
     def update_settings_label(self, available):
         settings = self.nav["settings"]
-        title = "设置" if self.compact else NAMES["settings"]
-        if available:
-            title += "·" if self.compact else " · 有更新"
-        settings.setText(title)
+        if self.compact:
+            settings.setText("")
+        else:
+            settings.setText(NAMES["settings"] + (" · 有更新" if available else ""))
         description = "偏好设置（有可用更新）" if available else NAMES["settings"]
         settings.setAccessibleName(description)
         settings.setToolTip(description)
@@ -218,8 +353,9 @@ class Window(QMainWindow):
 
     def update_theme_button(self):
         dark = self.c.theme == "dark"
-        text = "切换到浅色主题" if dark else "切换到深色主题"
-        self.theme_button.setIcon(style.icon("sun" if dark else "moon", style.THEMES[self.c.theme]["muted"], 18))
+        text = "切换到白天模式" if dark else "切换到黑夜模式"
+        self.theme_button.setIcon(style.icon("sun" if dark else "moon", style.THEMES[self.c.theme]["muted"], 16))
+        self.theme_button.setText("" if self.compact else ("切换白天" if dark else "切换黑夜"))
         self.theme_button.setToolTip(text)
         self.theme_button.setAccessibleName(text)
         for mode, choice in self.theme_choices.items():
@@ -574,8 +710,6 @@ class Window(QMainWindow):
     def build_resources(self):
         page = Page("资源与性能")
         self.resource_panels = {"usage": [], "budget": [], "record": []}
-        self.resource_view_buttons = page.tabs(
-            (("usage", "占用概览"), ("budget", "预算设置"), ("record", "实机记录")), self.select_resource_view)
 
         def section(group, title=None, caption=None, *, surface="Section"):
             result = page.panel(title, caption, surface=surface)
@@ -794,6 +928,7 @@ class Window(QMainWindow):
             self.resource_view_buttons[key].setChecked(key == view)
         if "resources" in self.pages:
             self.pages["resources"].verticalScrollBar().setValue(0)
+        self.update_caption()
         self.update_resource_activity()
 
     def open_resource_budget(self):
@@ -856,19 +991,16 @@ class Window(QMainWindow):
     def build_settings(self):
         page = Page("偏好设置")
         responsive_rows = []
-        choices = (("general", "常规"), ("terminal", "终端"), ("environment", "环境"),
-                   ("storage", "存储"), ("exit", "退出"))
-        self.settings_panels = {key: [] for key, _title in choices}
-        self.settings_tabs = page.tabs(choices, self.select_settings_view)
+        self.settings_panels = {key: [] for key, _title, _short in SETTINGS_VIEWS}
 
         def section(group, title, caption=None):
             panel = page.panel(title, caption)
             self.settings_panels[group].append(panel)
             return panel
 
-        panel = section("general", "主题")
+        panel = section("general", "外观主题", "白天模式以白色为主体搭配葱绿与 Claude 橙；黑夜模式以深黑为主体搭配深蓝与白色。")
         row = panel.row()
-        for mode, title in (("light", "浅色"), ("dark", "深色")):
+        for mode, title in (("light", "白天模式"), ("dark", "黑夜模式")):
             choice = button(title, lambda value=mode: self.set_theme(value))
             choice.setCheckable(True)
             self.theme_choices[mode] = choice
@@ -978,6 +1110,7 @@ class Window(QMainWindow):
         update_button = button('下载更新并重启…', self.c.install_update, primary=True)
         update_row.addWidget(update_button)
         update_row.addWidget(self.action('保存更新偏好', self.c.save_update_preferences, ghost=True))
+        update_row.addStretch()
         def update_enabled(unused=None):
             idle = not self.c.busy and not self.c.update_checking.get() and self.c.exit_mode is None
             check_button.setEnabled(idle)
@@ -1016,6 +1149,7 @@ class Window(QMainWindow):
             self.settings_tabs[key].setChecked(key == selected)
         if "settings" in self.pages:
             self.pages["settings"].verticalScrollBar().setValue(0)
+        self.update_caption()
 
     def show_settings(self, selected):
         self.show_page("settings")
@@ -1029,6 +1163,15 @@ class Window(QMainWindow):
         self.hero_title.setText(view["title"])
         self.hero_detail.setText(view["detail"])
         self.hero_badge.setText("●  " + view["badge"])
+        dot_state = "ready" if view["ready"] else "waiting" if view["busy"] or view["can_confirm"] else "idle"
+        if self.sidebar_status_dot.property("state") != dot_state:
+            self.sidebar_status_dot.setProperty("state", dot_state)
+            painter = self.sidebar_status_dot.style()
+            painter.unpolish(self.sidebar_status_dot)
+            painter.polish(self.sidebar_status_dot)
+        if self.sidebar_status_label.text() != view["badge"]:
+            self.sidebar_status_label.setText(view["badge"])
+        self.sidebar_status_dot.setToolTip(view["badge"])
         if self.next_button.text() != view["next_text"]:
             self.next_button.setText(view["next_text"])
         for widget, needs_ready in self.action_widgets:
@@ -1469,19 +1612,53 @@ class Window(QMainWindow):
             edge.raise_()
 
     def update_compact(self):
-        compact = self.width() < 920
+        compact = self.width() < 840
         if compact == self.compact:
             return
         self.compact = compact
-        self.nav_layout.setContentsMargins(10 if compact else 26, 4, 10 if compact else 20, 4)
-        self.nav_layout.setSpacing(4 if compact else 6)
-        for key, title, short in NAVIGATION:
-            if key != "settings":
-                self.nav[key].setText(short if compact else title)
-        for widget in (self.management_button, *(self.nav[key] for key, _, _ in NAVIGATION)):
-            widget.setProperty("compact", compact)
-            painter = widget.style()
-            painter.unpolish(widget)
-            painter.polish(widget)
-            widget.updateGeometry()
+        self.sidebar.setFixedWidth(72 if compact else self.expanded_sidebar_width)
+        self.brand_header_layout.setContentsMargins(22 if compact else 16, 14 if compact else 16, 22 if compact else 14, 14)
+        self.nav_layout.setContentsMargins(8 if compact else 12, 10, 8 if compact else 12, 12)
+        self.sidebar_footer_layout.setContentsMargins(32 if compact else 18, 12 if compact else 11, 32 if compact else 14, 12 if compact else 11)
+        self.brand_names_widget.setVisible(not compact)
+        self.sidebar_footer_text.setVisible(not compact)
+        for widget in self.group_labels:
+            widget.setVisible(not compact)
+        for _group_title, items in SIDEBAR_GROUPS:
+            for key, title, _short in items:
+                widget = self.nav[key]
+                if key != "settings":
+                    widget.setText("" if compact else title)
+                widget.setProperty("compact", compact)
+                painter = widget.style()
+                painter.unpolish(widget)
+                painter.polish(widget)
+                widget.updateGeometry()
+        for branch, choices, mapping in (
+            (self.resource_subnav, RESOURCE_VIEWS, self.resource_view_buttons),
+            (self.settings_subnav, SETTINGS_VIEWS, self.settings_tabs),
+        ):
+            if branch is not None:
+                branch.setProperty("compact", compact)
+                painter = branch.style()
+                painter.unpolish(branch)
+                painter.polish(branch)
+                for key, title, short in choices:
+                    item = mapping[key]
+                    item.setText(short if compact else title)
+                    item.setProperty("compact", compact)
+                    sub_painter = item.style()
+                    sub_painter.unpolish(item)
+                    sub_painter.polish(item)
+                    item.updateGeometry()
+        self.theme_button.setProperty("compact", compact)
+        if compact:
+            self.theme_button.setFixedSize(36, 28)
+        else:
+            self.theme_button.setMinimumSize(0, 28)
+            self.theme_button.setMaximumSize(16777215, 28)
+        theme_painter = self.theme_button.style()
+        theme_painter.unpolish(self.theme_button)
+        theme_painter.polish(self.theme_button)
+        self.update_theme_button()
         self.update_nav_selection()
