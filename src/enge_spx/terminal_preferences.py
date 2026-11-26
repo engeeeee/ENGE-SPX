@@ -11,48 +11,48 @@ FILE = "terminal-preferences.json"
 COLOR_ROLES = {
     "background": ("终端背景", None),
     "foreground": ("终端文字", FOREGROUND),
-    "cursor": ("光标", "#d89979"),
-    "selection_background": ("选区背景", "#654638"),
-    "selection_foreground": ("选区文字", FOREGROUND),
+    "cursor": ("光标", "#4f8bff"),
+    "selection_background": ("选区背景", "#18386b"),
+    "selection_foreground": ("选区文字", "#ffffff"),
     "title_background": ("标题栏背景", None),
-    "title_foreground": ("标题栏文字", "#aaa296"),
+    "title_foreground": ("标题栏文字", "#9898a2"),
     "session_background": ("会话栏背景", None),
-    "session_foreground": ("会话栏文字", "#b8afa3"),
-    "connection_foreground": ("连接状态文字", "#91ad83"),
+    "session_foreground": ("会话栏文字", "#e4e4ea"),
+    "connection_foreground": ("连接状态文字", "#649eff"),
     "footer_background": ("底栏背景", None),
-    "footer_foreground": ("底栏文字", "#b2a79b"),
+    "footer_foreground": ("底栏文字", "#82828c"),
     "badge_background": ("工具标签背景", None),
     "badge_foreground": ("工具标签文字", None),
-    "border": ("窗口边框与分隔线", "#4a4239"),
-    "menu_background": ("菜单背景", "#2a2722"),
+    "border": ("窗口边框与分隔线", "#1e1e22"),
+    "menu_background": ("菜单背景", "#0b0b0d"),
     "menu_foreground": ("菜单文字", FOREGROUND),
-    "menu_selection_background": ("菜单选中背景", "#4b382c"),
-    "menu_selection_foreground": ("菜单选中文字", "#f6dfcc"),
+    "menu_selection_background": ("菜单选中背景", "#142c57"),
+    "menu_selection_foreground": ("菜单选中文字", "#ffffff"),
     "scrollbar_track": ("滚动条轨道", None),
-    "scrollbar_thumb": ("滚动条滑块", "#53473d"),
+    "scrollbar_thumb": ("滚动条滑块", "#2a2a30"),
 }
 COLOR_FIELDS = {role: "color_" + role for role in COLOR_ROLES}
 DEFAULTS = {"font_size": 11, "font_family": "", "copy_on_select": True, "right_click_paste": True,
             "appearance": "solid", "tint": "clay", "opacity": 65,
             **dict.fromkeys(COLOR_FIELDS.values())}
-TINTS = {"clay": "#1c1a18", "purple": "#302034", "graphite": "#1d252c"}
+TINTS = {"clay": "#000000", "purple": "#302034", "graphite": "#1d252c"}
 MATERIALS = {'solid': '纯色', 'acrylic': 'Acrylic 毛玻璃', 'blur': '柔和模糊',
              'mica': 'Mica 云母', 'mica-alt': 'Mica Alt 深色云母'}
-BADGES = {"clay": ("#e5b194", "#3a2e26", "#5e4333"),
+BADGES = {"clay": ("#dce8ff", "#0f1d3a", "#264b8f"),
           "purple": ("#dbc2e5", "#44304d", "#775985"),
           "graphite": ("#bed2e2", "#2f3e4b", "#587186")}
 COLOR_PRESETS = {
     "默认配色": {},
     "浅色": {
-        "background": "#fbf7ef", "foreground": "#29231f", "cursor": "#914428",
-        "selection_background": "#e5d1bf", "selection_foreground": "#241b15",
-        "title_background": "#f1e7da", "title_foreground": "#392d24",
-        "session_background": "#f5ede2", "session_foreground": "#392d24", "connection_foreground": "#386043",
-        "footer_background": "#f5ede2", "footer_foreground": "#544437", "border": "#c6b4a2",
-        "badge_background": "#e9d6c5", "badge_foreground": "#674127",
-        "menu_background": "#fff9ef", "menu_foreground": "#34261e",
-        "menu_selection_background": "#e7d6c7", "menu_selection_foreground": "#39271c",
-        "scrollbar_track": "#f1e7da", "scrollbar_thumb": "#9a7c63",
+        "background": "#ffffff", "foreground": "#121a15", "cursor": "#d97757",
+        "selection_background": "#e3f4ea", "selection_foreground": "#121a15",
+        "title_background": "#ffffff", "title_foreground": "#49584f",
+        "session_background": "#f5f8f6", "session_foreground": "#121a15", "connection_foreground": "#237e49",
+        "footer_background": "#f5f8f6", "footer_foreground": "#49584f", "border": "#dce6df",
+        "badge_background": "#e9f6ee", "badge_foreground": "#237e49",
+        "menu_background": "#ffffff", "menu_foreground": "#121a15",
+        "menu_selection_background": "#e9f6ee", "menu_selection_foreground": "#237e49",
+        "scrollbar_track": "#f5f8f6", "scrollbar_thumb": "#c3d1c8",
     },
     "高对比度": {
         "background": "#101010", "foreground": "#ffffff", "cursor": "#ffdf69",
@@ -74,8 +74,8 @@ def display_color(tint, material):
     base = QColor(TINTS[tint])
     # Keep the tint family and give each filter a visible signature even when
     # the compositor accepts a backdrop but replaces it with its default fill.
-    overlay = {'blur': (104, 98, 92), 'mica': (96, 75, 57),
-               'mica-alt': (28, 44, 80)}.get(material)
+    overlay = {'blur': (88, 92, 100), 'mica': (52, 56, 66),
+               'mica-alt': (24, 42, 78)}.get(material)
     if overlay is None:
         return base
     return QColor(*(round(channel * .55 + target * .45) for channel, target in zip(base.getRgb()[:3], overlay)))
@@ -87,11 +87,15 @@ def display_palette(values, glass=False):
     custom = {role: values.get(key) for role, key in COLOR_FIELDS.items() if values.get(key) is not None}
     background = QColor(custom["background"]) if "background" in custom else display_color(
         values["tint"], values["appearance"] if glass else "solid")
-    bar = QColor(*(min(255, channel + 8) for channel in background.getRgb()[:3])).name()
+    if background.lightness() > 160:
+        bar = QColor(*(max(0, channel - 8) for channel in background.getRgb()[:3])).name()
+    else:
+        bar = QColor(*(min(255, channel + 7) for channel in background.getRgb()[:3])).name()
+    title_bar = background.name() if values["tint"] == "clay" and not glass and "background" not in custom else bar
     badge_text, badge_base, _ = BADGES[values["tint"]]
     return {
         **{role: default for role, (_, default) in COLOR_ROLES.items()},
-        "background": background.name(), "title_background": bar, "session_background": bar,
+        "background": background.name(), "title_background": title_bar, "session_background": bar,
         "footer_background": bar, "scrollbar_track": background.name(),
         "badge_background": badge_base, "badge_foreground": badge_text,
         **custom,

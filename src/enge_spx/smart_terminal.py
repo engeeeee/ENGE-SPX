@@ -27,7 +27,7 @@ from .clipboard import WindowsClipboard
 from .clipboard_transfer import Transfer, text_frame
 from .state import SPXError
 from .terminal_completion import ShellCompletion
-from .terminal_render import BACKGROUND, FOREGROUND, MAX_WEB_LINK_LENGTH, PALETTE, TerminalChar, TerminalStream, plain_web_link, sgr_attributes
+from .terminal_render import BACKGROUND, FOREGROUND, LIGHT_PALETTE, MAX_WEB_LINK_LENGTH, PALETTE, TerminalChar, TerminalStream, plain_web_link, sgr_attributes
 from .terminal_paint import RowPainter
 from .terminal_preferences import DEFAULTS, display_palette
 
@@ -908,7 +908,8 @@ class TerminalView(QWidget):
         key = (value, foreground)
         if key in self.colors:
             return self.colors[key]
-        named = {"default": self.display_colors["foreground" if foreground else "background"], **PALETTE}
+        palette = LIGHT_PALETTE if self.background.lightness() > 140 else PALETTE
+        named = {"default": self.display_colors["foreground" if foreground else "background"], **palette}
         result = QColor(named.get(value, "#" + value if re.fullmatch("[a-fA-F0-9]{6}", value) else named["default"]))
         if len(self.colors) >= 512:
             self.colors.clear()
@@ -1640,10 +1641,13 @@ class TerminalWindow(QMainWindow):
         layout = QVBoxLayout(root)
         layout.setContentsMargins(1, 1, 1, 1)
         layout.setSpacing(0)
-        self.titlebar = TitleBar(self, "ENGE SPX  /  智能终端")
+        self.titlebar = TitleBar(self, "ENGE SPX  ·  智能终端")
         # A custom QWidget does not paint a stylesheet background by default.
         # Alpha-zero caption pixels pass through a layered HWND before hit-test.
         self.titlebar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+        self.titlebar.setFixedHeight(40)
+        self.titlebar.layout().setContentsMargins(14, 0, 8, 0)
+        self.titlebar.layout().setSpacing(8)
         self.titlebar.caption.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         logo = QLabel()
         logo.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -1653,8 +1657,8 @@ class TerminalWindow(QMainWindow):
         session = QFrame()
         session.setObjectName("SessionBar")
         header = QHBoxLayout(session)
-        header.setContentsMargins(16, 8, 8, 8)
-        header.setSpacing(12)
+        header.setContentsMargins(16, 7, 10, 7)
+        header.setSpacing(10)
         badge = QLabel({"codex": "Codex", "claude": "Claude Code", "antigravity": "Antigravity", "shell": "Linux 终端", "ssh": "SSH"}.get(tool, tool))
         badge.setObjectName("ToolBadge")
         badge.setTextFormat(Qt.TextFormat.PlainText)
@@ -1667,10 +1671,13 @@ class TerminalWindow(QMainWindow):
         header.addWidget(project_label, 1)
         self.connection = QLabel("●  SSH 会话" if self.is_ssh else "●  等待 CLI 输入区")
         self.connection.setObjectName("ConnectionState")
+        self.connection.setProperty("state", "ready" if self.is_ssh else "waiting")
         header.addWidget(self.connection)
         self.quick_input = QToolButton()
         self.quick_input.setObjectName("QuickInputButton")
-        self.quick_input.setText("快捷输入")
+        self.quick_input.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.quick_input.setIconSize(QSize(13, 13))
+        self.quick_input.setText(" 快捷输入")
         self.quick_input.setToolTip("输入常用 Shell 指令的开头，按 Tab 接受灰色提示。Ctrl+Shift+P 管理快捷输入。"
                                     if tool in ("ssh", "shell") else "Ctrl+Shift+P 打开快捷输入，Tab 填入输入区。")
         self.quick_input.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1679,18 +1686,21 @@ class TerminalWindow(QMainWindow):
         if self.is_ssh and transfer is not None:
             self.files_button = QToolButton()
             self.files_button.setObjectName("FileBrowserButton")
-            self.files_button.setText("SFTP 文件")
+            self.files_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+            self.files_button.setIconSize(QSize(13, 13))
+            self.files_button.setText(" SFTP 文件")
             self.files_button.setToolTip("浏览、上传或下载此 SSH 服务器的文件")
             self.files_button.setCursor(Qt.CursorShape.PointingHandCursor)
             self.files_button.clicked.connect(self.show_sftp)
             header.addWidget(self.files_button)
-        options = QToolButton()
-        options.setObjectName("TerminalOptions")
-        options.setText("⋯")
-        options.setFixedSize(32, 28)
-        options.setAccessibleName("终端显示选项")
-        options.setToolTip("外观、字号和复制粘贴设置；偏好自动保存")
-        header.addWidget(options)
+        self.options_button = QToolButton()
+        self.options_button.setObjectName("TerminalOptions")
+        self.options_button.setIconSize(QSize(16, 16))
+        self.options_button.setFixedSize(30, 28)
+        self.options_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.options_button.setAccessibleName("终端显示选项")
+        self.options_button.setToolTip("外观、字号和复制粘贴设置；偏好自动保存")
+        header.addWidget(self.options_button)
         layout.addWidget(session)
         self.view = TerminalView(pty, transfer, clipboard, tool)
         if self.view.command_completion is not None:
@@ -1703,7 +1713,7 @@ class TerminalWindow(QMainWindow):
         footer = QFrame()
         footer.setObjectName("TerminalFooter")
         bottom = QHBoxLayout(footer)
-        bottom.setContentsMargins(16, 9, 16, 9)
+        bottom.setContentsMargins(16, 7, 16, 7)
         bottom.setSpacing(16)
         self.message = QLabel("请核对首次连接的主机指纹，并按提示输入密码或私钥口令。"
                               if self.is_ssh else "单击定位 · 拖选自动复制 · 右键粘贴 · 右上角设置")
@@ -1721,9 +1731,9 @@ class TerminalWindow(QMainWindow):
         self.view.quick_input_requested.connect(self.show_quick_input)
         self.view.status.connect(self.message.setText)
         if not self.is_ssh:
-            self.view.readiness_changed.connect(lambda ready: self.connection.setText("●  输入区就绪" if ready else "●  等待 CLI 输入区"))
+            self.view.readiness_changed.connect(self._update_readiness)
         self.view.ended.connect(self.connection_ended)
-        options.clicked.connect(lambda: self.show_options(options))
+        self.options_button.clicked.connect(lambda: self.show_options(self.options_button))
         self.setCentralWidget(root)
         self.resize_edges = []
         for edges, cursor in ((Qt.Edge.LeftEdge, Qt.CursorShape.SizeHorCursor), (Qt.Edge.RightEdge, Qt.CursorShape.SizeHorCursor), (Qt.Edge.TopEdge, Qt.CursorShape.SizeVerCursor), (Qt.Edge.BottomEdge, Qt.CursorShape.SizeVerCursor), (Qt.Edge.LeftEdge | Qt.Edge.TopEdge, Qt.CursorShape.SizeFDiagCursor), (Qt.Edge.RightEdge | Qt.Edge.TopEdge, Qt.CursorShape.SizeBDiagCursor), (Qt.Edge.LeftEdge | Qt.Edge.BottomEdge, Qt.CursorShape.SizeBDiagCursor), (Qt.Edge.RightEdge | Qt.Edge.BottomEdge, Qt.CursorShape.SizeFDiagCursor)):
@@ -1742,8 +1752,17 @@ class TerminalWindow(QMainWindow):
         if self.preferences.load_error:
             self.message.setText(self.preferences.load_error)
 
+    def _set_connection_state(self, state):
+        self.connection.setProperty("state", state)
+        self.connection.style().unpolish(self.connection)
+        self.connection.style().polish(self.connection)
+
+    def _update_readiness(self, ready):
+        self.connection.setText("●  输入区就绪" if ready else "●  等待 CLI 输入区")
+        self._set_connection_state("ready" if ready else "waiting")
+
     def apply_preferences(self, values):
-        from .terminal_appearance import terminal_stylesheet
+        from .terminal_appearance import option_icon_color, terminal_glyph, terminal_stylesheet
         from .terminal_preferences import COLOR_FIELDS, TINTS
         from .window_effects import GLASS_BACKENDS, apply_backdrop
         color = QColor(values.get("color_background") or TINTS[values["tint"]])
@@ -1763,6 +1782,11 @@ class TerminalWindow(QMainWindow):
                       tuple(values.get(key) for key in COLOR_FIELDS.values()))
         if chrome_key != self.chrome_key:
             self.setStyleSheet(terminal_stylesheet(palette, values, color.alpha(), glass))
+            icon_ink = option_icon_color(palette, values)
+            self.quick_input.setIcon(terminal_glyph("quick_input", icon_ink, 13))
+            if self.files_button is not None:
+                self.files_button.setIcon(terminal_glyph("files", icon_ink, 13))
+            self.options_button.setIcon(terminal_glyph("options", icon_ink, 16))
             self.chrome_key = chrome_key
 
     def sync_move_effect(self):
@@ -1909,6 +1933,7 @@ class TerminalWindow(QMainWindow):
         self.view.stop()
         self.quick_input.setEnabled(False)
         self.connection.setText("○  连接已结束")
+        self._set_connection_state("ended")
         self.message.setText("SSH 连接已结束，可以关闭此窗口。" if self.is_ssh
                              else "终端连接已结束。工作区和持久资料按现有规则保留；可关闭此窗口。")
 
@@ -1921,20 +1946,20 @@ class TerminalWindow(QMainWindow):
         event.accept()
 
 
-def terminal_application():
+def terminal_application(store=None):
     from .brand import TERMINAL_APP_ID
     from .platform_ui import prepare_windows
     from .ui import style
     prepare_windows(dpi=False, app_id=TERMINAL_APP_ID)
     app = QApplication.instance() or QApplication([])
-    style.apply(app)
+    style.apply(app, style.read_theme(store) if store is not None else "dark")
     return app
 
 
 def run(engine, project, tool, session, container):
     from pathlib import Path
     from .terminal_pty import DockerPTY
-    app = terminal_application()
+    app = terminal_application(engine.store)
     command = engine.attach_command(project, tool, session, container, interactive=True, terminal_capabilities=True, terminal_relay=True)
     transfer = Transfer(engine, project, tool, session, container) if tool in ("claude", "codex") else None
     pty = DockerPTY(command, engine.docker.environment(), project)

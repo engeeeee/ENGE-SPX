@@ -28,7 +28,7 @@ class RowPainter:
         self.font = QFont(font)
         self.width, self.height, self.color = width, height, color
         self.background = QColor(BACKGROUND)
-        self.selection_bg, self.selection_fg = QColor("#654638"), QColor(FOREGROUND)
+        self.selection_bg, self.selection_fg = QColor("#18386b"), QColor("#ffffff")
         self.rows, self.styles = OrderedDict(), {}
         self.rasters = OrderedDict()
         self.raster_bytes = self.raster_builds = 0

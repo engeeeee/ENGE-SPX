@@ -5,13 +5,19 @@ import time
 
 import pyte
 
-BACKGROUND = "#1c1a18"
-FOREGROUND = "#e8e3dc"
+BACKGROUND = "#000000"
+FOREGROUND = "#eff1f5"
 PALETTE = {
-    "black": "#24211f", "red": "#e47b71", "green": "#a3bf89", "brown": "#d6ad70",
-    "blue": "#91aace", "magenta": "#c6a0c7", "cyan": "#87bbb6", "white": "#ded8cf",
-    "brightblack": "#8b8179", "brightred": "#f49b90", "brightgreen": "#c0d6a4", "brightbrown": "#f0cc93",
-    "brightblue": "#b7cbee", "brightmagenta": "#dec0e1", "brightcyan": "#b5e2dc", "brightwhite": "#ffffff",
+    "black": "#18191c", "red": "#eb6f6a", "green": "#6ac486", "brown": "#dfb06b",
+    "blue": "#6ca0ec", "magenta": "#c195dc", "cyan": "#68c1c6", "white": "#d4d8df",
+    "brightblack": "#717680", "brightred": "#ff8d87", "brightgreen": "#8ce0a6", "brightbrown": "#f5cc8a",
+    "brightblue": "#90bdf8", "brightmagenta": "#dab5f0", "brightcyan": "#8be0e5", "brightwhite": "#ffffff",
+}
+LIGHT_PALETTE = {
+    "black": "#121a15", "red": "#c43c35", "green": "#237e49", "brown": "#9a6700",
+    "blue": "#1d5bbf", "magenta": "#8544a6", "cyan": "#0e7a84", "white": "#49584f",
+    "brightblack": "#6b7b71", "brightred": "#a82e28", "brightgreen": "#1a683a", "brightbrown": "#7d5300",
+    "brightblue": "#164694", "brightmagenta": "#6d348a", "brightcyan": "#0a5e66", "brightwhite": "#121a15",
 }
 TerminalChar = namedtuple("TerminalChar", [*pyte.screens.Char._fields, "faint", "hyperlink", "wrapped"],
                           defaults=[*pyte.screens.Char._field_defaults.values(), False, None, False])

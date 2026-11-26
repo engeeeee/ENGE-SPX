@@ -166,7 +166,7 @@ class TerminalPreferenceTests(unittest.TestCase):
                 view.stream.feed("\x1b]10;?\x07")
                 self.assertIn(b"1212/3434/5656", respond.call_args.args[0])
             page.reset.click()
-            self.assertEqual(view.foreground.name(), "#e8e3dc")
+            self.assertEqual(view.foreground.name(), "#eff1f5")
             self.assertEqual(view.background.name(), "#101010")
             window.appearance_dialog.font_size.setValue(15)
             self.assertEqual(view.font.pointSize(), 15)

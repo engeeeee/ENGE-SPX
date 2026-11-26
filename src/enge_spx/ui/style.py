@@ -159,6 +159,7 @@ def apply(app, theme="dark"):
         "display_font": "SimSun" if os.name == "nt" else "Noto Serif CJK SC",
         "check_icon": (ICONS / "check.svg").as_posix().replace('"', '\\"'),
         "chevron_icon": (ICONS / f"chevron-{theme}.svg").as_posix().replace('"', '\\"'),
+        "chevron_up_icon": (ICONS / f"chevron-up-{theme}.svg").as_posix().replace('"', '\\"'),
     }
     app.setStyleSheet(re.sub(r"@([a-z_]+)@", lambda match: tokens[match[1]], STYLES))
     app.setProperty("spxTheme", theme)
@@ -270,7 +271,17 @@ QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled, QDoubleSpinBox:disabl
 QComboBox { padding-right: 30px; }
 QComboBox::drop-down { width: 28px; border: none; subcontrol-origin: padding; subcontrol-position: center right; }
 QComboBox::down-arrow { image: url("@chevron_icon@"); width: 14px; height: 14px; }
+QSpinBox, QDoubleSpinBox { padding-right: 26px; }
+QSpinBox::up-button, QSpinBox::down-button, QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { subcontrol-origin: border; width: 22px; border: none; border-left: 1px solid @line@; background: transparent; }
+QSpinBox::up-button, QDoubleSpinBox::up-button { subcontrol-position: top right; border-top-right-radius: 7px; }
+QSpinBox::down-button, QDoubleSpinBox::down-button { subcontrol-position: bottom right; border-bottom-right-radius: 7px; }
+QSpinBox::up-button:hover, QSpinBox::down-button:hover, QDoubleSpinBox::up-button:hover, QDoubleSpinBox::down-button:hover { background: @hover@; }
+QSpinBox::up-arrow, QDoubleSpinBox::up-arrow { image: url("@chevron_up_icon@"); width: 10px; height: 10px; }
+QSpinBox::down-arrow, QDoubleSpinBox::down-arrow { image: url("@chevron_icon@"); width: 10px; height: 10px; }
 QComboBox QAbstractItemView { background: @paper@; border: 1px solid @edge@; selection-background-color: @select_bg@; selection-color: @ink@; padding: 5px; }
+QListWidget { background: @field@; border: 1px solid @line@; border-radius: 8px; padding: 4px; outline: none; }
+QListWidget::item { padding: 8px 10px; border-radius: 5px; }
+QListWidget::item:selected { background: @select_bg@; color: @ink@; }
 QListWidget#SSHMachineList { background: @field@; border: 1px solid @line@; border-radius: 8px; padding: 4px; }
 QListWidget#SSHMachineList::item { padding: 10px 8px; border-radius: 5px; }
 QListWidget#SSHMachineList::item:selected { background: @select_bg@; color: @ink@; }
