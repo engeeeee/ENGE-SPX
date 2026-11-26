@@ -308,7 +308,9 @@ def exercise_reconnect(app, root, host_key):
             if predicate():
                 return
             time.sleep(.01)
-        raise AssertionError(f"{label}. Server errors={errors}, screen={view.screen.display[-5:]}")
+        raise AssertionError(f"{label}. Server errors={errors}, client={view.pty.poll()}, "
+                             f"drained={view.output_drained}, status={session.message.text()}, "
+                             f"screen={view.screen.display[-5:]}")
 
     window = Window(Controller(Store(root / "reconnect-state")))
     secret = read_password(PASSWORD)

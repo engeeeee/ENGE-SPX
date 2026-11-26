@@ -44,6 +44,7 @@ class SSHClientTests(unittest.TestCase):
         )
         for error in errors:
             self.assertTrue(retryable_disconnect(255, error), error)
+        self.assertTrue(retryable_disconnect(0xFFFFFFFF, errors[-2]))
         self.assertFalse(retryable_disconnect(0, b"Connection to 127.0.0.1 closed."))
         self.assertFalse(retryable_disconnect(255, b"Host key verification failed."))
         self.assertFalse(retryable_disconnect(255, b"fixture@localhost: Permission denied (password)."))

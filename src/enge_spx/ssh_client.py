@@ -29,7 +29,9 @@ _NETWORK_END = re.compile(
 
 
 def retryable_disconnect(status, output):
-    if status != 255:
+    # OpenSSH returns -1 if no remote exit status arrived. POSIX exposes 255
+    # while GetExitCodeProcess returns an unsigned DWORD on Windows.
+    if status not in (255, -1, 0xFFFFFFFF):
         return False
     text = _VT_CONTROL.sub("", output.decode("utf-8", errors="replace")).lower()
     if re.search(r"host key verification failed|remote host identification has changed|"
