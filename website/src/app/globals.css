@@ -170,13 +170,11 @@ small { font-size: .8125rem; color: var(--muted); }
 .preview-options button:hover { background: var(--soft); }
 .preview-options button[aria-pressed="true"] { background: var(--selected); border-color: var(--selected-border); color: var(--accent); }
 .preview-platform { flex-shrink: 0; margin-right: .25rem; color: var(--muted); font-size: .75rem; }
-.hero-stage {
-    padding: clamp(.65rem, 2vw, 1.75rem);
+.hero-stage .shot-button {
+    border: 0;
     border-radius: 0 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px);
-    background: var(--stage);
+    box-shadow: none;
 }
-.hero-stage .shot-button { aspect-ratio: 4 / 3; box-shadow: 0 14px 36px var(--shadow); }
-.hero-stage .shot-button img { position: absolute; inset: 0 0 auto; }
 .product-shot { min-width: 0; }
 .shot-button {
     position: relative;
@@ -342,7 +340,6 @@ dialog::backdrop { background: #000000b0; }
     .hero { grid-template-columns: minmax(0, 1fr); gap: 1.9rem; }
     .hero h1 span { display: inline; }
     .hero h1 span + span::before { content: " "; }
-    .hero-stage .shot-button { aspect-ratio: 16 / 10; }
 }
 @media (max-width: 900px) {
     .desktop-nav { display: none; }
@@ -361,8 +358,6 @@ dialog::backdrop { background: #000000b0; }
     .hero h1 span { display: block; }
     .hero h1 span + span::before { content: none; }
     .hero-description { margin-block: 1rem 1.2rem; }
-    .hero-stage .shot-button { aspect-ratio: 8 / 7; }
-    .hero-stage .shot-button { border-radius: 5px; }
     .preview-platform { display: none; }
     .preview-options button { padding-inline: .4rem; }
     .features-grid, .showcase, .network-preview, .download-panel, .faq-section { grid-template-columns: minmax(0, 1fr); }
