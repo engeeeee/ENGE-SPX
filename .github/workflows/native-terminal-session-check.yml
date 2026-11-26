@@ -1,0 +1,27 @@
+name: Native terminal session check
+on:
+  push:
+    branches: [checks/agy-terminal-sessions]
+permissions:
+  contents: read
+jobs:
+  terminal-windows:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements.txt
+      - name: Resize rendering, grouped sessions and workspace lifecycle
+        working-directory: tests
+        env:
+          PYTHONPATH: ../src
+          PYTHONFAULTHANDLER: '1'
+        run: python -m unittest -v test_terminal_workspace test_terminal_rendering test_workspace_ui test_terminal_usability test_terminal_preferences test_workspace_launch test_exit_lifecycle
+      - name: Restore only the terminal after Explorer Show Desktop
+        env:
+          PYTHONPATH: src
+          PYTHONFAULTHANDLER: '1'
+        run: python tools/probe_windows_show_desktop.py
