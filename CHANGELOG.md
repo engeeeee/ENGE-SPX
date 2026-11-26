@@ -1,5 +1,10 @@
 # Changes
 
+## 0.16.5 Stable AGY viewport and SSH reconnect — 2026-11-26
+
+- Keep the last visible viewport through a split Antigravity resize replay, including in smart SSH and Linux shell sessions.
+- Reconnect interrupted SSH sessions in the same tab with backoff, preserved scrollback and the original host-key verification.
+
 ## 0.16.4 Terminal resize, sidebar colors and shell completion — 2026-11-26
 
 - Use the native Antigravity alternate screen for smart terminal launches so resizing redraws the current viewport.

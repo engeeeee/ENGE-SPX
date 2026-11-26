@@ -2,7 +2,7 @@
 <h1 align="center">ENGE SPX</h1>
 <p align="center"><strong>An isolated AI coding workspace for Windows</strong></p>
 <p align="center">Run Claude Code, Codex, Antigravity and Chromium in Linux containers with a chosen, verified proxy exit.</p>
-<p align="center"><a href="README.md">简体中文</a> · <strong>English</strong> · <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.16.4-windows">Download</a></p>
+<p align="center"><a href="README.md">简体中文</a> · <strong>English</strong> · <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.16.5-windows">Download</a></p>
 
 [Official website](https://enge1337.cn/) · [Website source](website/README.md)
 
@@ -70,12 +70,12 @@ Open saved machines directly from the SSH page or start a temporary connection. 
 
 ## Download and start
 
-Current release: **[0.16.4 stable](https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.16.4-windows)**. Windows x64 requires Docker Desktop with Linux containers / WSL 2 and Docker Engine 28+. Packaged builds do not require a separate Python installation. Executables are currently unsigned.
+Current release: **[0.16.5 stable](https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.16.5-windows)**. Windows x64 requires Docker Desktop with Linux containers / WSL 2 and Docker Engine 28+. Packaged builds do not require a separate Python installation. Executables are currently unsigned.
 
-Version 0.16.4 uses native Antigravity rendering to avoid history replay on resize, follows the terminal palette for sidebar selection, and restores inline completion at SSH and Linux shell prompts. [Release notes](docs/releases/0.16.4.zh-CN.md)
+Version 0.16.5 keeps the Antigravity viewport stable during resize, including inside SSH and Linux shells. SSH reconnects in the same tab after network failures. [Release notes](docs/releases/0.16.5.zh-CN.md)
 
-- **[Windows installer](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.16.4-windows/ENGE-SPX-Windows-x64-0.16.4-Setup.exe)**. Per-user setup with shortcuts.
-- **[Portable ZIP](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.16.4-windows/ENGE-SPX-Windows-x64-0.16.4-Portable.zip)**. Extract everything, run `ENGE-SPX.exe` and keep `_internal` beside it.
+- **[Windows installer](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.16.5-windows/ENGE-SPX-Windows-x64-0.16.5-Setup.exe)**. Per-user setup with shortcuts.
+- **[Portable ZIP](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.16.5-windows/ENGE-SPX-Windows-x64-0.16.5-Portable.zip)**. Extract everything, run `ENGE-SPX.exe` and keep `_internal` beside it.
 - Both packages contain `spx.exe`. Checksums and the matching runtime are on the release page.
 
 1. Install [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/) once and complete its license, WSL and Linux-engine initialization.
