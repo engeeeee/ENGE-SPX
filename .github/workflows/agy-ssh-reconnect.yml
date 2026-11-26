@@ -1,0 +1,36 @@
+name: AGY resize and SSH reconnect on Windows
+on:
+  push:
+    branches: [checks/agy-ssh-windows-exit-status]
+    paths: ['.github/workflows/agy-ssh-reconnect.yml']
+permissions:
+  contents: read
+jobs:
+  terminal:
+    runs-on: windows-latest
+    timeout-minutes: 8
+    env:
+      PYTHONPATH: src;tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+      - name: Prepare the published Windows console host and askpass helper
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'spx-0.16.4.zip'
+          $runtime = Join-Path $env:RUNNER_TEMP 'spx-0.16.4'
+          curl.exe -fsSL --retry 2 'https://github.com/engeeeee/ENGE-SPX/releases/download/v0.16.4-windows/ENGE-SPX-Windows-x64-0.16.4-Portable.zip' -o $archive
+          if ($LASTEXITCODE -ne 0 -or (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '0b4625a64bf3cb4de66e6859963b00d5880038b90ed3c97a909dd9a1d9b3570b') { throw 'Unexpected portable archive.' }
+          Expand-Archive -LiteralPath $archive -DestinationPath $runtime
+          New-Item -ItemType Directory -Path build -Force | Out-Null
+          Copy-Item (Join-Path $runtime '_internal/ssh-conpty') build -Recurse
+      - name: Install project and localhost fixture dependencies
+        run: python -m pip install -r requirements.txt paramiko==4.0.0
+      - name: Exercise resize and an actual SSH outage through ConPTY
+        shell: pwsh
+        run: |
+          $helper = Join-Path $env:RUNNER_TEMP 'spx-0.16.4/spx.exe'
+          python -u tests/integration_ssh_terminal.py --reconnect-only --helper $helper
