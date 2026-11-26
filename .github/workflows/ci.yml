@@ -112,7 +112,7 @@ jobs:
       - if: runner.os == 'Windows' && env.SPX_UI_HOTFIX != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: ENGE-SPX-UI-0.16.3
+          name: ENGE-SPX-UI-0.16.4
           path: ${{ runner.temp }}/spx-ui-checks
           if-no-files-found: error
       - if: runner.os == 'Windows' && env.SPX_UI_HOTFIX != 'true'
@@ -148,7 +148,7 @@ jobs:
       - name: Verify real portable and installed client update handoff
         if: env.SPX_WORKSPACE_UPDATE != 'true'
         shell: pwsh
-        run: ./.venv-build/Scripts/python.exe tests/integration_app_update.py --bundle dist/ENGE-SPX-Windows-x64-0.16.3-Portable.zip --setup dist/ENGE-SPX-Windows-x64-0.16.3-Setup.exe --output '${{ runner.temp }}/app-update-e2e.json'
+        run: ./.venv-build/Scripts/python.exe tests/integration_app_update.py --bundle dist/ENGE-SPX-Windows-x64-0.16.4-Portable.zip --setup dist/ENGE-SPX-Windows-x64-0.16.4-Setup.exe --output '${{ runner.temp }}/app-update-e2e.json'
       - name: Verify terminal taskbar identity, materials and opacity on Windows
         if: env.SPX_UI_HOTFIX != 'true'
         shell: pwsh
@@ -228,7 +228,7 @@ jobs:
         shell: pwsh
         run: |
           $appDir = Join-Path $env:RUNNER_TEMP 'spx-installed'
-          $setup = Start-Process -FilePath ./dist/ENGE-SPX-Windows-x64-0.16.3-Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$appDir" -PassThru -Wait
+          $setup = Start-Process -FilePath ./dist/ENGE-SPX-Windows-x64-0.16.4-Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$appDir" -PassThru -Wait
           if ($setup.ExitCode -ne 0 -or -not (Test-Path "$appDir/ENGE-SPX.exe")) { throw 'Setup failed.' }
           & "$appDir/spx.exe" --version
           if ($LASTEXITCODE -ne 0) { throw 'Installed CLI failed.' }
@@ -242,10 +242,10 @@ jobs:
           if ((Get-Content (Join-Path $privateData 'uninstall-test.txt')) -ne 'preserved') { throw 'Uninstall removed private data.' }
       - uses: actions/upload-artifact@v4
         with:
-          name: ENGE-SPX-Windows-x64-0.16.3
+          name: ENGE-SPX-Windows-x64-0.16.4
           path: |
-            dist/ENGE-SPX-Windows-x64-0.16.3-Portable.zip
-            dist/ENGE-SPX-Windows-x64-0.16.3-Setup.exe
+            dist/ENGE-SPX-Windows-x64-0.16.4-Portable.zip
+            dist/ENGE-SPX-Windows-x64-0.16.4-Setup.exe
             dist/*.sha256
           if-no-files-found: error
   containers:
@@ -357,7 +357,7 @@ jobs:
         if: github.repository == 'engeeeee/ENGE-SPX' && github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: ENGE-SPX-Runtime-0.16.3
+          name: ENGE-SPX-Runtime-0.16.4
           path: ${{ runner.temp }}/runtime-package/*
           compression-level: 0
           retention-days: 1
@@ -383,7 +383,7 @@ jobs:
           python -u tests/integration_prebuilt.py --directory "$RUNNER_TEMP/runtime-package"
       - uses: actions/upload-artifact@v4
         with:
-          name: ENGE-SPX-Runtime-0.16.3
+          name: ENGE-SPX-Runtime-0.16.4
           path: ${{ runner.temp }}/runtime-package/*
           compression-level: 0
           retention-days: 1
@@ -405,10 +405,10 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: python tools/reuse_workspace_runtime.py --output "$RUNNER_TEMP/runtime-package"
       - name: Verify cold SOCKS5 switching, official Antigravity install and workspace isolation
-        run: python -u tests/integration_chain.py --runtime-manifest "$RUNNER_TEMP/runtime-package/ENGE-SPX-Runtime-linux-amd64-0.16.3.json"
+        run: python -u tests/integration_chain.py --runtime-manifest "$RUNNER_TEMP/runtime-package/ENGE-SPX-Runtime-linux-amd64-0.16.4.json"
       - uses: actions/upload-artifact@v4
         with:
-          name: ENGE-SPX-Runtime-0.16.3
+          name: ENGE-SPX-Runtime-0.16.4
           path: ${{ runner.temp }}/runtime-package/*
           compression-level: 0
           retention-days: 1
@@ -423,11 +423,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: ENGE-SPX-Windows-x64-0.16.3
+          name: ENGE-SPX-Windows-x64-0.16.4
           path: verified-package
       - uses: actions/download-artifact@v4
         with:
-          name: ENGE-SPX-Runtime-0.16.3
+          name: ENGE-SPX-Runtime-0.16.4
           path: verified-runtime
       - name: Publish the verified ENGE SPX release
         uses: actions/github-script@v7

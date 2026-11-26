@@ -1,5 +1,11 @@
 # Changes
 
+## 0.16.4 Terminal resize, sidebar colors and shell completion — 2026-11-26
+
+- Use the native Antigravity alternate screen for smart terminal launches so resizing redraws the current viewport.
+- Match the session sidebar selection to the terminal palette.
+- Show inline command suggestions at recognized SSH and Linux shell prompts with or without bracketed paste. Tab inserts the suffix for review.
+
 ## 0.16.3 Terminal sessions and Antigravity resize — 2026-11-26
 
 - Switch between SSH and isolated smart terminal sessions from a collapsible sidebar.

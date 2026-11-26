@@ -3,7 +3,7 @@
 <p align="center"><strong>Windows 上的 AI 编程隔离工作台</strong></p>
 <p align="center">在 Docker 容器中运行 Claude Code、Codex、Antigravity 与 Chromium，并核对实际代理出口。</p>
 <p align="center">
-  <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.16.3-windows">下载 Windows 版</a> ·
+  <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.16.4-windows">下载 Windows 版</a> ·
   <a href="https://enge1337.cn/">官方网站</a> ·
   <a href="#界面预览">界面预览</a> ·
   <a href="docs/quickstart.zh-CN.md">快速入门</a> ·
@@ -12,8 +12,8 @@
 </p>
 <p align="center">
   <a href="https://github.com/engeeeee/ENGE-SPX/actions/workflows/ci.yml"><img src="https://github.com/engeeeee/ENGE-SPX/actions/workflows/ci.yml/badge.svg" alt="Windows / Linux CI"></a>
-  <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.16.3-windows"><img src="https://img.shields.io/badge/Windows-x64-0078D4" alt="Windows x64"></a>
-  <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.16.3-windows"><img src="https://img.shields.io/badge/0.16.3-Stable-3F8F61" alt="0.16.3 正式版"></a>
+  <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.16.4-windows"><img src="https://img.shields.io/badge/Windows-x64-0078D4" alt="Windows x64"></a>
+  <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.16.4-windows"><img src="https://img.shields.io/badge/0.16.4-Stable-3F8F61" alt="0.16.4 正式版"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-PolyForm_Noncommercial-6D5BD0" alt="PolyForm Noncommercial"></a>
 </p>
 
@@ -89,15 +89,15 @@ flowchart LR
 
 ## 下载并开始使用
 
-当前版本为 **[0.16.3 正式版](https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.16.3-windows)**。支持 Windows x64，需要 Docker Desktop 的 **Linux containers / WSL 2** 后端，Docker Engine **28+**。安装版和便携版均不需要另装 Python。
+当前版本为 **[0.16.4 正式版](https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.16.4-windows)**。支持 Windows x64，需要 Docker Desktop 的 **Linux containers / WSL 2** 后端，Docker Engine **28+**。安装版和便携版均不需要另装 Python。
 
-本版增加终端会话侧栏和独立窗口，可切换从工作台打开的 SSH 和容器智能终端，并合并 Antigravity CLI 连续缩放时的尺寸更新。[0.16.3 发布说明](docs/releases/0.16.3.zh-CN.md)
+本版改用 Antigravity CLI 的原生备用屏幕渲染，修复缩放时重放历史。会话侧栏高亮跟随终端配色，SSH 与 Linux Shell 的行内补全适配普通命令提示符。[0.16.4 发布说明](docs/releases/0.16.4.zh-CN.md)
 
 | 下载方式 | 适合谁 |
 | --- | --- |
-| **[Windows 安装版](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.16.3-windows/ENGE-SPX-Windows-x64-0.16.3-Setup.exe)** | 当前用户安装，提供开始菜单和桌面快捷方式 |
-| **[Windows 便携版](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.16.3-windows/ENGE-SPX-Windows-x64-0.16.3-Portable.zip)** | 完整解压后运行 `ENGE-SPX.exe`，保留 `_internal` |
-| **[发布记录与 SHA-256](https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.16.3-windows)** | 查看改动、校验文件与同版本资产；两个 Windows 包均包含 `spx.exe` 命令行入口 |
+| **[Windows 安装版](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.16.4-windows/ENGE-SPX-Windows-x64-0.16.4-Setup.exe)** | 当前用户安装，提供开始菜单和桌面快捷方式 |
+| **[Windows 便携版](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.16.4-windows/ENGE-SPX-Windows-x64-0.16.4-Portable.zip)** | 完整解压后运行 `ENGE-SPX.exe`，保留 `_internal` |
+| **[发布记录与 SHA-256](https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.16.4-windows)** | 查看改动、校验文件与同版本资产；两个 Windows 包均包含 `spx.exe` 命令行入口 |
 
 1. **安装一次 Docker Desktop**：按 [官方安装说明](https://docs.docker.com/desktop/setup/install/windows-install/)完成许可、WSL 和 Linux 引擎初始化。
 2. **点击“一键准备环境”**：软件自动启动已安装的 Docker，等待引擎就绪，再复用已有运行环境，或下载、校验并导入。
