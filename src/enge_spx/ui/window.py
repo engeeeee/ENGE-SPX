@@ -115,7 +115,7 @@ class Window(QMainWindow):
         self.theme_choices = {}
         self.theme_button = button("", self.toggle_theme)
         self.theme_button.setObjectName("WindowTheme")
-        self.theme_button.setFixedHeight(28)
+        self.theme_button.setFixedSize(36, 28)
         self.titlebar.layout().insertWidget(2, self.theme_button)
         outer.addWidget(self.titlebar)
 
@@ -354,8 +354,8 @@ class Window(QMainWindow):
     def update_theme_button(self):
         dark = self.c.theme == "dark"
         text = "切换到白天模式" if dark else "切换到黑夜模式"
-        self.theme_button.setIcon(style.icon("sun" if dark else "moon", style.THEMES[self.c.theme]["muted"], 16))
-        self.theme_button.setText("" if self.compact else ("切换白天" if dark else "切换黑夜"))
+        self.theme_button.setIcon(style.icon("sun" if dark else "moon", style.THEMES[self.c.theme]["muted"], 17))
+        self.theme_button.setText("")
         self.theme_button.setToolTip(text)
         self.theme_button.setAccessibleName(text)
         for mode, choice in self.theme_choices.items():
@@ -998,7 +998,7 @@ class Window(QMainWindow):
             self.settings_panels[group].append(panel)
             return panel
 
-        panel = section("general", "外观主题", "白天模式以白色为主体搭配葱绿与 Claude 橙；黑夜模式以深黑为主体搭配深蓝与白色。")
+        panel = section("general", "外观主题", "白天模式以白色为主体搭配葱绿与 Claude 橙；黑夜模式以纯黑为背景搭配白色与局部深蓝控件。")
         row = panel.row()
         for mode, title in (("light", "白天模式"), ("dark", "黑夜模式")):
             choice = button(title, lambda value=mode: self.set_theme(value))
@@ -1651,14 +1651,5 @@ class Window(QMainWindow):
                     sub_painter.unpolish(item)
                     sub_painter.polish(item)
                     item.updateGeometry()
-        self.theme_button.setProperty("compact", compact)
-        if compact:
-            self.theme_button.setFixedSize(36, 28)
-        else:
-            self.theme_button.setMinimumSize(0, 28)
-            self.theme_button.setMaximumSize(16777215, 28)
-        theme_painter = self.theme_button.style()
-        theme_painter.unpolish(self.theme_button)
-        theme_painter.polish(self.theme_button)
         self.update_theme_button()
         self.update_nav_selection()

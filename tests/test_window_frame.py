@@ -73,11 +73,14 @@ class NativeWindowTests(unittest.TestCase):
 
     def test_titlebar_theme_switch_updates_palette_and_persists(self):
         self.assertEqual(self.controller.theme, "dark")
+        self.assertEqual(self.window.theme_button.text(), "")
         self.window.theme_button.click()
         self.assertEqual(self.app.property("spxTheme"), "light")
+        self.assertEqual(self.window.theme_button.text(), "")
         self.assertEqual(style.read_theme(self.controller.store), "light")
         self.window.theme_button.click()
         self.assertEqual(self.app.property("spxTheme"), "dark")
+        self.assertEqual(self.window.theme_button.text(), "")
         self.assertEqual(style.read_theme(self.controller.store), "dark")
 
     def test_idle_state_does_not_rewrite_widgets(self):

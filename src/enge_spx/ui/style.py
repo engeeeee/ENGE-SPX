@@ -1,4 +1,4 @@
-"""Day (white + scallion green + Claude orange) and Night (deep black + deep blue + white) themes."""
+"""Day (white + scallion green + Claude orange) and Night (pure black + white + blue controls) themes."""
 from functools import lru_cache
 import os
 import re
@@ -13,41 +13,43 @@ from ..state import SPXError
 THEME_FILE = "appearance.json"
 THEMES = {
     "dark": {
-        "canvas": "#080A0F",
-        "sidebar": "#05070B",
-        "titlebar": "#06080D",
-        "paper": "#0D121C",
-        "field": "#090D15",
-        "inset": "#0B0F18",
-        "line": "#1A2336",
-        "edge": "#2C3B59",
+        "canvas": "#000000",
+        "sidebar": "#000000",
+        "titlebar": "#000000",
+        "paper": "#0B0B0D",
+        "field": "#070708",
+        "inset": "#08080A",
+        "line": "#1E1E21",
+        "edge": "#343439",
         "ink": "#FFFFFF",
-        "muted": "#C2CFE3",
-        "faint": "#8092B0",
-        "primary": "#1C4B9E",
+        "muted": "#B8B8BE",
+        "faint": "#7D7D85",
+        "primary": "#1D4B9E",
         "on_primary": "#FFFFFF",
-        "primary_hover": "#245BBF",
-        "primary_down": "#153A7D",
-        "clay": "#DCE8FF",
+        "primary_hover": "#255BC0",
+        "primary_down": "#163B7E",
+        "clay": "#FFFFFF",
         "accent": "#FFFFFF",
-        "accent_bright": "#3A72D8",
-        "hero": "#0B1324",
-        "hero_line": "#223A68",
-        "wash": "#122242",
-        "nav_line": "#294782",
-        "sub_wash": "#0F1C36",
-        "sub_line": "#233C6E",
-        "hover": "#121A2B",
-        "disabled": "#0C1018",
-        "quiet": "#50607D",
-        "rail": "#101726",
-        "thumb": "#24324D",
-        "thumb_hover": "#354A70",
+        "accent_bright": "#2B64CC",
+        "hero": "#08080A",
+        "hero_end": "#111114",
+        "hero_line": "#26262B",
+        "wash": "#0F1D3A",
+        "nav_line": "#264B8F",
+        "sub_wash": "#0C1830",
+        "sub_line": "#20407A",
+        "select_bg": "#1B1B1F",
+        "hover": "#151518",
+        "disabled": "#0C0C0E",
+        "quiet": "#55555C",
+        "rail": "#151518",
+        "thumb": "#2A2A2F",
+        "thumb_hover": "#3D3D45",
         "check_bg": "#1F54B5",
-        "check_line": "#3D73D4",
-        "status_ready": "#4C8BFF",
-        "status_wait": "#DCE8FF",
-        "status_idle": "#6A7B99",
+        "check_line": "#3872DB",
+        "status_ready": "#2B6BE0",
+        "status_wait": "#FFFFFF",
+        "status_idle": "#6E6E76",
         "close_hover": "#9E2A2B",
         "close_ink": "#FFFFFF",
     },
@@ -71,11 +73,13 @@ THEMES = {
         "accent": "#237E49",
         "accent_bright": "#329D5E",
         "hero": "#F6FBF7",
+        "hero_end": "#E9F6EE",
         "hero_line": "#BEDEC9",
         "wash": "#E9F6EE",
         "nav_line": "#B5DBC2",
         "sub_wash": "#EDF8F1",
         "sub_line": "#C5E3D0",
+        "select_bg": "#E9F6EE",
         "hover": "#EFF5F1",
         "disabled": "#F3F6F4",
         "quiet": "#8E9C94",
@@ -145,7 +149,7 @@ def apply(app, theme="dark"):
     for role, token in (
         ("Window", "canvas"), ("WindowText", "ink"), ("Base", "field"),
         ("AlternateBase", "inset"), ("Text", "ink"), ("Button", "paper"),
-        ("ButtonText", "ink"), ("Highlight", "wash"), ("HighlightedText", "ink"),
+        ("ButtonText", "ink"), ("Highlight", "select_bg"), ("HighlightedText", "ink"),
         ("PlaceholderText", "faint"), ("ToolTipBase", "paper"), ("ToolTipText", "ink"),
     ):
         palette.setColor(getattr(QPalette.ColorRole, role), QColor(colors[token]))
@@ -179,7 +183,7 @@ QWidget#Page, QWidget#Viewport { background: @canvas@; }
 QScrollArea { border: none; background: transparent; }
 QFrame#Section { background: transparent; border: none; border-top: 1px solid @line@; }
 QFrame#Hero {
-    background: qlineargradient(x1:0, y1:0, x2:0.95, y2:1, stop:0 @hero@, stop:1 @wash@);
+    background: qlineargradient(x1:0, y1:0, x2:0.95, y2:1, stop:0 @hero@, stop:1 @hero_end@);
     border: 1px solid @hero_line@;
     border-radius: 14px;
 }
@@ -249,19 +253,16 @@ QPushButton#WindowControl { font-size: 15px; }
 QPushButton#WindowClose { font-size: 19px; }
 QPushButton#WindowControl:hover { background: @hover@; color: @ink@; }
 QPushButton#WindowTheme {
-    background: @inset@;
-    border: 1px solid @line@;
-    border-radius: 6px;
-    padding: 3px 10px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    padding: 2px;
     color: @muted@;
-    font-size: 12px;
-    font-weight: 500;
 }
-QPushButton#WindowTheme[compact="true"] { background: transparent; border-color: transparent; padding: 2px; }
-QPushButton#WindowTheme:hover { background: @hover@; border-color: @edge@; color: @ink@; }
+QPushButton#WindowTheme:hover { background: @hover@; color: @ink@; }
 QPushButton#WindowTheme:focus, QPushButton#Nav:focus, QPushButton#SubNavItem:focus { border-color: @accent_bright@; }
 QPushButton#WindowClose:hover { background: @close_hover@; color: @close_ink@; }
-QLineEdit, QComboBox, QPlainTextEdit, QSpinBox, QDoubleSpinBox { background: @field@; border: 1px solid @line@; border-radius: 7px; padding: 9px 11px; color: @ink@; selection-background-color: @wash@; selection-color: @ink@; }
+QLineEdit, QComboBox, QPlainTextEdit, QSpinBox, QDoubleSpinBox { background: @field@; border: 1px solid @line@; border-radius: 7px; padding: 9px 11px; color: @ink@; selection-background-color: @select_bg@; selection-color: @ink@; }
 QPlainTextEdit#LogConsole { background: @inset@; border: 1px solid @line@; padding: 14px; border-radius: 10px; }
 QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover { border-color: @edge@; }
 QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus { border-color: @accent_bright@; }
@@ -269,11 +270,11 @@ QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled, QDoubleSpinBox:disabl
 QComboBox { padding-right: 30px; }
 QComboBox::drop-down { width: 28px; border: none; subcontrol-origin: padding; subcontrol-position: center right; }
 QComboBox::down-arrow { image: url("@chevron_icon@"); width: 14px; height: 14px; }
-QComboBox QAbstractItemView { background: @paper@; border: 1px solid @edge@; selection-background-color: @wash@; selection-color: @ink@; padding: 5px; }
+QComboBox QAbstractItemView { background: @paper@; border: 1px solid @edge@; selection-background-color: @select_bg@; selection-color: @ink@; padding: 5px; }
 QListWidget#SSHMachineList { background: @field@; border: 1px solid @line@; border-radius: 8px; padding: 4px; }
 QListWidget#SSHMachineList::item { padding: 10px 8px; border-radius: 5px; }
-QListWidget#SSHMachineList::item:selected { background: @wash@; color: @ink@; }
-QTableView#SFTPDirectory { background: @field@; alternate-background-color: @inset@; border: 1px solid @line@; border-radius: 8px; gridline-color: @line@; selection-background-color: @wash@; selection-color: @ink@; }
+QListWidget#SSHMachineList::item:selected { background: @select_bg@; color: @ink@; }
+QTableView#SFTPDirectory { background: @field@; alternate-background-color: @inset@; border: 1px solid @line@; border-radius: 8px; gridline-color: @line@; selection-background-color: @select_bg@; selection-color: @ink@; }
 QTableView#SFTPDirectory QHeaderView::section { background: @paper@; color: @muted@; border: none; border-bottom: 1px solid @line@; padding: 8px; }
 QCheckBox { spacing: 9px; color: @muted@; font-size: 13px; }
 QCheckBox::indicator { width: 16px; height: 16px; border: 1px solid @edge@; border-radius: 4px; background: @field@; }
@@ -289,6 +290,6 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: trans
 QToolTip { color: @ink@; background: @paper@; border: 1px solid @edge@; padding: 5px; }
 QMenu { background: @paper@; color: @ink@; border: 1px solid @edge@; padding: 5px; }
 QMenu::item { padding: 8px 18px; border-radius: 4px; }
-QMenu::item:selected { background: @wash@; }
+QMenu::item:selected { background: @select_bg@; }
 QMenu::item:disabled { color: @faint@; }
 """
