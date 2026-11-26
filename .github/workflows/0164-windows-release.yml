@@ -1,0 +1,63 @@
+name: ENGE SPX 0.16.4 Windows package
+on:
+  push:
+    branches: [checks/0.16.4-windows-package]
+    paths: ['.github/workflows/0164-windows-release.yml']
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: src;tests
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+      - name: Build the release source
+        shell: pwsh
+        run: |
+          $source = '3807fe96456a85ff14f65f350892500c0fe0e84d'
+          if ((git rev-parse HEAD^) -ne $source) { throw 'Unexpected release source.' }
+          if ((git diff --name-only $source HEAD) -ne '.github/workflows/0164-windows-release.yml') { throw 'Build and release source differ.' }
+          choco install innosetup --no-progress -y
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./packaging/windows/Build-Windows.ps1 -Python (Join-Path $env:pythonLocation 'python.exe')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ENGE-SPX-Windows-x64-0.16.4
+          path: |
+            dist/ENGE-SPX-Windows-x64-0.16.4-Portable.zip
+            dist/ENGE-SPX-Windows-x64-0.16.4-Setup.exe
+            dist/*.sha256
+          if-no-files-found: error
+      - name: Verify sidebar colors and OpenSSH completion
+        shell: pwsh
+        run: |
+          $python = './.venv-build/Scripts/python.exe'
+          & $python -m unittest -v test_terminal_workspace.TerminalWorkspaceTests.test_sidebar_selection_uses_the_terminal_palette
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $python -m pip install paramiko==4.0.0
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $python -u tests/integration_ssh_terminal.py --transcript-only --helper dist/ENGE-SPX/spx.exe
+      - name: Verify the frozen package and installer
+        shell: pwsh
+        run: |
+          $expected = '0.16.4'
+          $actual = & ./dist/ENGE-SPX/spx.exe --version
+          if ($LASTEXITCODE -ne 0 -or $actual -ne $expected) { throw 'Frozen CLI version differs from source.' }
+          foreach ($executable in @('ENGE-SPX.exe', 'spx.exe')) {
+            $info = (Get-Item (Join-Path 'dist/ENGE-SPX' $executable)).VersionInfo
+            if ($info.ProductVersion -ne $expected -or $info.FileVersion -ne $expected -or $info.IsPreRelease) { throw 'Incorrect executable version metadata.' }
+          }
+          $installed = Join-Path $env:RUNNER_TEMP 'spx-0164-installed'
+          $setup = Start-Process -FilePath "dist/ENGE-SPX-Windows-x64-$expected-Setup.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$installed" -PassThru -Wait
+          if ($setup.ExitCode -ne 0 -or -not (Test-Path "$installed/ENGE-SPX.exe")) { throw 'Setup failed.' }
+          $smoke = Join-Path $env:RUNNER_TEMP 'spx-0164-smoke'
+          $gui = Start-Process -FilePath "$installed/ENGE-SPX.exe" -ArgumentList '--data', $smoke, '--smoke-gui' -PassThru
+          if (-not $gui.WaitForExit(20000) -or $gui.ExitCode -ne 0) { throw 'Installed GUI startup failed.' }
