@@ -1,5 +1,11 @@
 # Changes
 
+## 0.16.3 Terminal sessions and Antigravity resize — 2026-11-26
+
+- Switch between SSH and isolated smart terminal sessions from a collapsible sidebar.
+- Move the active session into its own window and rejoin it with the connection, history and draft intact.
+- Coalesce Antigravity resize events and keep the current view visible until the redraw settles.
+
 ## 0.16.2 Workbench and smart terminal redesign — 2026-11-26
 
 - Organize the workbench around sidebar navigation, with white Day and pure-black Night themes and a title-bar theme toggle.

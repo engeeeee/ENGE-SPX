@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import ctypes
 from ctypes import wintypes as w
+from dataclasses import dataclass, field
 import os
 from pathlib import Path
 import subprocess
@@ -95,6 +96,28 @@ class DockerPTY:
                 self.write_lock.release()
             self.process.stdin.close()
             self.process.stdout.close()
+
+
+@dataclass(frozen=True)
+class WorkspaceTerminalLaunch:
+    project: Path
+    tool: str
+    command: list[str] = field(repr=False)
+    environment: dict[str, str] = field(repr=False)
+    transfer: object = field(repr=False)
+    browser_url: str | None = field(default=None, repr=False)
+
+    def start(self):
+        return DockerPTY(self.command, self.environment, str(self.project))
+
+
+def prepare_workspace_terminal(engine, project, tool, session, container, *, browser_url=None):
+    from .clipboard_transfer import Transfer
+
+    command = engine.attach_command(project, tool, session, container, interactive=True,
+                                    terminal_capabilities=True, terminal_relay=True)
+    transfer = Transfer(engine, project, tool, session, container) if tool in ("claude", "codex") else None
+    return WorkspaceTerminalLaunch(Path(project), tool, command, engine.docker.environment(), transfer, browser_url)
 
 
 class _COORD(ctypes.Structure):

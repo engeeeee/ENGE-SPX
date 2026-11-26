@@ -11,7 +11,6 @@ import time
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
-from enge_spx.smart_terminal import TerminalWindow
 from enge_spx.state import Store
 from enge_spx.ui.controller import Controller
 from enge_spx.ui.window import Window
@@ -57,9 +56,10 @@ def main():
     with tempfile.TemporaryDirectory(prefix="spx-show-desktop-") as path:
         controller = Controller(Store(Path(path) / "data"))
         workbench = Window(controller)
-        terminal = TerminalWindow(IdlePTY(), "shell", Path(path))
         workbench.show()
-        terminal.show()
+        session = workbench.terminal_sessions().open(IdlePTY(), "shell", Path(path))
+        terminal = session.window()
+        assert terminal.taskbar_group_set, "Terminal taskbar grouping was not configured"
         QTest.qWait(200)
         main_hwnd, term_hwnd = int(workbench.winId()), int(terminal.winId())
         toggle = None

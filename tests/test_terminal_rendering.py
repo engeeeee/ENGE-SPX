@@ -18,12 +18,13 @@ class FixturePTY:
     def __init__(self):
         self.queue = queue.Queue()
         self.writes = []
+        self.resizes = []
     def read(self):
         return self.queue.get()
     def write(self, data):
         self.writes.append(data)
     def resize(self, *args):
-        pass
+        self.resizes.append(args)
     def close(self):
         self.queue.put(b'')
 
@@ -227,6 +228,36 @@ class TerminalRenderingTests(unittest.TestCase):
         self.view.stream.feed('\x1b[?2026h\x1b[2J\x1b[HNew grid\x1b[?2026l')
         self.image()
         self.assertEqual(len(self.view.surface_rows), self.view.screen.lines)
+
+    def test_agy_resize_coalesces_grid_and_holds_the_current_screen_through_replay(self):
+        self.view.stop()
+        self.view.close()
+        self.view.reader.join(2)
+        self.pty = FixturePTY()
+        self.view = view = TerminalView(self.pty, tool="antigravity")
+        view.resize(1000, 620)
+        view.show()
+        self.app.processEvents()
+        view.stream.feed("Current AGY input")
+        self.image()
+        resize_count = len(self.pty.resizes)
+        for width in (940, 880, 1050):
+            view.resize(width, 580)
+        self.assertEqual(len(self.pty.resizes), resize_count)
+        self.pump(lambda: len(self.pty.resizes) == resize_count + 1)
+        self.assertEqual(self.pty.resizes[-1], (view.screen.columns, view.screen.lines))
+
+        def displayed():
+            self.image()
+            return "".join(char.data for record in view.surface_rows if record for char in record[0])
+
+        self.pty.queue.put(b"\x1b[?2026h\x1b[2J\x1b[HFirst conversation row\x1b[?2026l")
+        self.pump(lambda: "First conversation row" in view.screen.display[0])
+        self.assertIn("Current AGY input", displayed())
+        self.assertNotIn("First conversation row", displayed())
+        self.pty.queue.put(b"\x1b[2J\x1b[HLatest AGY input")
+        self.pump(lambda: "Latest AGY input" in displayed())
+        self.assertEqual(len(self.pty.resizes), resize_count + 1)
 
     def test_width_resize_reuses_ink_rasters_instead_of_viewport_padding(self):
         self.view.stream.feed('Stable resize text 中文')

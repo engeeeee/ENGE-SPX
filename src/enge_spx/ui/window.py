@@ -93,7 +93,7 @@ class Window(QMainWindow):
         self.log_view = None
         self._last_view = None
         self._force_close = False
-        self.ssh_windows = set()
+        self.terminal_workspace = None
         self.sftp_windows = set()
         self.tray = None
         self.tray_hint_shown = False
@@ -258,6 +258,7 @@ class Window(QMainWindow):
         self.c.nodes_changed.connect(self.refresh_node_boxes)
         self.c.update_available.changed.connect(self.update_settings_label)
         self.c.workspace_changed.connect(self.refresh_workspace_profiles)
+        self.c.terminal_prepared.connect(self.launch_workspace_terminal)
         self.c.logs_added.connect(self.append_logs)
         self.c.page_requested.connect(self.navigate)
         self.c.proxy_requested.connect(lambda: self.proxy_dialog())
@@ -1260,11 +1261,40 @@ class Window(QMainWindow):
         finally:
             dialog.deleteLater()
 
+    def terminal_sessions(self):
+        if self.terminal_workspace is None:
+            from ..terminal_workspace import TerminalWorkspace
+            self.terminal_workspace = TerminalWorkspace(self.c.store, self)
+        else:
+            self.terminal_workspace.preferences.store = self.c.store
+        return self.terminal_workspace
+
+    def launch_workspace_terminal(self, launch):
+        if launch is None or self.c.exit_mode is not None:
+            return
+        from ..clipboard import WindowsClipboard
+
+        pty = None
+        try:
+            clipboard = WindowsClipboard() if os.name == "nt" else None
+            pty = launch.start()
+            self.terminal_sessions().open(pty, launch.tool, launch.project, transfer=launch.transfer, clipboard=clipboard)
+        except (OSError, SPXError) as error:
+            if pty is not None:
+                pty.close()
+            notice(self, "无法启动终端", str(error), error=True)
+            return
+        except Exception:
+            if pty is not None:
+                pty.close()
+            raise
+        if launch.browser_url:
+            webbrowser.open(launch.browser_url)
+
     def launch_ssh(self, connection, session_label=None, *, password=None):
         from ..ssh_askpass import PasswordSession, erase
         from ..ssh_client import environment
         from ..ssh_transfer import SSHTransfer
-        from ..smart_terminal import TerminalWindow
         from ..terminal_pty import start
 
         if self.c.exit_mode is not None:
@@ -1272,13 +1302,13 @@ class Window(QMainWindow):
                 erase(password)
             return
         home = Path.home()
-        session = window = None
+        session = terminal_session = None
         try:
             command = connection.command(prefilled_password=bool(password))
             env = environment()
             if password:
                 session = PasswordSession(connection, password,
-                                          lambda prompt: confirm(window or self, "核对 SSH 主机指纹", prompt), self)
+                                          lambda prompt: confirm(terminal_session or self, "核对 SSH 主机指纹", prompt), self)
                 env = session.start(env)
             pty = start(command, env, home, ssh=True)
         except (OSError, SPXError) as error:
@@ -1292,21 +1322,17 @@ class Window(QMainWindow):
             from ..clipboard import WindowsClipboard
             clipboard = WindowsClipboard() if os.name == "nt" else None
             transfer = SSHTransfer(connection, env, prefilled=session is not None)
-            window = TerminalWindow(pty, "ssh", home, transfer=transfer, clipboard=clipboard,
-                                    preferences_store=self.c.store, session_label=session_label or connection.label)
+            terminal_session = self.terminal_sessions().open(pty, "ssh", home, transfer=transfer, clipboard=clipboard,
+                                                              session_label=session_label or connection.label)
         except Exception:
             pty.close()
             if session is not None:
                 session.close()
             raise
         if session is not None:
-            window.message.setText("正在使用已填写的凭据。首次连接请核对主机指纹。")
-            window.view.ended.connect(session.close)
-            window.destroyed.connect(session.close)
-        window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        self.ssh_windows.add(window)
-        window.destroyed.connect(lambda: self.ssh_windows.discard(window))
-        window.show()
+            terminal_session.message.setText("正在使用已填写的凭据。首次连接请核对主机指纹。")
+            terminal_session.view.ended.connect(session.close)
+            terminal_session.destroyed.connect(session.close)
 
     def launch_sftp(self, connection, *, password=None):
         from .sftp_dialog import SFTPDialog
@@ -1559,8 +1585,8 @@ class Window(QMainWindow):
             event.ignore()
             return
         if self._force_close or self.c.request_close():
-            for session in tuple(self.ssh_windows):
-                session.close()
+            if self.terminal_workspace is not None:
+                self.terminal_workspace.close(keep_workspace=self.c.exit_mode == "keep")
             for session in tuple(self.sftp_windows):
                 session.close()
             self.c.stop_resource_monitor()

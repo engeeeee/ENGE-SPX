@@ -99,7 +99,7 @@ class WorkspaceUITests(unittest.TestCase):
             page.quick_connect.click()
         run.assert_not_called()
         self.assertEqual(start.call_args.args[0][-6:], ["-l", "operator", "-p", "22", "--", "example.invalid"])
-        session, = self.window.ssh_windows
+        session, = self.window.terminal_workspace.sessions
         self.assertTrue(session.isVisible())
         self.assertEqual(session.findChild(QLabel, "ProjectName").text(), "operator@example.invalid:22")
         reader = session.view.reader
@@ -108,6 +108,19 @@ class WorkspaceUITests(unittest.TestCase):
         self.assertFalse(reader.is_alive())
         pty.close.assert_called_once()
         self.assertFalse((self.store.home / ssh_machines.FILE).exists())
+
+    def test_prepared_workspace_terminal_joins_the_current_terminal_group(self):
+        from test_terminal_rendering import FixturePTY
+
+        remote = self.window.terminal_sessions().open(FixturePTY(), "ssh", self.project, session_label="远端测试")
+        launch = Mock(project=self.project, tool="antigravity", transfer=None, browser_url=None)
+        launch.start.return_value = FixturePTY()
+        self.controller.terminal_prepared.emit(launch)
+        launch.start.assert_called_once_with()
+        group = self.window.terminal_workspace.group
+        self.assertIs(remote.window(), group)
+        self.assertEqual([session.view.tool for session in group.sessions], ["ssh", "antigravity"])
+        self.assertIs(group.view.pty, launch.start.return_value)
 
     def test_dedicated_ssh_page_saves_edits_connects_and_removes_machine(self):
         from enge_spx.credentials import CredentialCodec
@@ -196,7 +209,8 @@ class WorkspaceUITests(unittest.TestCase):
             c.open_terminal("codex")
             engine = Mock()
             run.call_args.args[0](engine)
-        engine.terminal.assert_called_once_with(str(self.project.resolve()), "codex", expected_workspace=(self.identity, "ro"))
+        engine.terminal.assert_called_once_with(str(self.project.resolve()), "codex", expected_workspace=(self.identity, "ro"),
+                                                desktop_session=True)
 
     def test_expired_review_offers_a_fresh_connection_check(self):
         c = self.controller
