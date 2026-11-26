@@ -76,6 +76,13 @@ def exercise_transcript(app, root, host_key):
                 channel.sendall(b"atus --short")
                 assert receive(1) == b"\r", "Only explicit Enter may run the filled-in command"
                 channel.sendall(b"\x1b[?2004l")
+                channel.sendall(b"\r\nfixture@server:~# ")
+                prefix = receive(4)
+                assert prefix == b"df -"
+                channel.sendall(prefix)
+                assert receive(1) == b"h"
+                channel.sendall(b"h")
+                assert receive(1) == b"\r", "Plain completion must leave the command in the input line"
                 channel.sendall(b"\x1b[2J\x1b[10;1Hcomposer-kept\x1b[1;8r\x1b[8;1H")
                 for row in range(160):
                     channel.sendall(f"\r\n\x1b[Kcodex-transcript-{row:03d}".encode())
@@ -140,6 +147,13 @@ def exercise_transcript(app, root, host_key):
         wait(lambda: "git status --short" in rows_text(view.rows()))
         assert view.inline_preview is None
         QTest.keyClick(view, Qt.Key.Key_Return)
+        wait(lambda: not view.ready.is_set() and "fixture@server:~# " in rows_text(view.rows()))
+        QTest.keyClicks(view, "df -")
+        wait(lambda: view.inline_preview is not None and view.inline_preview[2] == "h")
+        view.grab()
+        QTest.keyClick(view, Qt.Key.Key_Tab)
+        wait(lambda: "df -h" in rows_text(view.rows()))
+        QTest.keyClick(view, Qt.Key.Key_Return)
         wait(lambda: "inline-finished" in rows_text(view.rows()))
         history = rows_text(view.screen.history.top)
         assert "composer-kept" in rows_text(view.rows())
@@ -164,7 +178,7 @@ def exercise_transcript(app, root, host_key):
         wait(lambda: view.output_drained)
         assert "codex-transcript-000" in rows_text(view.screen.history.top)
         assert not errors
-        print("PASS native SSH inline Tab completion without submission, transcript and fullscreen wheel", flush=True)
+        print("PASS native SSH ghost text and Tab with and without bracketed paste, transcript and fullscreen wheel", flush=True)
     finally:
         finish.set()
         close_transcript.set()

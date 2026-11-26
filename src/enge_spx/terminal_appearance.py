@@ -69,10 +69,10 @@ QToolButton#TerminalSidebarButton:checked { background: $control_hover_bg; borde
 QToolButton#QuickInputButton, QToolButton#FileBrowserButton, QToolButton#TerminalDetachButton { color: $option_text; background: $control_bg; border: 1px solid $divider; border-radius: 6px; padding: 4px 10px; font-size: 12px; font-weight: 500; }
 QToolButton#QuickInputButton:hover, QToolButton#FileBrowserButton:hover, QToolButton#TerminalDetachButton:hover { color: $option_hover_text; background: $control_hover_bg; border-color: $control_hover_border; }
 QToolButton#QuickInputButton:disabled, QToolButton#FileBrowserButton:disabled { color: $footer_foreground; background: transparent; border-color: transparent; }
-QListWidget#TerminalSessionList { color: $session_foreground; background: $session_background; border: 0; border-right: 1px solid $divider; padding: 8px 7px; font-size: 12px; }
-QListWidget#TerminalSessionList::item { min-height: 26px; padding: 4px 8px; border-radius: 6px; }
-QListWidget#TerminalSessionList::item:hover { background: $session_hover; }
-QListWidget#TerminalSessionList::item:selected { color: $menu_selection_foreground; background: $menu_selection_background; }
+QListWidget#TerminalSessionList { color: $session_foreground; background: $session_background; border: 0; border-right: 1px solid $divider; padding: 8px 7px; font-size: 12px; selection-background-color: $sidebar_selected_bg; selection-color: $sidebar_selected_text; }
+QListWidget#TerminalSessionList::item { min-height: 26px; padding: 4px 8px; border: 1px solid transparent; border-radius: 6px; }
+QListWidget#TerminalSessionList::item:hover:!selected { background: $session_hover; }
+QListWidget#TerminalSessionList::item:selected { color: $sidebar_selected_text; background: $sidebar_selected_bg; border-color: $sidebar_selected_border; }
 QFrame#TerminalFooter { background: $footer_background; border-top: 1px solid $divider; }
 QLabel#TerminalMessage { color: $footer_foreground; font-size: 11px; }
 QLabel#FontSize { color: $font_size_text; font-family: "Consolas", "DejaVu Sans Mono", monospace; font-size: 11px; }
@@ -111,6 +111,9 @@ def terminal_stylesheet(colors, values, alpha, glass):
         badge_border = _blend(colors["badge_foreground"], colors["badge_background"], 0.34)
     else:
         badge_border = BADGES[values["tint"]][2]
+    sidebar_selected_bg = values.get("color_selection_background") or _blend(
+        colors["session_foreground"], colors["session_background"], 0.17)
+    sidebar_selected_text = values.get("color_selection_foreground") or colors["session_foreground"]
     theme.update(
         frame="transparent" if glass else colors["background"],
         frame_border=border or (("rgba(18, 26, 21, 46)" if is_light else "rgba(255, 255, 255, 42)")
@@ -125,6 +128,9 @@ def terminal_stylesheet(colors, values, alpha, glass):
         control_bg=_blend(colors["foreground"], colors["session_background"], 0.04 if is_light else 0.055),
         control_hover_bg=_blend(colors["cursor"], colors["session_background"], 0.15),
         control_hover_border=_blend(colors["cursor"], colors["border"], 0.55),
+        sidebar_selected_bg=sidebar_selected_bg,
+        sidebar_selected_text=sidebar_selected_text,
+        sidebar_selected_border=_blend(sidebar_selected_text, sidebar_selected_bg, 0.23),
         badge_border=badge_border,
         connection_bg=_blend(colors["connection_foreground"], colors["session_background"], 0.12),
         connection_border=_blend(colors["connection_foreground"], colors["session_background"], 0.30),

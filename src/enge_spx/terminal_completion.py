@@ -5,7 +5,7 @@ from wcwidth import wcswidth
 
 from .terminal_shortcuts import BUILTINS
 
-PROMPT_ENDS = ("$ ", "# ", "% ", "❯ ", "➜ ")
+PROMPT_ENDS = ("$", "#", "%", "❯", "➜")
 
 
 class ShellCompletion:
@@ -22,8 +22,17 @@ class ShellCompletion:
 
     @staticmethod
     def active(screen):
-        # Readline/fish/zle advertise bracketed paste at an editable prompt.
-        return screen.bracketed and screen.primary is None and not screen.mouse and not screen.cursor.hidden
+        return screen.primary is None and not screen.mouse and not screen.cursor.hidden
+
+    @staticmethod
+    def at_prompt(screen, row, column, prompt):
+        if screen.marked_shell:
+            return screen.shell_prompt == (row, column)
+        prompt = prompt.strip()
+        # Older shells and some SSH hosts omit bracketed-paste mode. Require
+        # a conventional shell prompt (or an explicit OSC prompt boundary).
+        return prompt.endswith(PROMPT_ENDS) or (
+            prompt.endswith(">") and (prompt.startswith("PS ") or "@" in prompt))
 
     @staticmethod
     def text(line, blank, start, end):
@@ -50,9 +59,7 @@ class ShellCompletion:
             row, column = screen.cursor.y, screen.cursor.x
             line = screen.buffer[row]
             prompt = self.text(line, screen.default_char, 0, column)
-            marker = screen.shell_prompt == (row, column) if screen.marked_shell else (
-                prompt.endswith(PROMPT_ENDS) or prompt.endswith("> ") and ("@" in prompt or prompt.startswith("PS ")))
-            if not marker or not self.empty_to_right(line, column):
+            if not self.at_prompt(screen, row, column, prompt) or not self.empty_to_right(line, column):
                 return
             self.anchor = row, column, prompt
         self.prefix = prefix
@@ -64,7 +71,7 @@ class ShellCompletion:
         column = screen.cursor.x
         if row != screen.cursor.y or column != start + wcswidth(self.prefix) or column >= screen.columns:
             return None
-        if screen.marked_shell and screen.shell_prompt != (row, start):
+        if not self.at_prompt(screen, row, start, prompt):
             return None
         line, blank = screen.buffer[row], screen.default_char
         echoed = self.text(line, blank, start, column)

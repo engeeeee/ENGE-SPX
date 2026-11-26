@@ -6,7 +6,8 @@ import unittest
 if os.name != "nt":
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPoint, Qt
+from PySide6.QtGui import QColor, QPalette
 from PySide6.QtTest import QSignalSpy, QTest
 from PySide6.QtWidgets import QApplication
 
@@ -39,6 +40,23 @@ class TerminalWorkspaceTests(unittest.TestCase):
         self.readers.append(session.view.reader)
         self.app.processEvents()
         return session
+
+    def test_sidebar_selection_uses_the_terminal_palette(self):
+        self.open("ssh", "构建服务器")
+        sidebar = self.workspace.group.sidebar
+
+        def selection_color():
+            return sidebar.palette().color(QPalette.ColorRole.Highlight)
+
+        default = selection_color()
+        self.workspace.preferences.set("tint", "purple")
+        self.assertNotEqual(selection_color(), default)
+        self.workspace.preferences.set("color_selection_background", "#702e3a")
+        self.assertEqual(selection_color(), QColor("#702e3a"))
+        item = sidebar.visualItemRect(sidebar.currentItem())
+        image = sidebar.viewport().grab()
+        point = item.topLeft() + QPoint(5, item.height() // 2)
+        self.assertEqual(image.toImage().pixelColor(point * image.devicePixelRatio()), selection_color())
 
     def test_ssh_and_workspace_switch_detach_and_rejoin_the_same_views(self):
         local = self.open("antigravity", "开发项目")

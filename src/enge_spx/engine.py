@@ -1261,7 +1261,8 @@ class Engine:
             validate_mounts(self, obj, plan=plan)
             from .tool_session import command as tool_command
             colour_env = ["--env", "TERM=xterm-256color", "--env", "COLORTERM=truecolor", "--env", "TERM_PROGRAM=ENGE-SPX"] if terminal_capabilities else []
-            arguments = tool_command(TOOLS[tool], keep_open=interactive and tool != "shell")
+            arguments = tool_command(TOOLS[tool], keep_open=interactive and tool != "shell",
+                                     smart_terminal=terminal_relay)
             if terminal_relay:
                 code = (PACKAGE_RESOURCES / "checks/terminal_relay.py").read_text(encoding="utf-8")
                 arguments = ["python3", "-I", "-c", code, "110", "32", *arguments]

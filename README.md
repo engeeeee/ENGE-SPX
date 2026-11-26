@@ -91,7 +91,7 @@ flowchart LR
 
 当前版本为 **[0.16.3 正式版](https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.16.3-windows)**。支持 Windows x64，需要 Docker Desktop 的 **Linux containers / WSL 2** 后端，Docker Engine **28+**。安装版和便携版均不需要另装 Python。
 
-本版增加终端会话侧栏和独立窗口，可切换从工作台打开的 SSH 和容器智能终端，并修复 Antigravity CLI 缩放跳屏。[0.16.3 发布说明](docs/releases/0.16.3.zh-CN.md)
+本版增加终端会话侧栏和独立窗口，可切换从工作台打开的 SSH 和容器智能终端，并合并 Antigravity CLI 连续缩放时的尺寸更新。[0.16.3 发布说明](docs/releases/0.16.3.zh-CN.md)
 
 | 下载方式 | 适合谁 |
 | --- | --- |

@@ -372,12 +372,12 @@ class OrderedInput:
                 return
             self.pty.write(reply)
 
-    def write_text(self, value):
+    def write_text(self, value, *, completion=False):
         if self.ready.is_set():
             self.pty.write(text_frame(value))
-        elif self.tool == "ssh":
-            # Some remote shells or ConPTY versions do not expose bracketed
-            # paste. Send a single literal line, including no Enter or Tab keys.
+        elif self.tool == "ssh" or completion:
+            # Some shells and console hosts omit bracketed paste. Only send
+            # printable text on this path, with no Enter or Tab keystroke.
             line = " ".join(value.replace("\t", " ").splitlines())
             self.pty.write("".join(c for c in line if c.isprintable()).encode("utf-8"))
         else:
@@ -409,8 +409,8 @@ class OrderedInput:
                         self.draft_nonempty = False
                     else:
                         self.report("当前没有确认可删除的 Codex 草稿，未发送取消或退出快捷键。")
-                elif kind == "quick_text":
-                    self.write_text(value)
+                elif kind in ("quick_text", "completion"):
+                    self.write_text(value, completion=kind == "completion")
                     self.draft_nonempty = True
                 elif kind == "paste":
                     snapshot = value.result(timeout=2)
@@ -1082,7 +1082,7 @@ class TerminalView(QWidget):
         if (self.inline_preview is not None and self.inline_preview[:2] == (y, x)
                 and self.inline_preview == self.command_preview() and self.hasFocus() and not hidden):
             muted = QColor(self.foreground)
-            muted.setAlpha(124)
+            muted.setAlpha(152)
             p.setPen(muted)
             p.setFont(self.font)
             p.drawText(QPointF(self.PAD_X + x * self.cell_width, self.PAD_Y + y * self.cell_height + self.metrics.ascent()),
@@ -1196,9 +1196,9 @@ class TerminalView(QWidget):
             preview = self.inline_preview
             x, y, hidden = self.presented_cursor
             if (preview is not None and preview == self.command_preview()
-                    and preview[:2] == (y, x) and not hidden and self.ready.is_set()):
+                    and preview[:2] == (y, x) and not hidden):
                 self.clear_inline()
-                self.sender.put("quick_text", preview[2])
+                self.sender.put("completion", preview[2])
                 event.accept()
                 return
         typing = (not modifiers & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier

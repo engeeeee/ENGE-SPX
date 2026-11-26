@@ -180,7 +180,7 @@ class ShellCompletionTests(unittest.TestCase):
         screen = TerminalScreen(80, 12)
         stream = TerminalStream(screen)
         ghost = ShellCompletion([shortcut("shell", "测试文件", "git status -- 中文.txt")])
-        stream.feed("\x1b[?2004hoperator@server:~$ ")
+        stream.feed("operator@server:~$")
         ghost.input(screen, "git status -- 中".encode())
         stream.feed("git status -- 中")
         self.assertEqual(ghost.preview(screen)[2], "文.txt")
