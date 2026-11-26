@@ -3,22 +3,22 @@ export type Theme = "dark" | "light";
 
 export const product = {
     name: "ENGE SPX",
-    version: "0.16.2",
+    version: "0.16.5",
     published: "2026-11-26",
     site: "https://enge1337.cn",
     repository: "https://github.com/engeeeee/ENGE-SPX",
     release:
-        "https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.16.2-windows",
+        "https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.16.5-windows",
     installer:
-        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.16.2-windows/ENGE-SPX-Windows-x64-0.16.2-Setup.exe",
+        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.16.5-windows/ENGE-SPX-Windows-x64-0.16.5-Setup.exe",
     portable:
-        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.16.2-windows/ENGE-SPX-Windows-x64-0.16.2-Portable.zip",
-    installerSize: "35.5 MB",
-    portableSize: "54.7 MB",
+        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.16.5-windows/ENGE-SPX-Windows-x64-0.16.5-Portable.zip",
+    installerSize: "35.6 MB",
+    portableSize: "54.8 MB",
     installerSha256:
-        "2eebbd26b9b8635d56c13a77a5afa94cad03bffae591b0f3705cb456336ba1d6",
+        "1d1ed37abe14016576e959908026e36da565d6205cfd2fdfcefff40c3ba1ebf9",
     portableSha256:
-        "41248e636e628439aec2727d177cb44fd9ed85e4578ba7f12a1eb99e3868b27e",
+        "710e83db867f126806e414419f8ac7d16b943f53102cb76bf04fe75cfdfc8ed8",
     screenshotVersion: "0.16.2",
 } as const;
 
@@ -39,7 +39,7 @@ export const docs = {
     storage: `${product.repository}/blob/main/docs/storage-terminal.zh-CN.md`,
     updates: `${product.repository}/blob/main/docs/updates-and-timezone.zh-CN.md`,
     screenshots: `${product.repository}/blob/main/docs/screenshots/README.md`,
-    releaseNotes: `${product.repository}/blob/main/docs/releases/0.16.2.zh-CN.md`,
+    releaseNotes: `${product.repository}/blob/main/docs/releases/0.16.5.zh-CN.md`,
     license: `${product.repository}/blob/main/LICENSE`,
     issues: `${product.repository}/issues`,
     docker: "https://docs.docker.com/desktop/setup/install/windows-install/",
@@ -108,16 +108,16 @@ export const screenshots = [
     },
     {
         id: "ssh-terminal",
-        title: "SSH 智能终端",
-        alt: "SSH 智能终端会话：集成快捷输入、SFTP 文件按钮及 Ctrl+V 自动上传图片返回远端路径",
-        source: `/screenshots/${product.screenshotVersion}/terminal-ssh@2x.png`,
-        lightSource: `/screenshots/${product.screenshotVersion}/terminal-ssh-light@2x.png`,
+        title: "分组与 SSH 智能终端",
+        alt: "ENGE SPX 0.16.5 多会话分组终端：可收起左侧会话栏统一切换容器与 SSH 会话，支持独立窗口、快捷输入、SFTP 与 Ctrl+V 自动上传",
+        source: "/screenshots/0.16.5/terminal-ssh@2x.png",
+        lightSource: "/screenshots/0.16.5/terminal-ssh-light@2x.png",
         width: 1100,
         height: 680,
         pixelRatio: 2,
-        platform: "SSH 终端运行演示",
-        version: product.screenshotVersion,
-        context: "内置快捷输入与 SFTP 上传反馈",
+        platform: "分组终端真实界面示例",
+        version: "0.16.5",
+        context: "可收起会话侧栏 · 独立窗口 · SFTP · 自动重连",
     },
     {
         id: "sftp",
@@ -185,8 +185,12 @@ export const faqs = [
         answer: "可以。ENGE SPX 不修改 Windows 系统代理。代理页面可选「本机 v2ray 兼容模式」，让外部客户端负责第一跳，工作台仍保留工作区内部网关与落地出口核验。",
     },
     {
-        question: "SSH 密码和私钥口令保存在哪里？安全吗？",
-        answer: "在 Windows 打包版「远程 SSH」保存密码或私钥口令时，凭据仅使用当前 Windows 用户的 DPAPI 加密存储在本地，不上传任何云端服务；编辑机器时勾选「清除已保存的凭据」即可删除。多因素认证机器可留空密码，连接时按终端提示交互输入。",
+        question: "多个容器终端或 SSH 会话可以合并管理，或拆成独立窗口吗？",
+        answer: "可以。容器工具与 SSH 会话默认进入同一个分组终端窗口，在可收起的左侧会话栏之间切换即可；点击顶栏「独立窗口」可弹出为单独窗口（如放在副屏对比输出），也能随时点击「移回会话窗口」，迁移过程中会话进程、历史与草稿保持不断。",
+    },
+    {
+        question: "SSH 断线后能自动恢复吗？密码和私钥口令保存在哪里？",
+        answer: "SSH 网络断开时，终端会保留最多 10,000 行历史输出并按 1–30 秒退避自动重试重连，重新握手时照常核验服务器公钥指纹。密码或私钥口令仅使用当前 Windows 用户的 DPAPI 加密存储在本地，不上传任何云端服务；编辑机器时勾选「清除已保存的凭据」即可删除，多因素认证机器可留空密码交互输入。",
     },
     {
         question: "SSH 终端里 Ctrl+V 上传文件大小与远端目录规则是什么？",

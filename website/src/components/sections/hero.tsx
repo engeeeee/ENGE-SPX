@@ -25,8 +25,8 @@ const views = [
 const pillars = [
     "Docker 容器运行 Claude Code / Codex",
     "双跳加密线路与双出口独立核验",
-    "Ctrl+V 截图与文件直入 CLI 输入区",
-    "DPAPI 加密 SSH 与内置 SFTP 管理",
+    "多会话分组终端与 Ctrl+V 截图直贴",
+    "DPAPI SSH、断线自动重连与 SFTP",
 ] as const;
 
 export function HeroSection() {
@@ -97,7 +97,7 @@ export function HeroSection() {
                             </button>
                         ))}
                     </div>
-                    <span className="preview-platform">0.16.2 UI</span>
+                    <span className="preview-platform">v{product.version}</span>
                 </div>
                 <div className="hero-stage">
                     <Screenshot id={view} priority />

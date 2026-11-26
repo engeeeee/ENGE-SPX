@@ -24,7 +24,7 @@ export const metadata: Metadata = {
                 url: "/og.png",
                 width: 1200,
                 height: 630,
-                alt: "ENGE SPX 官网与真实 0.16.2 软件界面",
+                alt: `ENGE SPX 官网与真实 ${product.version} 软件界面`,
             },
         ],
     },

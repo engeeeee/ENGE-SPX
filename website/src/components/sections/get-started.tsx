@@ -47,7 +47,7 @@ export function GetStartedSection() {
                             <ArrowUpRight size={13} aria-hidden="true" />
                         </a>
                         <a className="text-link" href={docs.releaseNotes}>
-                            0.16.2 更新日志{" "}
+                            {product.version} 更新日志{" "}
                             <ArrowUpRight size={13} aria-hidden="true" />
                         </a>
                         <CopyChecksum

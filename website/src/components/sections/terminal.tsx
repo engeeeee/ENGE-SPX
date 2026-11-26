@@ -16,7 +16,7 @@ export function TerminalSection() {
                 </div>
                 <div className="section-intro-copy">
                     <p>
-                        0.16.2 全面重塑智能终端外观与交互：默认纯黑高对比画布搭配深蓝光标、状态胶囊与高清图标，并提供对齐主程序白天模式的浅色预设与无边框外观面板。
+                        0.16.2–0.16.5 持续完善智能终端外观与多会话体验：纯黑高对比画布搭配深蓝点缀、浅色预设与无边框外观面板；多个容器与 SSH 会话共用可收起左侧会话栏，并可随时一键拆出「独立窗口」或「移回会话窗口」。
                     </p>
                     <a className="text-link" href={docs.terminal}>
                         终端外观与渲染说明 <ArrowUpRight size={14} aria-hidden="true" />
@@ -48,8 +48,9 @@ export function TerminalSection() {
                     </div>
                     <p>
                         按 <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd>{" "}
-                        或点击顶栏「快捷输入」管理常用命令与提示词模板；命令行出现灰色后缀提示时按{" "}
-                        <kbd>Tab</kbd> 一键补全。
+                        或点击顶栏「快捷输入」插入常用指令与模板；支持命令行灰色后缀提示按{" "}
+                        <kbd>Tab</kbd>{" "}
+                        一键行内补全，并为 Antigravity CLI 缩放同步备用屏幕视口。
                     </p>
                     <a className="text-link" href={docs.storage}>
                         快捷输入使用说明{" "}

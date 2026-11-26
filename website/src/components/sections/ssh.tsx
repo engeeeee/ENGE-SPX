@@ -24,9 +24,9 @@ const sshViews = [
     {
         id: "ssh-terminal" as ScreenshotId,
         icon: Terminal,
-        title: "SSH 智能终端 · Ctrl+V 自动上传截图",
+        title: "SSH 智能终端 · 多会话侧栏与自动重连",
         summary:
-            "双击服务器即在独立任务栏窗口中打开 SSH 会话。支持微软 ConPTY 万行（10,000 行）滚动回看与 Tab 行内补全；按下 Ctrl+V 或右键粘贴本机截图/文件时，自动通过 SFTP 上传并把远端路径填入命令行。",
+            "容器与 SSH 会话共用可收起左侧会话栏，也可一键拆为「独立窗口」并保持连接不断。支持 10,000 行历史回看、Tab 行内补全与断线自动重连（1–30 秒退避）；按下 Ctrl+V 自动走 SFTP 上传截图或文件并填入远端路径。",
     },
     {
         id: "sftp" as ScreenshotId,
@@ -45,8 +45,8 @@ const sshGuarantees = [
     },
     {
         icon: ShieldCheck,
-        title: "首次主机指纹核对",
-        detail: "直连终端与 SFTP 首次握手均弹出服务器公钥指纹供你核验，已知主机记录一致校验后继续。",
+        title: "指纹核验与断线自动重连",
+        detail: "握手均核验主机公钥指纹；网络断开后保留 10,000 行历史并按 1–30 秒退避自动重连。",
     },
     {
         icon: FileUp,
