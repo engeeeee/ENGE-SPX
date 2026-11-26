@@ -42,6 +42,7 @@ class TerminalWorkspaceTests(unittest.TestCase):
         return session
 
     def test_sidebar_selection_uses_the_terminal_palette(self):
+        self.workspace.preferences.store = None
         self.open("ssh", "构建服务器")
         sidebar = self.workspace.group.sidebar
 
