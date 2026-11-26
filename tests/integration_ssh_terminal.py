@@ -7,6 +7,7 @@ import argparse
 import base64
 import os
 from pathlib import Path
+import posixpath
 import socket
 import subprocess
 import tempfile
@@ -19,7 +20,7 @@ import paramiko
 from PySide6.QtCore import QPoint, QPointF, Qt
 from PySide6.QtGui import QWheelEvent
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QFileDialog, QInputDialog, QWidget
 
 from enge_spx.smart_terminal import TerminalWindow
 from enge_spx.clipboard import Snapshot
@@ -27,6 +28,7 @@ from enge_spx.ssh_askpass import PasswordSession, read_password
 from enge_spx.ssh_client import Connection, environment, executable
 from enge_spx.ssh_transfer import SSHTransfer
 from enge_spx.terminal_pty import start
+from enge_spx.ui.sftp_dialog import SFTPDialog
 
 PASSWORD = "spx-fixture-password"
 PASSPHRASE = "spx-fixture-key-passphrase"
@@ -55,6 +57,25 @@ def exercise_transcript(app, root, host_key):
                 channel = transport.accept(15)
                 assert channel is not None and server.shell.wait(5)
                 assert sent.wait(10)
+                channel.settimeout(8)
+
+                def receive(size):
+                    data = bytearray()
+                    while len(data) < size:
+                        part = channel.recv(size - len(data))
+                        assert part
+                        data.extend(part)
+                    return bytes(data)
+
+                channel.sendall(b"\x1b[2J\x1b[H\x1b[?2004hfixture@server:~$ ")
+                prefix = receive(6)
+                assert prefix == b"git st"
+                channel.sendall(prefix)
+                suffix = receive(len(b"\x1b[200~atus --short\x1b[201~"))
+                assert suffix == b"\x1b[200~atus --short\x1b[201~"
+                channel.sendall(b"atus --short")
+                assert receive(1) == b"\r", "Only explicit Enter may run the filled-in command"
+                channel.sendall(b"\x1b[?2004l")
                 channel.sendall(b"\x1b[2J\x1b[10;1Hcomposer-kept\x1b[1;8r\x1b[8;1H")
                 for row in range(160):
                     channel.sendall(f"\r\n\x1b[Kcodex-transcript-{row:03d}".encode())
@@ -109,6 +130,16 @@ def exercise_transcript(app, root, host_key):
         window.resize(window.width() - 100, window.height() - 100)
         wait(lambda: server.size is not None and server.size == (view.screen.columns, view.screen.lines))
         sent.set()
+        wait(lambda: view.ready.is_set() and "fixture@server:~$ " in rows_text(view.rows()))
+        QTest.keyClicks(view, "git st")
+        wait(lambda: view.inline_preview is not None)
+        assert view.inline_preview[2] == "atus --short"
+        assert "git status --short" not in rows_text(view.rows()), "Ghost text must stay outside the terminal buffer"
+        view.grab()
+        QTest.keyClick(view, Qt.Key.Key_Tab)
+        wait(lambda: "git status --short" in rows_text(view.rows()))
+        assert view.inline_preview is None
+        QTest.keyClick(view, Qt.Key.Key_Return)
         wait(lambda: "inline-finished" in rows_text(view.rows()))
         history = rows_text(view.screen.history.top)
         assert "composer-kept" in rows_text(view.rows())
@@ -133,7 +164,7 @@ def exercise_transcript(app, root, host_key):
         wait(lambda: view.output_drained)
         assert "codex-transcript-000" in rows_text(view.screen.history.top)
         assert not errors
-        print("PASS SSH keeps Codex inline transcript and forwards fullscreen mouse wheel", flush=True)
+        print("PASS native SSH inline Tab completion without submission, transcript and fullscreen wheel", flush=True)
     finally:
         finish.set()
         close_transcript.set()
@@ -295,10 +326,12 @@ class FixtureSFTP(paramiko.SFTPServerInterface):
         self.root = root.resolve(strict=True)
 
     def canonicalize(self, path):
-        return "/fixture home"
+        if path.startswith("/"):
+            return posixpath.normpath(path)
+        return posixpath.normpath("/fixture home/" + path)
 
     def local(self, path):
-        relative = path.removeprefix("/fixture home/") if path.startswith("/fixture home/") else path.lstrip("/")
+        relative = "" if path == "/fixture home" else path.removeprefix("/fixture home/").lstrip("/")
         resolved = (self.root / relative).resolve()
         assert resolved.is_relative_to(self.root)
         return resolved
@@ -310,6 +343,13 @@ class FixtureSFTP(paramiko.SFTPServerInterface):
             return paramiko.SFTP_NO_SUCH_FILE
 
     lstat = stat
+
+    def list_folder(self, path):
+        result = []
+        for file in self.local(path).iterdir():
+            attrs = paramiko.SFTPAttributes.from_stat(file.lstat(), filename=file.name)
+            result.append(attrs)
+        return result
 
     def mkdir(self, path, attr):
         self.local(path).mkdir()
@@ -323,12 +363,126 @@ class FixtureSFTP(paramiko.SFTPServerInterface):
     def open(self, path, flags, attr):
         descriptor = os.open(self.local(path), flags | getattr(os, "O_BINARY", 0), 0o600)
         handle = paramiko.SFTPHandle(flags)
-        handle.writefile = os.fdopen(descriptor, "wb")
+        stream = os.fdopen(descriptor, "r+b" if flags & os.O_RDWR else "wb" if flags & os.O_WRONLY else "rb")
+        if not flags & os.O_WRONLY:
+            handle.readfile = stream
+        if flags & (os.O_WRONLY | os.O_RDWR):
+            handle.writefile = stream
+        handle.stat = lambda: paramiko.SFTPAttributes.from_stat(os.fstat(stream.fileno()))
         return handle
 
     def rename(self, oldpath, newpath):
+        if self.local(newpath).exists():
+            return paramiko.SFTP_FAILURE
         self.local(oldpath).rename(self.local(newpath))
         return paramiko.SFTP_OK
+
+    def remove(self, path):
+        self.local(path).unlink()
+        return paramiko.SFTP_OK
+
+
+def exercise_file_browser(app, root, host_key):
+    remote = root / "browser-remote"
+    directory = remote / "子目录"
+    directory.mkdir(parents=True)
+    source = root / "测试 文件 #1.bin"
+    payload = bytes(range(256)) * 2_600
+    source.write_bytes(payload)
+    target = root / "下载 文件.bin"
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(1)
+    listener.settimeout(12)
+    port = listener.getsockname()[1]
+    server = Server(None)
+
+    def serve():
+        peer, _ = listener.accept()
+        with paramiko.Transport(peer) as transport:
+            transport.add_server_key(host_key)
+            transport.set_subsystem_handler("sftp", paramiko.SFTPServer, FixtureSFTP, remote)
+            transport.start_server(server=server)
+            deadline = time.monotonic() + 30
+            while transport.is_active() and time.monotonic() < deadline:
+                time.sleep(.01)
+
+    worker = threading.Thread(target=serve, daemon=True)
+    worker.start()
+    known = root / "browser_known_hosts"
+    known.touch()
+    connection = Connection.from_fields("127.0.0.1", "fixture", port)
+    options = Connection.options
+
+    def isolated_hosts(value, **kwargs):
+        return options(value, **kwargs) + ["-o", f'UserKnownHostsFile="{known.as_posix()}"', "-o", "GlobalKnownHostsFile=none"]
+
+    parent = QWidget()
+    parent.show()
+    browser = SFTPDialog(parent, connection)
+    secret = read_password(PASSWORD)
+
+    def wait(predicate):
+        deadline = time.monotonic() + 15
+        while time.monotonic() < deadline:
+            app.processEvents()
+            if predicate():
+                return
+            time.sleep(.01)
+        raise AssertionError("SFTP browser did not reach expected state: " + browser.status.text())
+
+    try:
+        with patch.object(Connection, "options", isolated_hosts), \
+                patch.object(browser, "confirm_fingerprint", return_value=True) as fingerprint, \
+                patch.object(browser, "prompt_password", return_value=secret) as password:
+            browser.open_browser()
+            wait(lambda: browser.connected and not browser.busy)
+        fingerprint.assert_called_once()
+        assert "SHA256:" in fingerprint.call_args.args[0]
+        password.assert_called_once_with(False)
+        assert browser.address.text() == "/fixture home" and server.auth == "password"
+        browser.table.activated.emit(browser.model.index(0, 0))
+        wait(lambda: browser.address.text().endswith("/子目录") and not browser.busy)
+
+        with patch.object(QFileDialog, "getOpenFileNames", return_value=([str(source)], "")):
+            browser.upload_button.click()
+        wait(lambda: not browser.busy and browser.model.rowCount() == 1)
+        assert (directory / source.name).read_bytes() == payload
+        assert browser.model.data(browser.model.index(0, 0)) == source.name
+        browser.table.selectRow(0)
+        with patch.object(QFileDialog, "getSaveFileName", return_value=(str(target), "")):
+            browser.download_button.click()
+        wait(lambda: not browser.busy and target.is_file())
+        assert target.read_bytes() == payload
+
+        with patch.object(QInputDialog, "getText", return_value=("新建目录", True)):
+            browser.mkdir_button.click()
+        wait(lambda: not browser.busy and browser.model.rowCount() == 2)
+        assert (directory / "新建目录").is_dir()
+        with patch.object(QFileDialog, "getOpenFileNames", return_value=([str(source)], "")):
+            browser.upload_button.click()
+        wait(lambda: not browser.busy)
+        assert "同名文件" in browser.status.text() and (directory / source.name).read_bytes() == payload
+
+        cancelled = root / "cancel.bin"
+        cancelled.write_bytes(payload)
+        def cancel_on_progress(moved, total):
+            if moved:
+                browser.cancelled.set()
+        browser.run_operation("测试上传取消", lambda: browser.client.upload(
+            cancelled, browser.directory, cancel_on_progress, browser.cancelled), None, transfer=True)
+        wait(lambda: not browser.busy)
+        assert "取消" in browser.status.text()
+        assert not (directory / cancelled.name).exists() and not list(directory.glob("*.part"))
+        print("PASS native SFTP fingerprint, login, Unicode navigation, upload, download, mkdir and cancellation", flush=True)
+    finally:
+        client = browser.client
+        browser.close()
+        assert client is None or client.closed.is_set()
+        assert not secret
+        parent.close()
+        listener.close()
+        worker.join(3)
 
 
 def exercise_upload(app, root, host_key):
@@ -447,6 +601,7 @@ def main():
                 exercise(app, root, host_key, prefilled=True)
                 exercise(app, root, host_key, key, public_key, prefilled=True)
                 exercise_upload(app, root, host_key)
+                exercise_file_browser(app, root, host_key)
 
 
 if __name__ == "__main__":

@@ -19,6 +19,8 @@ from enge_spx.clipboard import Snapshot
 from enge_spx.clipboard_transfer import Attachment, InputAdapter, Transfer, text_frame
 from enge_spx.smart_terminal import ImageAcknowledgement, OrderedInput, TerminalScreen, TerminalStream, TerminalWindow
 from enge_spx.terminal_render import BACKGROUND, FOREGROUND
+from enge_spx.terminal_completion import ShellCompletion
+from enge_spx.terminal_shortcuts import shortcut
 
 
 class AdapterCompatibilityTests(unittest.TestCase):
@@ -157,6 +159,38 @@ class AdapterCompatibilityTests(unittest.TestCase):
             time.sleep(.01)
         self.assertEqual(written[-1], b"suffix")
 
+
+class ShellCompletionTests(unittest.TestCase):
+    def test_confirmation_requires_echo_and_dismisses_on_command_start(self):
+        screen = TerminalScreen(80, 12)
+        stream = TerminalStream(screen)
+        stream.feed("\x1b[?2004hcustom prompt ⟫ \x1b]133;B\x07")
+        ghost = ShellCompletion()
+        ghost.input(screen, b"git st")
+        self.assertIsNone(ghost.preview(screen))
+        stream.feed("git st")
+        self.assertEqual(ghost.preview(screen)[2], "atus --short")
+        ghost.input(screen, b"\x7f")
+        stream.feed("\b\x1b[K")
+        self.assertEqual(ghost.preview(screen)[2], "tatus --short")
+        stream.feed("\x1b]133;C\x1b\\")
+        self.assertIsNone(ghost.preview(screen))
+
+    def test_saved_unicode_command_precedence_and_safe_prompt_limits(self):
+        screen = TerminalScreen(80, 12)
+        stream = TerminalStream(screen)
+        ghost = ShellCompletion([shortcut("shell", "测试文件", "git status -- 中文.txt")])
+        stream.feed("\x1b[?2004hoperator@server:~$ ")
+        ghost.input(screen, "git status -- 中".encode())
+        stream.feed("git status -- 中")
+        self.assertEqual(ghost.preview(screen)[2], "文.txt")
+        stream.feed("\x1b[?1049h")
+        self.assertIsNone(ghost.preview(screen))
+        ghost.clear()
+        stream.feed("\x1b[?1049l\x1b[2J\x1b[Hpassword: ")
+        ghost.input(screen, b"git st")
+        stream.feed("git st")
+        self.assertIsNone(ghost.preview(screen))
 
 class ColourProtocolTests(unittest.TestCase):
     def test_ssh_alternate_screen_resize_restores_main_scrollback(self):

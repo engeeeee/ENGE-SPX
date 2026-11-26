@@ -34,8 +34,13 @@ def shortcut(group, name, text):
 BUILTINS = (
     Shortcut("shell", "Git 状态", "git status --short"),
     Shortcut("shell", "查看改动", "git diff"),
+    Shortcut("shell", "最近提交", "git log --oneline -10"),
     Shortcut("shell", "当前目录", "pwd"),
     Shortcut("shell", "列出文件", "ls -la"),
+    Shortcut("shell", "磁盘用量", "df -h"),
+    Shortcut("shell", "内存用量", "free -h"),
+    Shortcut("shell", "Docker 容器", "docker ps"),
+    Shortcut("shell", "Compose 服务", "docker compose ps"),
     Shortcut("assistant", "总结当前改动", "请总结当前改动、受影响的功能和验证结果。"),
     Shortcut("assistant", "定位报错", "请先定位当前报错的原因，再给出最小修复方案。"),
     Shortcut("assistant", "检查测试覆盖", "请检查这次改动的测试覆盖，指出尚未覆盖的回归路径。"),

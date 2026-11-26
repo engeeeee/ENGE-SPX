@@ -26,6 +26,7 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, Q
 from .clipboard import WindowsClipboard
 from .clipboard_transfer import Transfer, text_frame
 from .state import SPXError
+from .terminal_completion import ShellCompletion
 from .terminal_render import BACKGROUND, FOREGROUND, MAX_WEB_LINK_LENGTH, PALETTE, TerminalChar, TerminalStream, plain_web_link, sgr_attributes
 from .terminal_paint import RowPainter
 from .terminal_preferences import DEFAULTS, display_palette
@@ -162,6 +163,15 @@ class TerminalScreen(pyte.HistoryScreen):
     def reset(self):
         super().reset()
         self.cursor.attrs = TerminalChar(**self.cursor.attrs._asdict())
+        self.shell_prompt = None
+        self.marked_shell = False
+
+    def mark_shell_prompt(self, marker):
+        if self.primary is not None:
+            return
+        self.shell_prompt = (self.cursor.y, self.cursor.x) if marker == "B" else None
+        if self.shell_prompt is not None:
+            self.marked_shell = True
 
     def select_graphic_rendition(self, *attrs):
         hyperlink = self.cursor.attrs.hyperlink
@@ -514,6 +524,8 @@ class TerminalView(QWidget):
         self.setMinimumSize(480, 260)
         self.pty, self.clipboard = pty, clipboard
         self.tool = tool or getattr(transfer, 'tool', None)
+        self.command_completion = ShellCompletion() if self.tool in ("ssh", "shell") else None
+        self.inline_preview = None
         self.ready = threading.Event()
         self.images = ImageAcknowledgement()
         self.sender = OrderedInput(pty, transfer, self.status.emit, self.ready, self.images, tool=self.tool)
@@ -728,6 +740,7 @@ class TerminalView(QWidget):
         if self.scrollbar.isHidden() == visible:
             self.scrollbar.setVisible(visible)
         if changed:
+            self.refresh_inline()
             if self.preedit or before != (self.screen.cursor.x, self.screen.cursor.y):
                 self.update_input_method()
         if eof:
@@ -1042,6 +1055,14 @@ class TerminalView(QWidget):
         p.drawImage(QPointF(), self.surface)
         p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
         x, y, hidden = self.presented_cursor
+        if (self.inline_preview is not None and self.inline_preview[:2] == (y, x)
+                and self.inline_preview == self.command_preview() and self.hasFocus() and not hidden):
+            muted = QColor(self.foreground)
+            muted.setAlpha(124)
+            p.setPen(muted)
+            p.setFont(self.font)
+            p.drawText(QPointF(self.PAD_X + x * self.cell_width, self.PAD_Y + y * self.cell_height + self.metrics.ascent()),
+                       self.inline_preview[2])
         if not self.preedit and self.blink and self.hasFocus() and self.selection_lines is None and self.offset == 0 and not hidden:
             p.fillRect(QRectF(self.PAD_X + x * self.cell_width, self.PAD_Y + y * self.cell_height, 2, self.cell_height), self.cursor_color)
         if self.preedit and self.offset == 0 and self.selection_lines is None:
@@ -1088,6 +1109,7 @@ class TerminalView(QWidget):
         if (self.screen.columns, self.screen.lines) == (columns, rows):
             self.update_input_method()
             return
+        self.clear_inline()
         self.screen.resize(lines=rows, columns=columns)
         if self.tool == "ssh":
             live = self.offset == 0
@@ -1102,6 +1124,7 @@ class TerminalView(QWidget):
         self.update_input_method()
 
     def paste(self):
+        self.clear_inline()
         if self.stopping.is_set():
             self.status.emit("终端连接已结束，请从 ENGE SPX 重新打开工具后粘贴。")
             return
@@ -1114,8 +1137,42 @@ class TerminalView(QWidget):
         self.offset = 0
         self.sender.paste(self.clipboard)
 
+    def command_preview(self):
+        if (self.command_completion is None or self.offset or self.selection_lines is not None or self.preedit
+                or self.stopping.is_set() or self.stream.synchronized_at is not None):
+            return None
+        return self.command_completion.preview(self.screen)
+
+    def refresh_inline(self):
+        current, previous = self.command_preview(), self.inline_preview
+        if current != previous:
+            self.inline_preview = current
+            for placement in (previous, current):
+                if placement is not None:
+                    top = self.PAD_Y + placement[0] * self.cell_height
+                    self.update(QRectF(self.PAD_X, top, self.width() - self.PAD_X, self.cell_height).toAlignedRect())
+
+    def clear_inline(self):
+        if self.command_completion is not None:
+            self.command_completion.clear()
+            self.refresh_inline()
+
     def keyPressEvent(self, event):
         modifiers = event.modifiers()
+        if event.key() == Qt.Key.Key_Tab and modifiers == Qt.KeyboardModifier.NoModifier:
+            preview = self.inline_preview
+            x, y, hidden = self.presented_cursor
+            if (preview is not None and preview == self.command_preview()
+                    and preview[:2] == (y, x) and not hidden and self.ready.is_set()):
+                self.clear_inline()
+                self.sender.put("quick_text", preview[2])
+                event.accept()
+                return
+        typing = (not modifiers & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier
+                                   | Qt.KeyboardModifier.MetaModifier)
+                  and (event.text().isprintable() or event.key() == Qt.Key.Key_Backspace))
+        if not typing:
+            self.clear_inline()
         if event.key() == Qt.Key.Key_P and modifiers == (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier):
             self.quick_input_requested.emit()
             event.accept()
@@ -1169,7 +1226,9 @@ class TerminalView(QWidget):
                 self.draft_anchor = None
             elif data[:1] != b'\x1b' and any(byte > 32 for byte in data) and self.draft_anchor is None:
                 self.draft_anchor = (self.screen.cursor.y, self.screen.cursor.x)
-            self.sender.put("keys", data)
+            if self.sender.put("keys", data) and typing and self.command_completion is not None:
+                self.command_completion.input(self.screen, data)
+                self.refresh_inline()
         event.accept()
 
     def event(self, event):
@@ -1188,8 +1247,12 @@ class TerminalView(QWidget):
         if event.commitString():
             if self.draft_anchor is None:
                 self.draft_anchor = (self.screen.cursor.y, self.screen.cursor.x)
-            self.sender.put("keys", event.commitString().encode("utf-8"))
+            data = event.commitString().encode("utf-8")
+            if self.sender.put("keys", data) and self.command_completion is not None:
+                self.command_completion.input(self.screen, data)
         self.preedit = event.preeditString()
+        if self.preedit:
+            self.clear_inline()
         self.preedit_cursor = len(self.preedit.encode("utf-16-le")) // 2
         self.preedit_cursor_visible = True
         self.preedit_formats = []
@@ -1203,6 +1266,7 @@ class TerminalView(QWidget):
                 item.format = QTextCharFormat(attribute.value)
                 self.preedit_formats.append(item)
         self.update_input_method()
+        self.refresh_inline()
         self.update()
         event.accept()
 
@@ -1309,6 +1373,7 @@ class TerminalView(QWidget):
 
     def mousePressEvent(self, event):
         self.setFocus()
+        self.clear_inline()
         y, x = self.cell(event)
         if event.button() == Qt.MouseButton.RightButton:
             self.quick_paste_click = (self.right_click_paste and self.ready.is_set() and
@@ -1556,6 +1621,8 @@ class TerminalWindow(QMainWindow):
         self.effect_key = self.chrome_key = None
         self._frame_configured = False
         self.appearance_dialog = None
+        self.sftp_dialog = None
+        self.files_button = None
         self.is_ssh = tool == "ssh"
         # Qt chooses the HWND surface at creation. Paint an opaque fill in
         # solid mode so later material changes need no window recreation.
@@ -1604,10 +1671,19 @@ class TerminalWindow(QMainWindow):
         self.quick_input = QToolButton()
         self.quick_input.setObjectName("QuickInputButton")
         self.quick_input.setText("快捷输入")
-        self.quick_input.setToolTip("Ctrl+Shift+P 打开常用命令或提示词，Tab 填入输入区。")
+        self.quick_input.setToolTip("输入常用 Shell 指令的开头，按 Tab 接受灰色提示。Ctrl+Shift+P 管理快捷输入。"
+                                    if tool in ("ssh", "shell") else "Ctrl+Shift+P 打开快捷输入，Tab 填入输入区。")
         self.quick_input.setCursor(Qt.CursorShape.PointingHandCursor)
         self.quick_input.clicked.connect(self.show_quick_input)
         header.addWidget(self.quick_input)
+        if self.is_ssh and transfer is not None:
+            self.files_button = QToolButton()
+            self.files_button.setObjectName("FileBrowserButton")
+            self.files_button.setText("SFTP 文件")
+            self.files_button.setToolTip("浏览、上传或下载此 SSH 服务器的文件")
+            self.files_button.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.files_button.clicked.connect(self.show_sftp)
+            header.addWidget(self.files_button)
         options = QToolButton()
         options.setObjectName("TerminalOptions")
         options.setText("⋯")
@@ -1617,6 +1693,12 @@ class TerminalWindow(QMainWindow):
         header.addWidget(options)
         layout.addWidget(session)
         self.view = TerminalView(pty, transfer, clipboard, tool)
+        if self.view.command_completion is not None:
+            from .terminal_shortcuts import load
+            try:
+                self.view.command_completion.set_commands(load(self.shortcut_store).values())
+            except (OSError, SPXError):
+                pass  # The editor reports its configuration error when opened.
         layout.addWidget(self.view, 1)
         footer = QFrame()
         footer.setObjectName("TerminalFooter")
@@ -1773,6 +1855,7 @@ class TerminalWindow(QMainWindow):
 
         if self.view.stopping.is_set():
             return
+        self.view.clear_inline()
         dialog = QuickInput(self, self.shortcut_store, self.view.tool)
         try:
             if dialog.exec() and dialog.text:
@@ -1780,6 +1863,8 @@ class TerminalWindow(QMainWindow):
                 self.view.scrollbar.setValue(self.view.scrollbar.maximum())
                 self.view.sender.put("quick_text", dialog.text)
         finally:
+            if self.view.command_completion is not None:
+                self.view.command_completion.set_commands(dialog.custom.values())
             dialog.deleteLater()
             self.view.setFocus()
 
@@ -1792,6 +1877,21 @@ class TerminalWindow(QMainWindow):
         self.appearance_dialog.raise_()
         self.appearance_dialog.activateWindow()
 
+    def show_sftp(self):
+        from .ui.sftp_dialog import SFTPDialog
+
+        if self.view.stopping.is_set():
+            return
+        if self.sftp_dialog is not None:
+            self.sftp_dialog.raise_()
+            self.sftp_dialog.activateWindow()
+            return
+        transfer = self.view.sender.transfer
+        self.sftp_dialog = SFTPDialog(self, transfer.connection, confirm_host=False,
+                                     session_environment=transfer.environment if transfer.prefilled else None)
+        self.sftp_dialog.destroyed.connect(lambda: setattr(self, "sftp_dialog", None))
+        self.sftp_dialog.open_browser()
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
         w, h, b = self.width(), self.height(), 5
@@ -1802,6 +1902,10 @@ class TerminalWindow(QMainWindow):
             edge.raise_()
 
     def connection_ended(self):
+        if self.sftp_dialog is not None:
+            self.sftp_dialog.close()
+        if self.files_button is not None:
+            self.files_button.setEnabled(False)
         self.view.stop()
         self.quick_input.setEnabled(False)
         self.connection.setText("○  连接已结束")
@@ -1809,6 +1913,8 @@ class TerminalWindow(QMainWindow):
                              else "终端连接已结束。工作区和持久资料按现有规则保留；可关闭此窗口。")
 
     def closeEvent(self, event):
+        if self.sftp_dialog is not None:
+            self.sftp_dialog.close()
         self.interaction_guard.stop()
         self.preferences.flush()
         self.view.stop()

@@ -16,8 +16,10 @@ class SSHPage(Page):
         actions = QHBoxLayout()
         self.add_machine = button("新建机器", self.edit, primary=True)
         self.quick_connect = button("临时连接", window.open_ssh, ghost=True)
+        self.quick_files = button("临时 SFTP", lambda: window.open_ssh(file_browser=True), ghost=True)
         actions.addWidget(self.add_machine)
         actions.addWidget(self.quick_connect)
+        actions.addWidget(self.quick_files)
         actions.addStretch()
         self.layout.addLayout(actions)
 
@@ -41,6 +43,7 @@ class SSHPage(Page):
             self.details.layout.addWidget(item)
         commands = self.details.row()
         commands.addWidget(button("连接", self.connect_selected, primary=True))
+        commands.addWidget(button("SFTP 文件", self.files_selected))
         commands.addWidget(button("编辑", self.edit_selected, ghost=True))
         commands.addWidget(button("删除", self.remove_selected, ghost=True))
         commands.addStretch()
@@ -117,6 +120,11 @@ class SSHPage(Page):
         machine = self.selected()
         if machine is not None:
             self.window_owner.open_ssh(machine=machine)
+
+    def files_selected(self):
+        machine = self.selected()
+        if machine is not None:
+            self.window_owner.open_ssh(machine=machine, file_browser=True)
 
     def remove_selected(self):
         machine = self.selected()

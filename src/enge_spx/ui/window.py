@@ -72,6 +72,7 @@ class Window(QMainWindow):
         self._last_view = None
         self._force_close = False
         self.ssh_windows = set()
+        self.sftp_windows = set()
         self.tray = None
         self.tray_hint_shown = False
         self._restore_message = restore_message()
@@ -1082,7 +1083,7 @@ class Window(QMainWindow):
         if self.c.project.get().strip():
             self.c.open_terminal(tool)
 
-    def open_ssh(self, *, machine=None):
+    def open_ssh(self, *, machine=None, file_browser=False):
         from PySide6.QtWidgets import QDialog
         from .ssh_dialog import SSHDialog
 
@@ -1100,13 +1101,19 @@ class Window(QMainWindow):
                 return
             connection = machine.connection
             title = f"{machine.name} · {connection.label}" if machine.name else connection.label
-            self.launch_ssh(connection, title, password=password)
+            if file_browser:
+                self.launch_sftp(connection, password=password)
+            else:
+                self.launch_ssh(connection, title, password=password)
             return
-        dialog = SSHDialog(self)
+        dialog = SSHDialog(self, file_browser=file_browser)
         try:
             if dialog.exec() == QDialog.DialogCode.Accepted:
                 connection = dialog.connection
-                self.launch_ssh(connection, password=dialog.take_password())
+                if file_browser:
+                    self.launch_sftp(connection, password=dialog.take_password())
+                else:
+                    self.launch_ssh(connection, password=dialog.take_password())
         finally:
             dialog.deleteLater()
 
@@ -1157,6 +1164,14 @@ class Window(QMainWindow):
         self.ssh_windows.add(window)
         window.destroyed.connect(lambda: self.ssh_windows.discard(window))
         window.show()
+
+    def launch_sftp(self, connection, *, password=None):
+        from .sftp_dialog import SFTPDialog
+
+        dialog = SFTPDialog(self, connection, password=password)
+        self.sftp_windows.add(dialog)
+        dialog.destroyed.connect(lambda: self.sftp_windows.discard(dialog))
+        dialog.open_browser()
 
     def choose_storage(self, value):
         path = QFileDialog.getExistingDirectory(self, "选择专用的空目标目录", value.get())
@@ -1402,6 +1417,8 @@ class Window(QMainWindow):
             return
         if self._force_close or self.c.request_close():
             for session in tuple(self.ssh_windows):
+                session.close()
+            for session in tuple(self.sftp_windows):
                 session.close()
             self.c.stop_resource_monitor()
             self.c.delivery.stop()
