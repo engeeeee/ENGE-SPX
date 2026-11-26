@@ -48,14 +48,18 @@ export function SiteInteractions({ children }: { children: ReactNode }) {
     const dialog = useRef<HTMLDialogElement>(null);
     const picture = screenshots.find((item) => item.id === selected)!;
     const source = screenshotPath(picture, theme);
+
     useEffect(() => {
-        setTheme(document.documentElement.dataset.theme === "light" ? "light" : "dark");
+        setTheme(
+            document.documentElement.dataset.theme === "light"
+                ? "light"
+                : "dark",
+        );
     }, []);
     useEffect(() => {
-        document.querySelector('meta[name="theme-color"]')?.setAttribute(
-            "content",
-            theme === "dark" ? "#000000" : "#ffffff",
-        );
+        document
+            .querySelector('meta[name="theme-color"]')
+            ?.setAttribute("content", theme === "dark" ? "#000000" : "#ffffff");
     }, [theme]);
 
     const toggleTheme = () => {
@@ -65,9 +69,10 @@ export function SiteInteractions({ children }: { children: ReactNode }) {
         try {
             localStorage.setItem(themeStorageKey, next);
         } catch {
-            // The theme remains usable in this tab when storage is unavailable.
+            // Keep working when localStorage is blocked.
         }
     };
+
     const change = (direction: number) =>
         setSelected(
             (id) =>
@@ -112,9 +117,7 @@ export function SiteInteractions({ children }: { children: ReactNode }) {
                             <span className="eyebrow">
                                 {picture.platform} · v{picture.version}
                             </span>
-                            <h2 id="screenshot-dialog-title">
-                                {picture.title}
-                            </h2>
+                            <h2 id="screenshot-dialog-title">{picture.title}</h2>
                         </div>
                         <div className="gallery-view-controls">
                             <button
@@ -200,12 +203,13 @@ export function SiteInteractions({ children }: { children: ReactNode }) {
                         {picture.platform} · {picture.pixelRatio}× 截图 ·{" "}
                         {picture.width * picture.pixelRatio} ×{" "}
                         {picture.height * picture.pixelRatio} ·{" "}
+                        {picture.context} ·{" "}
                         <a
                             href={docs.screenshots}
                             target="_blank"
                             rel="noreferrer"
                         >
-                            截图来源 <ArrowUpRight size={12} />
+                            截图说明 <ArrowUpRight size={12} />
                         </a>
                     </p>
                 </div>
@@ -245,15 +249,12 @@ export function Screenshot({
                 />
                 <span className="shot-zoom">
                     <Expand size={14} />
-                    <span>放大截图</span>
+                    <span>放大查看</span>
                 </span>
             </button>
             {caption && (
                 <figcaption>
-                    {item.platform} · v
-                    {item.version}{" "}
-                    ·{" "}
-                    {item.context}
+                    {item.platform} · v{item.version} · {item.context}
                 </figcaption>
             )}
         </figure>
@@ -265,6 +266,7 @@ export function Navigation() {
     const [active, setActive] = useState("");
     const { theme, toggleTheme } = useContext(Site);
     const themeLabel = theme === "dark" ? "切换到浅色模式" : "切换到深色模式";
+
     useEffect(() => {
         const observer = new IntersectionObserver(
             (entries) => {
@@ -274,7 +276,7 @@ export function Navigation() {
                     else setActive((current) => (current === id ? "" : current));
                 }
             },
-            { rootMargin: "-15% 0px -60% 0px" },
+            { rootMargin: "-18% 0px -58% 0px" },
         );
         navigation.forEach(({ id }) => {
             const element = document.getElementById(id);
@@ -282,6 +284,7 @@ export function Navigation() {
         });
         return () => observer.disconnect();
     }, []);
+
     return (
         <>
             <a className="skip-link" href="#main">
@@ -290,13 +293,9 @@ export function Navigation() {
             <header className="site-header">
                 <div className="nav-inner">
                     <a href="#" className="brand" aria-label="ENGE SPX 首页">
-                        <img
-                            src={brand.logo}
-                            alt=""
-                            width="35"
-                            height="35"
-                        />
+                        <img src={brand.logo} alt="" width="34" height="34" />
                         <span>ENGE SPX</span>
+                        <span className="brand-version">v{product.version}</span>
                     </a>
                     <nav className="desktop-nav" aria-label="主要导航">
                         {navigation.map(({ id, label }) => (
@@ -331,11 +330,20 @@ export function Navigation() {
                             className="button button-small button-primary nav-download"
                             href={product.installer}
                         >
-                            <ArrowDownToLine size={15} />
+                            <ArrowDownToLine size={15} aria-hidden="true" />
                             下载 Windows 版
                         </a>
-                        <button className="theme-button icon-button" aria-label={themeLabel} title={themeLabel} onClick={toggleTheme}>
-                            {theme === "dark" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
+                        <button
+                            className="theme-button icon-button"
+                            aria-label={themeLabel}
+                            title={themeLabel}
+                            onClick={toggleTheme}
+                        >
+                            {theme === "dark" ? (
+                                <Sun aria-hidden="true" />
+                            ) : (
+                                <Moon aria-hidden="true" />
+                            )}
                         </button>
                         <button
                             className="menu-button icon-button"
@@ -355,12 +363,7 @@ export function Navigation() {
                         className="brand"
                         onClick={() => dialog.current?.close()}
                     >
-                        <img
-                            src={brand.logo}
-                            alt=""
-                            width="35"
-                            height="35"
-                        />
+                        <img src={brand.logo} alt="" width="34" height="34" />
                         <span>ENGE SPX</span>
                     </a>
                     <button
@@ -400,7 +403,13 @@ export function Navigation() {
     );
 }
 
-export function CopyChecksum() {
+export function CopyChecksum({
+    hash = product.installerSha256,
+    label = "安装版",
+}: {
+    hash?: string;
+    label?: string;
+}) {
     const [copied, setCopied] = useState(false);
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
     useEffect(
@@ -414,9 +423,7 @@ export function CopyChecksum() {
             className="text-button checksum-button"
             onClick={async () => {
                 try {
-                    await navigator.clipboard.writeText(
-                        product.installerSha256,
-                    );
+                    await navigator.clipboard.writeText(hash);
                     setCopied(true);
                     if (timer.current) clearTimeout(timer.current);
                     timer.current = setTimeout(() => setCopied(false), 2500);
@@ -431,7 +438,7 @@ export function CopyChecksum() {
         >
             <Check size={13} />
             <span aria-live="polite">
-                {copied ? "安装版 SHA-256 已复制" : "复制安装版 SHA-256"}
+                {copied ? `${label} SHA-256 已复制` : `复制${label} SHA-256`}
             </span>
         </button>
     );

@@ -34,8 +34,12 @@ export const docs = {
     exit: `${product.repository}/blob/main/docs/exit.zh-CN.md`,
     clipboard: `${product.repository}/blob/main/docs/smart-clipboard.zh-CN.md`,
     terminal: `${product.repository}/blob/main/docs/terminal-appearance-performance.zh-CN.md`,
+    ssh: `${product.repository}/blob/main/docs/storage-terminal.zh-CN.md#ssh-连接及文件粘贴`,
+    sftp: `${product.repository}/blob/main/docs/storage-terminal.zh-CN.md#sftp-文件管理`,
+    storage: `${product.repository}/blob/main/docs/storage-terminal.zh-CN.md`,
     updates: `${product.repository}/blob/main/docs/updates-and-timezone.zh-CN.md`,
     screenshots: `${product.repository}/blob/main/docs/screenshots/README.md`,
+    releaseNotes: `${product.repository}/blob/main/docs/releases/0.16.2.zh-CN.md`,
     license: `${product.repository}/blob/main/LICENSE`,
     issues: `${product.repository}/issues`,
     docker: "https://docs.docker.com/desktop/setup/install/windows-install/",
@@ -43,9 +47,10 @@ export const docs = {
 
 export const navigation = [
     { id: "workspace", label: "工作区" },
-    { id: "architecture", label: "网络路径" },
-    { id: "terminal", label: "终端" },
-    { id: "resources", label: "资源" },
+    { id: "architecture", label: "代理网络" },
+    { id: "terminal", label: "智能终端" },
+    { id: "ssh", label: "远程 SSH" },
+    { id: "resources", label: "资源预算" },
 ] as const;
 
 export const screenshots = [
@@ -65,7 +70,7 @@ export const screenshots = [
     {
         id: "workspace",
         title: "项目工作区",
-        alt: "真实项目工作区界面：本地目录、身份授权、Claude Code、Codex、终端及 Chromium 入口",
+        alt: "项目工作区界面：本地目录、身份授权、Claude Code、Codex、终端及 Chromium 入口",
         source: `/screenshots/${product.screenshotVersion}/dark/workspace.png`,
         lightSource: `/screenshots/${product.screenshotVersion}/light/workspace.png`,
         width: 1120,
@@ -78,7 +83,7 @@ export const screenshots = [
     {
         id: "connection",
         title: "连接与代理",
-        alt: "真实连接与代理界面：分别选择落地、前置线路和本机代理",
+        alt: "连接与代理界面：分别选择落地代理、前置加密线路和本机下载代理",
         source: `/screenshots/${product.screenshotVersion}/dark/connection.png`,
         lightSource: `/screenshots/${product.screenshotVersion}/light/connection.png`,
         width: 960,
@@ -89,17 +94,43 @@ export const screenshots = [
         context: "未配置账号与节点",
     },
     {
-        id: "resources",
-        title: "资源与性能",
-        alt: "真实资源预算界面：网关、会话、CLI 与 Chromium 的 CPU、内存上限",
-        source: `/screenshots/${product.screenshotVersion}/dark/resources.png`,
-        lightSource: `/screenshots/${product.screenshotVersion}/light/resources.png`,
-        width: 840,
-        height: 1000,
-        pixelRatio: 3,
-        platform: "Windows 原生界面",
+        id: "ssh",
+        title: "远程 SSH 管理",
+        alt: "远程 SSH 管理页：保存多台服务器配置，支持 DPAPI 凭据保存、私钥登录、一键终端与 SFTP",
+        source: `/screenshots/${product.screenshotVersion}/dark/ssh.png`,
+        lightSource: `/screenshots/${product.screenshotVersion}/light/ssh.png`,
+        width: 960,
+        height: 840,
+        pixelRatio: 2,
+        platform: "ENGE SPX 界面示例",
         version: product.screenshotVersion,
-        context: "未配置账号与节点",
+        context: "使用 RFC 5737 示例地址演示",
+    },
+    {
+        id: "ssh-terminal",
+        title: "SSH 智能终端",
+        alt: "SSH 智能终端会话：集成快捷输入、SFTP 文件按钮及 Ctrl+V 自动上传图片返回远端路径",
+        source: `/screenshots/${product.screenshotVersion}/terminal-ssh@2x.png`,
+        lightSource: `/screenshots/${product.screenshotVersion}/terminal-ssh-light@2x.png`,
+        width: 1100,
+        height: 680,
+        pixelRatio: 2,
+        platform: "SSH 终端运行演示",
+        version: product.screenshotVersion,
+        context: "内置快捷输入与 SFTP 上传反馈",
+    },
+    {
+        id: "sftp",
+        title: "SFTP 文件管理器",
+        alt: "内置 SFTP 文件管理器：路径导航、文件大小与修改时间列表、多选上传、下载和传输进度",
+        source: `/screenshots/${product.screenshotVersion}/sftp@2x.png`,
+        lightSource: `/screenshots/${product.screenshotVersion}/sftp-light@2x.png`,
+        width: 860,
+        height: 560,
+        pixelRatio: 2,
+        platform: "SFTP 文件管理器",
+        version: product.screenshotVersion,
+        context: "基于系统 OpenSSH SFTP v3",
     },
     {
         id: "terminal",
@@ -114,6 +145,19 @@ export const screenshots = [
         version: product.screenshotVersion,
         context: "Codex 0.169.0 · 未发送的测试草稿",
     },
+    {
+        id: "resources",
+        title: "资源与性能",
+        alt: "资源预算界面：网关、会话、CLI 与 Chromium 的 CPU、内存上限",
+        source: `/screenshots/${product.screenshotVersion}/dark/resources.png`,
+        lightSource: `/screenshots/${product.screenshotVersion}/light/resources.png`,
+        width: 840,
+        height: 1000,
+        pixelRatio: 3,
+        platform: "Windows 原生界面",
+        version: product.screenshotVersion,
+        context: "未配置账号与节点",
+    },
 ] as const;
 
 export type ScreenshotId = (typeof screenshots)[number]["id"];
@@ -126,20 +170,34 @@ export const brand = {
     touchIcon: asset(`/apple-touch-icon.png?v=${product.version}`),
 } as const;
 
-export const screenshotPath = (item: { source: string; lightSource?: string }, theme: Theme) =>
-    asset(theme === "light" ? item.lightSource ?? item.source : item.source);
+export const screenshotPath = (
+    item: { source: string; lightSource?: string },
+    theme: Theme,
+) => asset(theme === "light" ? item.lightSource ?? item.source : item.source);
 
 export const faqs = [
     {
-        question: "外部终端能用智能粘贴吗？",
-        answer: "截图和文件粘贴在 ENGE SPX 自带终端中可用。Windows Terminal、PowerShell 和其他外部终端保留各自的快捷键。",
+        question: "外部终端（Windows Terminal / PowerShell）能用智能粘贴吗？",
+        answer: "Ctrl+V 直接粘贴截图和文件仅在 ENGE SPX 内置智能终端中生效。如果配置使用 Windows Terminal、PowerShell 或自定义程序，软件保留第三方终端原有快捷键与行为，不劫持系统热键。",
     },
     {
-        question: "我已经在用 v2rayN，可以继续用吗？",
-        answer: "可以。选用本机 v2ray 兼容模式，再选择落地代理。按目标分流仍由 v2rayN 管理。",
+        question: "本地已经在用 v2rayN / Clash 等客户端，可以共存吗？",
+        answer: "可以。ENGE SPX 不修改 Windows 系统代理。代理页面可选「本机 v2ray 兼容模式」，让外部客户端负责第一跳，工作台仍保留工作区内部网关与落地出口核验。",
     },
     {
-        question: "如何更新 ENGE SPX？",
-        answer: "软件打开时自动检查正式版。在左侧「偏好设置」的「常规」里查看结果、手动检查或关闭自动检查。",
+        question: "SSH 密码和私钥口令保存在哪里？安全吗？",
+        answer: "在 Windows 打包版「远程 SSH」保存密码或私钥口令时，凭据仅使用当前 Windows 用户的 DPAPI 加密存储在本地，不上传任何云端服务；编辑机器时勾选「清除已保存的凭据」即可删除。多因素认证机器可留空密码，连接时按终端提示交互输入。",
+    },
+    {
+        question: "SSH 终端里 Ctrl+V 上传文件大小与远端目录规则是什么？",
+        answer: "在 SSH 终端按下 Ctrl+V 或右键粘贴本机图片/文件时，系统 SFTP 客户端会先核对主机密钥，随后上传至远端账户主目录的 .enge-spx-paste-* 文件夹并自动把远端路径填入输入框。单文件上限 128 MiB，单批上限 256 MiB。",
+    },
+    {
+        question: "首次运行环境占用多大？可以把数据迁移到 D 盘吗？",
+        answer: "Linux 容器运行环境首次约需 1 GB，在软件内一键准备即可（下载后自动校验 SHA-256，校验导入后自动清理包缓存）。可在「偏好设置 → 存储」中一键迁移应用数据，或通过 Docker 数据盘迁移助手引导更换盘符。",
+    },
+    {
+        question: "如何更新与安全回退？",
+        answer: "软件启动时默认检查正式版更新，可在「偏好设置 → 常规」查看或关闭；下载的新包仍保持数据兼容性。退出软件默认隐藏到托盘，真正退出时可按规则安全停止工作区容器，也可按需同时关闭 Docker Desktop。",
     },
 ] as const;

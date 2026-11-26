@@ -92,8 +92,17 @@ try {
         assert.equal(await page.locator(".landing-node").count(), 1);
         assert.equal(await page.locator(".landing-options > span").count(), 3);
 
+        const sshTabs = page.getByRole("tablist", { name: "远程 SSH 功能模块" });
+        await sshTabs.getByRole("tab", { name: /内置 SFTP/ }).click();
+        assert.match(await page.locator("#ssh .ssh-stage img").getAttribute("src"), /sftp@2x\.png$/);
+        await sshTabs.getByRole("tab", { name: /SSH 智能终端/ }).click();
+        assert.match(await page.locator("#ssh .ssh-stage img").getAttribute("src"), /terminal-ssh@2x\.png$/);
+        await sshTabs.getByRole("tab", { name: /SSH 主机管理/ }).click();
+        assert.match(await page.locator("#ssh .ssh-stage img").getAttribute("src"), /\/dark\/ssh\.png$/);
+
         await page
             .getByRole("button", { name: "放大查看工作台真实截图" })
+            .first()
             .click();
         assert.equal(
             await page.locator(".screenshot-dialog").evaluate((d) => d.open),
@@ -130,6 +139,7 @@ try {
         ["architecture", "architecture.png", "网络路径与代理架构"],
         ["workspace", "workspace.png", "项目工作区"],
         ["terminal", "terminal.png", "智能粘贴终端"],
+        ["ssh", "ssh.png", "远程 SSH 与 SFTP"],
         ["resources", "resources.png", "资源与性能"],
         ["get-started", "get-started.png", "快速开始与下载"],
     ]) {
@@ -149,8 +159,11 @@ try {
     });
     await page.setViewportSize({ width: 1920, height: 1080 });
     await capture("desktop-1920.png", "宽屏首页 · 1920px");
-    await page.getByRole("button", { name: "放大查看工作台真实截图" }).click();
-    await page.getByRole("button", { name: "放大阅读" }).click();
+        await page
+            .getByRole("button", { name: "放大查看工作台真实截图" })
+            .first()
+            .click();
+        await page.getByRole("button", { name: "放大阅读" }).click();
     await capture("high-resolution-reading.png", "原始逻辑尺寸阅读 · 1080p");
     await page.keyboard.press("Escape");
     await page.setViewportSize({ width: 768, height: 1024 });

@@ -28,7 +28,7 @@ npm run build
 src/app/page.tsx                  页面组合与结构化 SEO 数据
 src/app/layout.tsx                站点元数据、字体和全局交互
 src/app/globals.css               颜色、排版、布局、响应式和动效
-src/components/sections/          功能、终端、网络等内容分区与 Footer
+src/components/sections/          工作区、终端、SSH/SFTP、网络等分区与 Footer
 src/components/architecture.tsx   两种接入模式与网络路径示意
 src/components/interactions.tsx   导航、高清截图浏览器、校验值复制
 src/lib/content.ts               版本、真实下载地址、文档、截图、FAQ
@@ -44,7 +44,7 @@ scripts/deploy-static.py          Linux 上的静态目录原子发布
 
 官网默认夜间模式，右上角可切换并记住选择。工作台、连接、项目和资源页使用 **0.16.2 Windows** 两种主题的原生 3× 截图，点开原图后可按原始逻辑尺寸阅读。采集记录和 SHA-256 位于 `public/screenshots/0.16.2` 中各主题的 `capture.json`。
 
-终端截图使用 **0.16.2 Linux 产品终端与 Codex 0.169.0**，两种主题均为 2200×1360 原生 2× 图，展示未发送的测试草稿。[图片来源与展示方式](DESIGN.md)
+终端截图使用 **0.16.2 Linux 产品终端与 Codex 0.169.0**，两种主题均为 2200×1360 原生 2× 图，展示未发送的测试草稿；远程 SSH 页面、SSH 终端与 SFTP 管理器使用 0.16.2 界面及 RFC 5737 示例服务器地址以 2× 渲染展示。[图片来源与展示方式](DESIGN.md)
 
 ## 预览与简短检查
 

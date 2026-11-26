@@ -1,40 +1,93 @@
-import { ArrowDownToLine, ArrowUpRight, Package, Archive } from "lucide-react";
+import { Archive, ArrowDownToLine, ArrowUpRight, Package } from "lucide-react";
 import { CopyChecksum } from "@/components/interactions";
 import { docs, product } from "@/lib/content";
 
 export function GetStartedSection() {
     return (
-        <section id="get-started" className="section container" aria-labelledby="download-title">
+        <section
+            id="get-started"
+            className="section container"
+            aria-labelledby="download-title"
+        >
             <div className="download-panel">
                 <div>
-                    <p className="eyebrow">Windows x64 · v{product.version}</p>
-                    <h2 id="download-title">下载 ENGE SPX</h2>
+                    <p className="eyebrow">
+                        WINDOWS x64 · v{product.version} · {product.published}
+                    </p>
+                    <h2 id="download-title">下载与获取 ENGE SPX</h2>
+                    <p style={{ marginTop: "0.7rem", fontSize: "0.94rem" }}>
+                        安装版与便携版均内嵌全部运行时及 <code>spx.exe</code>{" "}
+                        命令行入口，开箱即用无需另配 Python 环境。
+                    </p>
                     <div className="download-options">
                         <a className="download-option" href={product.installer}>
                             <Package size={21} aria-hidden="true" />
-                            <span><strong>安装版</strong><small>EXE · {product.installerSize}</small></span>
+                            <span>
+                                <strong>Windows 安装版</strong>
+                                <small>
+                                    Setup.exe · {product.installerSize}
+                                </small>
+                            </span>
                             <ArrowDownToLine size={17} aria-hidden="true" />
                         </a>
                         <a className="download-option" href={product.portable}>
                             <Archive size={21} aria-hidden="true" />
-                            <span><strong>便携版</strong><small>ZIP · {product.portableSize}</small></span>
+                            <span>
+                                <strong>Windows 便携版</strong>
+                                <small>
+                                    Portable.zip · {product.portableSize}
+                                </small>
+                            </span>
                             <ArrowDownToLine size={17} aria-hidden="true" />
                         </a>
                     </div>
                     <div className="text-links">
-                        <a className="text-link" href={product.release}>发布说明 <ArrowUpRight size={13} aria-hidden="true" /></a>
-                        <CopyChecksum />
+                        <a className="text-link" href={product.release}>
+                            GitHub Releases{" "}
+                            <ArrowUpRight size={13} aria-hidden="true" />
+                        </a>
+                        <a className="text-link" href={docs.releaseNotes}>
+                            0.16.2 更新日志{" "}
+                            <ArrowUpRight size={13} aria-hidden="true" />
+                        </a>
+                        <CopyChecksum
+                            hash={product.installerSha256}
+                            label="安装版"
+                        />
+                        <CopyChecksum
+                            hash={product.portableSha256}
+                            label="便携版"
+                        />
                     </div>
                 </div>
                 <div className="setup">
-                    <h3>快速开始</h3>
+                    <h3>四步完成环境部署</h3>
                     <ol className="setup-list">
-                        <li>安装 <a href={docs.docker}>Docker Desktop</a>，启用 WSL2 和 Linux 容器。</li>
-                        <li>安装或解压 ENGE SPX，在工作台点击「一键准备环境」。</li>
-                        <li>配置线路和落地代理，检查并确认出口。</li>
-                        <li>选择项目目录与权限，启动编程工具。</li>
+                        <li>
+                            安装一次{" "}
+                            <a
+                                href={docs.docker}
+                                target="_blank"
+                                rel="noreferrer"
+                            >
+                                Docker Desktop
+                            </a>
+                            ，确认启用 WSL 2 与 Linux containers（仅远程 SSH / SFTP 可免 Docker 直接使用）。
+                        </li>
+                        <li>
+                            运行安装版或解压便携版，进入工作台点击「一键准备环境」（约 1 GB，支持断点续传与校验）。
+                        </li>
+                        <li>
+                            在「连接与代理」配置第一跳线路与落地代理，核验两处出口后确认启用。
+                        </li>
+                        <li>
+                            选择项目目录与授权模式，打开 Claude Code、Codex、Antigravity，或前往「远程 SSH」直连服务器。
+                        </li>
                     </ol>
-                    <a className="text-link" href={docs.quickstart}>完整安装指南 <ArrowUpRight size={13} aria-hidden="true" /></a>
+                    <a className="text-link" href={docs.quickstart}>
+                        完整快速入门指南{" "}
+                        <ArrowUpRight size={14} aria-hidden="true" />
+                    </a>
                 </div>
             </div>
         </section>
