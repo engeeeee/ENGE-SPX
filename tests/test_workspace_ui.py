@@ -109,6 +109,19 @@ class WorkspaceUITests(unittest.TestCase):
         pty.close.assert_called_once()
         self.assertFalse((self.store.home / ssh_machines.FILE).exists())
 
+    def test_prepared_workspace_terminal_joins_the_current_terminal_group(self):
+        from test_terminal_rendering import FixturePTY
+
+        remote = self.window.terminal_sessions().open(FixturePTY(), "ssh", self.project, session_label="远端测试")
+        launch = Mock(project=self.project, tool="antigravity", transfer=None, browser_url=None)
+        launch.start.return_value = FixturePTY()
+        self.controller.terminal_prepared.emit(launch)
+        launch.start.assert_called_once_with()
+        group = self.window.terminal_workspace.group
+        self.assertIs(remote.window(), group)
+        self.assertEqual([session.view.tool for session in group.sessions], ["ssh", "antigravity"])
+        self.assertIs(group.view.pty, launch.start.return_value)
+
     def test_dedicated_ssh_page_saves_edits_connects_and_removes_machine(self):
         from enge_spx.credentials import CredentialCodec
         from test_credentials import MemoryProtector
