@@ -114,9 +114,10 @@ class WorkspaceLaunchTests(unittest.TestCase):
         with patch("enge_spx.engine.os", SimpleNamespace(name="nt")), \
                 patch("enge_spx.terminal.launch") as external, patch("enge_spx.engine.webbrowser.open") as browser:
             launch = engine.terminal(str(self.project), "antigravity", desktop_session=True)
-        engine.attach_command.assert_called_once_with(str(self.project), "antigravity", "session", "project-container",
+        project = self.project.resolve()
+        engine.attach_command.assert_called_once_with(str(project), "antigravity", "session", "project-container",
                                                        interactive=True, terminal_capabilities=True, terminal_relay=True)
-        self.assertEqual(launch.project, self.project)
+        self.assertEqual(launch.project, project)
         self.assertEqual(launch.browser_url, engine._browser.return_value)
         external.assert_not_called()
         browser.assert_not_called()

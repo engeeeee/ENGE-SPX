@@ -76,10 +76,10 @@ class TerminalWorkspace(QObject):
 
     def _workspace_session_ended(self, session):
         try:
-            stopped = self.preferences.store.read("runtime.json", {}).get("phase") == "stopped"
+            state = self.preferences.store.read("runtime.json", {})
         except (OSError, SPXError):
             return
-        if stopped:
+        if isinstance(state, dict) and state.get("phase") == "stopped":
             self.close_session(session)
 
     def _window_closed(self, window):
