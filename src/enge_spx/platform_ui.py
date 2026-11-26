@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import time
 
-from .brand import APP_ID, ICONS as ASSETS, LEGACY_APP_ID
+from .brand import APP_ID, ICONS as ASSETS, LEGACY_APP_ID, TERMINAL_APP_ID
 
 
 def restore_message():
@@ -39,9 +39,54 @@ def prepare_windows(dpi=True, *, app_id=APP_ID):
             pass
 
 
+def set_terminal_window_app_id(hwnd, *, enabled=True):
+    """Set or clear a terminal's Explorer taskbar group on its own HWND."""
+    if os.name != "nt":
+        return False
+    from ctypes import wintypes
+    from uuid import UUID
+
+    class GUID(ctypes.Structure):
+        _fields_ = [("data", ctypes.c_ubyte * 16)]
+
+    class PropertyKey(ctypes.Structure):
+        _fields_ = [("guid", GUID), ("pid", wintypes.DWORD)]
+
+    class Value(ctypes.Union):
+        _fields_ = [("text", ctypes.c_wchar_p), ("storage", ctypes.c_void_p * 2)]
+
+    class PropVariant(ctypes.Structure):
+        _fields_ = [("type", ctypes.c_ushort), ("reserved", ctypes.c_ushort * 3), ("value", Value)]
+
+    iid = GUID.from_buffer_copy(UUID("886d8eeb-8cf2-4446-8d02-cdba1dbdcf99").bytes_le)
+    app_id_key = PropertyKey(GUID.from_buffer_copy(UUID("9f4c2855-9f79-4b39-a8d0-e1d42de1d5f3").bytes_le), 5)
+    store = ctypes.c_void_p()
+    try:
+        get_store = ctypes.windll.shell32.SHGetPropertyStoreForWindow
+        get_store.argtypes = [wintypes.HWND, ctypes.POINTER(GUID), ctypes.POINTER(ctypes.c_void_p)]
+        get_store.restype = ctypes.c_long
+        if get_store(hwnd, ctypes.byref(iid), ctypes.byref(store)) < 0 or not store.value:
+            return False
+        methods = ctypes.cast(store, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents
+        release = ctypes.WINFUNCTYPE(wintypes.ULONG, ctypes.c_void_p)(methods[2])
+        try:
+            set_value = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(PropertyKey),
+                                          ctypes.POINTER(PropVariant))(methods[6])
+            value = PropVariant()
+            if enabled:
+                value.type = 31  # VT_LPWSTR; zero-initialized VT_EMPTY clears the property.
+                value.value.text = TERMINAL_APP_ID
+            return set_value(store, ctypes.byref(app_id_key), ctypes.byref(value)) >= 0
+        finally:
+            release(store)
+    except (AttributeError, OSError):
+        return False
+
+
 class WindowInstance:
     def __init__(self, home, legacy=False):
         self.handle = None
+        self.hwnd = None
         identity = LEGACY_APP_ID if legacy else APP_ID
         self.key = identity + "." + hashlib.sha256(os.path.normcase(str(home)).encode()).hexdigest()[:16]
 
@@ -92,9 +137,16 @@ class WindowInstance:
         if os.name == "nt":
             user = ctypes.windll.user32
             user.SetPropW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_void_p]
-            user.SetPropW(hwnd, self.key, ctypes.c_void_p(1))
+            if user.SetPropW(hwnd, self.key, ctypes.c_void_p(1)):
+                self.hwnd = hwnd
 
     def close(self):
+        if self.hwnd:
+            remove = ctypes.windll.user32.RemovePropW
+            remove.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p]
+            remove.restype = ctypes.c_void_p
+            remove(self.hwnd, self.key)
+            self.hwnd = None
         if self.handle:
             kernel = ctypes.windll.kernel32
             kernel.CloseHandle.argtypes = [ctypes.c_void_p]

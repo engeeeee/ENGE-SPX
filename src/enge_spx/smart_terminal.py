@@ -9,6 +9,7 @@ from concurrent.futures import Future
 from collections import Counter, defaultdict, deque
 from copy import copy, deepcopy
 import codecs
+from html import escape
 import math
 import os
 import queue
@@ -21,10 +22,12 @@ import pyte
 from wcwidth import wcwidth
 from PySide6.QtCore import Qt, QTimer, Signal, QEvent, QRectF, QSize, QPointF, QUrl
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontMetricsF, QGuiApplication, QIcon, QKeySequence, QPainter, QContextMenuEvent, QInputMethodEvent, QTextLayout, QTextOption, QTextCharFormat, QRegion, QImage
-from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollBar, QFrame, QMenu, QToolButton, QSizePolicy
+from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+                               QScrollBar, QFrame, QMenu, QToolButton, QSizePolicy,
+                               QListWidget, QListWidgetItem, QStackedWidget)
 
 from .clipboard import WindowsClipboard
-from .clipboard_transfer import Transfer, text_frame
+from .clipboard_transfer import text_frame
 from .state import SPXError
 from .terminal_completion import ShellCompletion
 from .terminal_render import BACKGROUND, FOREGROUND, LIGHT_PALETTE, MAX_WEB_LINK_LENGTH, PALETTE, TerminalChar, TerminalStream, plain_web_link, sgr_attributes
@@ -514,6 +517,9 @@ class TerminalView(QWidget):
     option_changed = Signal(str, object)
     quick_input_requested = Signal()
     PAD_X, PAD_Y = 16, 12
+    AGY_RESIZE_DELAY_MS = 75
+    AGY_REDRAW_QUIET = .065
+    AGY_REDRAW_LIMIT = .40
 
     def __init__(self, pty, transfer=None, clipboard=None, tool=None):
         super().__init__()
@@ -524,6 +530,12 @@ class TerminalView(QWidget):
         self.setMinimumSize(480, 260)
         self.pty, self.clipboard = pty, clipboard
         self.tool = tool or getattr(transfer, 'tool', None)
+        self.resize_timer = None
+        self.resize_redraw_started = None
+        if self.tool == "antigravity":
+            self.resize_timer = QTimer(self)
+            self.resize_timer.setSingleShot(True)
+            self.resize_timer.timeout.connect(lambda: self._resize_grid(settled=True))
         self.command_completion = ShellCompletion() if self.tool in ("ssh", "shell") else None
         self.inline_preview = None
         self.ready = threading.Event()
@@ -638,6 +650,8 @@ class TerminalView(QWidget):
             self.update(region)
 
     def _capture_frame(self):
+        if self.resize_redraw_started is not None:
+            return
         # Retain the newest complete VT frame, even if another begins in the
         # same pipe read. Never wait for a continuously busy pipe to go idle.
         screen = self.screen
@@ -651,6 +665,15 @@ class TerminalView(QWidget):
 
     def _frame_blocked(self):
         now = time.monotonic()
+        if self.resize_redraw_started is not None:
+            started = self.resize_redraw_started
+            # AGY clears and replays the viewport after SIGWINCH. Publish the
+            # resulting screen once the replay settles, including split reads.
+            if (not self.output_finished and now - started < self.AGY_REDRAW_LIMIT
+                    and (now - max(started, self.last_output) < self.AGY_REDRAW_QUIET
+                         or not self.output.empty() or self.stream.pending)):
+                return True
+            self.resize_redraw_started = None
         if self.stream.synchronized_at is not None:
             if now - self.stream.synchronized_at < .15 and not self.output_finished:
                 return True
@@ -1103,13 +1126,20 @@ class TerminalView(QWidget):
         self._resize_grid()
         self.update_input_method()
 
-    def _resize_grid(self):
+    def _resize_grid(self, *, settled=False):
         self.scrollbar.setGeometry(self.width() - 12, 4, 10, self.height() - 8)
         columns = max(20, int((self.width() - 12 - 2 * self.PAD_X) / self.cell_width))
         rows = max(5, int((self.height() - 2 * self.PAD_Y) / self.cell_height))
         if (self.screen.columns, self.screen.lines) == (columns, rows):
+            if self.resize_timer is not None:
+                self.resize_timer.stop()
             self.update_input_method()
             return
+        if self.resize_timer is not None and not self.stopping.is_set() and not self.surface.isNull():
+            if not settled:
+                self.resize_timer.start(self.AGY_RESIZE_DELAY_MS)
+                return
+            self.resize_redraw_started = time.monotonic()
         self.clear_inline()
         self.screen.resize(lines=rows, columns=columns)
         if self.tool == "ssh":
@@ -1123,6 +1153,8 @@ class TerminalView(QWidget):
             self.pty.resize(columns, rows)
         self.clear_selection()
         self.update_input_method()
+        if settled:
+            self.schedule_frame(QRegion(self.rect()))
 
     def paste(self):
         self.clear_inline()
@@ -1593,6 +1625,9 @@ class TerminalView(QWidget):
         self.stopping.set()
         self.blink_timer.stop()
         self.frame_timer.stop()
+        if self.resize_timer is not None:
+            self.resize_timer.stop()
+        self.resize_redraw_started = None
         self.sender.close(daemon=self.tool != "ssh")
 
 
@@ -1609,64 +1644,36 @@ class TerminalResizeEdge(QWidget):
                 self.window().set_interaction_active(False)
 
 
-class TerminalWindow(QMainWindow):
-    def __init__(self, pty, tool, project, transfer=None, clipboard=None, preferences_store=None, *, session_label=None):
-        super().__init__(None, Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
-        from .terminal_preferences import Preferences
-        self.preferences = Preferences(preferences_store, self)
-        self.shortcut_store = preferences_store
-        self.interaction_active = False
-        self.interaction_guard = QTimer(self)
-        self.interaction_guard.setInterval(120)
-        self.interaction_guard.timeout.connect(self.recover_interaction)
-        self.effect_key = self.chrome_key = None
-        self._frame_configured = False
-        self.appearance_dialog = None
+class TerminalSession(QWidget):
+    """The live PTY, draft and controls move together between window hosts."""
+
+    def __init__(self, pty, tool, project, preferences, transfer=None, clipboard=None, *, session_label=None):
+        super().__init__()
+        self.preferences = preferences
+        self.icon_key = None
         self.sftp_dialog = None
         self.files_button = None
         self.is_ssh = tool == "ssh"
-        # Qt chooses the HWND surface at creation. Paint an opaque fill in
-        # solid mode so later material changes need no window recreation.
-        self.translucent_surface = os.name == "nt"
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, self.translucent_surface)
-        self.setWindowTitle("ENGE SPX · 远程 SSH" if self.is_ssh else "ENGE SPX · " + tool + " · 智能粘贴终端")
-        self.setObjectName("SmartTerminal")
-        from .platform_ui import ASSETS
-        from .ui.widgets import TitleBar
-        self.setWindowIcon(QIcon(str(ASSETS / "app.ico")))
-        self.resize(1180, 780)
-        self.setMinimumSize(640, 400)
-        root = QFrame()
-        root.setObjectName("TerminalShell")
-        layout = QVBoxLayout(root)
-        layout.setContentsMargins(1, 1, 1, 1)
+        self.tool_name = {"codex": "Codex", "claude": "Claude Code", "antigravity": "Antigravity",
+                          "shell": "Linux 终端", "ssh": "SSH"}.get(tool, tool)
+        name = session_label or project.name or str(project)
+        self.label = f"{self.tool_name} · {name}"
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        self.titlebar = TitleBar(self, "ENGE SPX  ·  智能终端")
-        # A custom QWidget does not paint a stylesheet background by default.
-        # Alpha-zero caption pixels pass through a layered HWND before hit-test.
-        self.titlebar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
-        self.titlebar.setFixedHeight(40)
-        self.titlebar.layout().setContentsMargins(14, 0, 8, 0)
-        self.titlebar.layout().setSpacing(8)
-        self.titlebar.caption.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        logo = QLabel()
-        logo.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        logo.setPixmap(QIcon(str(ASSETS / "logo-64.png")).pixmap(QSize(20, 20)))
-        self.titlebar.layout().insertWidget(0, logo)
-        layout.addWidget(self.titlebar)
         session = QFrame()
         session.setObjectName("SessionBar")
         header = QHBoxLayout(session)
         header.setContentsMargins(16, 7, 10, 7)
         header.setSpacing(10)
-        badge = QLabel({"codex": "Codex", "claude": "Claude Code", "antigravity": "Antigravity", "shell": "Linux 终端", "ssh": "SSH"}.get(tool, tool))
+        badge = QLabel(self.tool_name)
         badge.setObjectName("ToolBadge")
         badge.setTextFormat(Qt.TextFormat.PlainText)
         header.addWidget(badge)
-        project_label = QLabel(session_label or project.name or str(project))
+        project_label = QLabel(name)
         project_label.setTextFormat(Qt.TextFormat.PlainText)
         project_label.setObjectName("ProjectName")
-        project_label.setToolTip(session_label or str(project))
+        project_label.setToolTip(escape(session_label or str(project)))
         project_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         header.addWidget(project_label, 1)
         self.connection = QLabel("●  SSH 会话" if self.is_ssh else "●  等待 CLI 输入区")
@@ -1681,7 +1688,7 @@ class TerminalWindow(QMainWindow):
         self.quick_input.setToolTip("输入常用 Shell 指令的开头，按 Tab 接受灰色提示。Ctrl+Shift+P 管理快捷输入。"
                                     if tool in ("ssh", "shell") else "Ctrl+Shift+P 打开快捷输入，Tab 填入输入区。")
         self.quick_input.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.quick_input.clicked.connect(self.show_quick_input)
+        self.quick_input.clicked.connect(lambda: self.window().show_quick_input())
         header.addWidget(self.quick_input)
         if self.is_ssh and transfer is not None:
             self.files_button = QToolButton()
@@ -1693,6 +1700,14 @@ class TerminalWindow(QMainWindow):
             self.files_button.setCursor(Qt.CursorShape.PointingHandCursor)
             self.files_button.clicked.connect(self.show_sftp)
             header.addWidget(self.files_button)
+        self.detach_button = QToolButton()
+        self.detach_button.setObjectName("TerminalDetachButton")
+        self.detach_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.detach_button.setIconSize(QSize(14, 14))
+        self.detach_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.detach_button.clicked.connect(lambda: self.window().toggle_session_window())
+        self.detach_button.hide()
+        header.addWidget(self.detach_button)
         self.options_button = QToolButton()
         self.options_button.setObjectName("TerminalOptions")
         self.options_button.setIconSize(QSize(16, 16))
@@ -1706,7 +1721,7 @@ class TerminalWindow(QMainWindow):
         if self.view.command_completion is not None:
             from .terminal_shortcuts import load
             try:
-                self.view.command_completion.set_commands(load(self.shortcut_store).values())
+                self.view.command_completion.set_commands(load(preferences.store).values())
             except (OSError, SPXError):
                 pass  # The editor reports its configuration error when opened.
         layout.addWidget(self.view, 1)
@@ -1728,29 +1743,12 @@ class TerminalWindow(QMainWindow):
         self.view.font_changed.connect(lambda size: self.font_size.setText(str(size) + " pt  ·  UTF-8"))
         self.view.font_changed.connect(lambda size: self.preferences.set("font_size", size))
         self.view.option_changed.connect(self.preferences.set)
-        self.view.quick_input_requested.connect(self.show_quick_input)
+        self.view.quick_input_requested.connect(lambda: self.window().show_quick_input())
         self.view.status.connect(self.message.setText)
         if not self.is_ssh:
             self.view.readiness_changed.connect(self._update_readiness)
         self.view.ended.connect(self.connection_ended)
-        self.options_button.clicked.connect(lambda: self.show_options(self.options_button))
-        self.setCentralWidget(root)
-        self.resize_edges = []
-        for edges, cursor in ((Qt.Edge.LeftEdge, Qt.CursorShape.SizeHorCursor), (Qt.Edge.RightEdge, Qt.CursorShape.SizeHorCursor), (Qt.Edge.TopEdge, Qt.CursorShape.SizeVerCursor), (Qt.Edge.BottomEdge, Qt.CursorShape.SizeVerCursor), (Qt.Edge.LeftEdge | Qt.Edge.TopEdge, Qt.CursorShape.SizeFDiagCursor), (Qt.Edge.RightEdge | Qt.Edge.TopEdge, Qt.CursorShape.SizeBDiagCursor), (Qt.Edge.LeftEdge | Qt.Edge.BottomEdge, Qt.CursorShape.SizeBDiagCursor), (Qt.Edge.RightEdge | Qt.Edge.BottomEdge, Qt.CursorShape.SizeFDiagCursor)):
-            self.resize_edges.append(TerminalResizeEdge(self, edges, cursor))
-        self.view.setFocus()
-        self.preferences.changed.connect(self.apply_preferences)
-        self.preferences.error.connect(self.message.setText)
-        if os.name == 'nt':
-            from .window_effects import configure_frame
-            # Native creation itself sends NCCALCSIZE. Enable custom handling
-            # only after winId exists; asking for winId inside creation recurses.
-            self.winId()
-            self._frame_configured = True
-            self._frame_configured = configure_frame(self)
-        self.apply_preferences(self.preferences.value)
-        if self.preferences.load_error:
-            self.message.setText(self.preferences.load_error)
+        self.options_button.clicked.connect(lambda: self.window().show_options(self.options_button))
 
     def _set_connection_state(self, state):
         self.connection.setProperty("state", state)
@@ -1760,6 +1758,211 @@ class TerminalWindow(QMainWindow):
     def _update_readiness(self, ready):
         self.connection.setText("●  输入区就绪" if ready else "●  等待 CLI 输入区")
         self._set_connection_state("ready" if ready else "waiting")
+
+    def show_sftp(self):
+        from .ui.sftp_dialog import SFTPDialog
+
+        if self.view.stopping.is_set():
+            return
+        if self.sftp_dialog is not None:
+            self.sftp_dialog.raise_()
+            self.sftp_dialog.activateWindow()
+            return
+        transfer = self.view.sender.transfer
+        self.sftp_dialog = SFTPDialog(self, transfer.connection, confirm_host=False,
+                                     session_environment=transfer.environment if transfer.prefilled else None)
+        self.sftp_dialog.destroyed.connect(lambda: setattr(self, "sftp_dialog", None))
+        self.sftp_dialog.open_browser()
+
+    def stop(self):
+        if self.sftp_dialog is not None:
+            self.sftp_dialog.close()
+        self.view.stop()
+
+    def connection_ended(self):
+        self.stop()
+        if self.files_button is not None:
+            self.files_button.setEnabled(False)
+        self.quick_input.setEnabled(False)
+        self.connection.setText("○  连接已结束")
+        self._set_connection_state("ended")
+        self.message.setText("SSH 连接已结束，可以关闭此窗口。" if self.is_ssh
+                             else "终端连接已结束，可以关闭此会话。")
+
+
+class TerminalWindow(QMainWindow):
+    closed = Signal()
+
+    def __init__(self, pty=None, tool=None, project=None, transfer=None, clipboard=None, preferences_store=None,
+                 *, session_label=None, workspace=None, grouped=False, session=None):
+        super().__init__(None, Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
+        from .platform_ui import ASSETS
+        from .terminal_preferences import Preferences
+        from .ui.widgets import TitleBar
+
+        self.workspace, self.grouped = workspace, grouped
+        self.preferences = workspace.preferences if workspace is not None else Preferences(preferences_store, self)
+        self.interaction_active = False
+        self.interaction_guard = QTimer(self)
+        self.interaction_guard.setInterval(120)
+        self.interaction_guard.timeout.connect(self.recover_interaction)
+        self.effect_key = self.chrome_key = None
+        self._frame_configured = False
+        self.taskbar_group_set = False
+        self.appearance_dialog = None
+        self.translucent_surface = os.name == "nt"
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, self.translucent_surface)
+        self.setObjectName("SmartTerminal")
+        self.setWindowIcon(QIcon(str(ASSETS / "app.ico")))
+        self.resize(1180, 780)
+        self.setMinimumSize(640, 400)
+        root = QFrame()
+        root.setObjectName("TerminalShell")
+        layout = QVBoxLayout(root)
+        layout.setContentsMargins(1, 1, 1, 1)
+        layout.setSpacing(0)
+        self.titlebar = TitleBar(self, "ENGE SPX  ·  智能终端")
+        self.titlebar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+        self.titlebar.setFixedHeight(40)
+        self.titlebar.layout().setContentsMargins(10, 0, 8, 0)
+        self.titlebar.layout().setSpacing(8)
+        self.titlebar.caption.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        logo = QLabel()
+        logo.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        logo.setPixmap(QIcon(str(ASSETS / "logo-64.png")).pixmap(QSize(20, 20)))
+        self.titlebar.layout().insertWidget(0, logo)
+        layout.addWidget(self.titlebar)
+
+        body = QHBoxLayout()
+        body.setSpacing(0)
+        self.sidebar = self.sidebar_button = None
+        if grouped:
+            self._build_sidebar(body)
+        self.stack = QStackedWidget()
+        body.addWidget(self.stack, 1)
+        layout.addLayout(body, 1)
+        self.setCentralWidget(root)
+        self.resize_edges = []
+        for edges, cursor in ((Qt.Edge.LeftEdge, Qt.CursorShape.SizeHorCursor), (Qt.Edge.RightEdge, Qt.CursorShape.SizeHorCursor), (Qt.Edge.TopEdge, Qt.CursorShape.SizeVerCursor), (Qt.Edge.BottomEdge, Qt.CursorShape.SizeVerCursor), (Qt.Edge.LeftEdge | Qt.Edge.TopEdge, Qt.CursorShape.SizeFDiagCursor), (Qt.Edge.RightEdge | Qt.Edge.TopEdge, Qt.CursorShape.SizeBDiagCursor), (Qt.Edge.LeftEdge | Qt.Edge.BottomEdge, Qt.CursorShape.SizeBDiagCursor), (Qt.Edge.RightEdge | Qt.Edge.BottomEdge, Qt.CursorShape.SizeFDiagCursor)):
+            self.resize_edges.append(TerminalResizeEdge(self, edges, cursor))
+        if os.name == 'nt':
+            from .platform_ui import set_terminal_window_app_id
+            from .window_effects import configure_frame
+            # Native creation itself sends NCCALCSIZE. Enable custom handling
+            # only after winId exists; asking for winId inside creation recurses.
+            self.winId()
+            if workspace is not None:
+                self.taskbar_group_set = set_terminal_window_app_id(int(self.winId()))
+            self._frame_configured = True
+            self._frame_configured = configure_frame(self)
+        if session is None:
+            session = TerminalSession(pty, tool, project, self.preferences, transfer, clipboard, session_label=session_label)
+        self.preferences.changed.connect(self.apply_preferences)
+        self.preferences.error.connect(self.show_preference_error)
+        self.add_session(session)
+        if self.preferences.load_error:
+            self.message.setText(self.preferences.load_error)
+
+    def _build_sidebar(self, layout):
+        self.sidebar = QListWidget()
+        self.sidebar.setObjectName("TerminalSessionList")
+        self.sidebar.setAccessibleName("终端会话列表")
+        self.sidebar.setMinimumWidth(152)
+        self.sidebar.setMaximumWidth(205)
+        self.sidebar.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.sidebar.setUniformItemSizes(True)
+        self.sidebar.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.sidebar.itemClicked.connect(self._select_sidebar_item)
+        self.sidebar.itemActivated.connect(self._select_sidebar_item)
+        self.sidebar.customContextMenuRequested.connect(self._session_menu)
+        layout.addWidget(self.sidebar)
+        self.sidebar_button = QToolButton(self.titlebar)
+        self.sidebar_button.setObjectName("TerminalSidebarButton")
+        self.sidebar_button.setFixedSize(28, 28)
+        self.sidebar_button.setIconSize(QSize(16, 16))
+        self.sidebar_button.setCheckable(True)
+        self.sidebar_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.titlebar.layout().insertWidget(0, self.sidebar_button)
+        self.set_sidebar_visible(self.workspace.sidebar_visible)
+        self.sidebar_button.toggled.connect(self.set_sidebar_visible)
+
+    def set_sidebar_visible(self, visible):
+        self.workspace.sidebar_visible = visible
+        self.sidebar.setVisible(visible)
+        self.sidebar_button.setChecked(visible)
+        caption = "收起会话侧栏" if visible else "展开会话侧栏"
+        self.sidebar_button.setToolTip(caption)
+        self.sidebar_button.setAccessibleName(caption)
+        if hasattr(self, "view"):
+            self.view.setFocus()
+
+    def show_preference_error(self, text):
+        if self.stack.count():
+            self.message.setText(text)
+
+    @property
+    def sessions(self):
+        return tuple(self.stack.widget(index) for index in range(self.stack.count()))
+
+    def add_session(self, session):
+        self.stack.addWidget(session)
+        if self.workspace is not None:
+            caption = "独立窗口" if self.grouped else "移回会话窗口"
+            session.detach_button.setText(caption)
+            session.detach_button.setToolTip(caption)
+            session.detach_button.show()
+        self._refresh_session_list()
+        self.activate_session(session)
+
+    def remove_session(self, session):
+        self.stack.removeWidget(session)
+        session.hide()
+        self._refresh_session_list()
+        if self.stack.count():
+            self.activate_session(self.stack.currentWidget())
+
+    def activate_session(self, session):
+        self.stack.setCurrentWidget(session)
+        self.view, self.message, self.font_size = session.view, session.message, session.font_size
+        self.quick_input, self.options_button, self.files_button = session.quick_input, session.options_button, session.files_button
+        self.setWindowTitle("ENGE SPX · " + session.label)
+        if self.sidebar is not None:
+            self.sidebar.setCurrentRow(self.stack.currentIndex())
+        self.apply_preferences(self.preferences.value)
+        self.view.setFocus()
+
+    def _refresh_session_list(self):
+        if self.sidebar is None:
+            return
+        self.sidebar.clear()
+        for session in self.sessions:
+            item = QListWidgetItem(session.label)
+            item.setToolTip(escape(session.label))
+            self.sidebar.addItem(item)
+
+    def _select_sidebar_item(self, item):
+        self.activate_session(self.stack.widget(self.sidebar.row(item)))
+
+    def _session_menu(self, position):
+        item = self.sidebar.itemAt(position)
+        if item is not None:
+            session = self.stack.widget(self.sidebar.row(item))
+            menu = QMenu(self)
+            menu.setObjectName("TerminalMenu")
+            menu.addAction("关闭会话", lambda: self.workspace.close_session(session))
+            menu.aboutToHide.connect(menu.deleteLater)
+            menu.popup(self.sidebar.viewport().mapToGlobal(position))
+
+    def toggle_session_window(self):
+        self.workspace.move_session(self.stack.currentWidget(), self)
+
+    def reveal(self):
+        if self.isMinimized():
+            self.setWindowState(self.windowState() & ~Qt.WindowState.WindowMinimized)
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        self.view.setFocus()
 
     def apply_preferences(self, values):
         from .terminal_appearance import option_icon_color, terminal_glyph, terminal_stylesheet
@@ -1774,20 +1977,27 @@ class TerminalWindow(QMainWindow):
             if self.interaction_active:
                 self.sync_move_effect()
         glass = self.translucent_surface and self.backdrop_backend in GLASS_BACKENDS
-        self.view.apply_display(values, glass)
+        for session in self.sessions:
+            session.view.apply_display(values, glass)
+            session.font_size.setText(str(values["font_size"]) + " pt  ·  UTF-8")
         color = self.view.background
-        self.font_size.setText(str(values["font_size"]) + " pt  ·  UTF-8")
         palette = self.view.display_colors
         chrome_key = (glass, color.alpha(), values["tint"], tuple(palette.values()),
                       tuple(values.get(key) for key in COLOR_FIELDS.values()))
         if chrome_key != self.chrome_key:
             self.setStyleSheet(terminal_stylesheet(palette, values, color.alpha(), glass))
-            icon_ink = option_icon_color(palette, values)
-            self.quick_input.setIcon(terminal_glyph("quick_input", icon_ink, 13))
-            if self.files_button is not None:
-                self.files_button.setIcon(terminal_glyph("files", icon_ink, 13))
-            self.options_button.setIcon(terminal_glyph("options", icon_ink, 16))
+            if self.sidebar_button is not None:
+                self.sidebar_button.setIcon(terminal_glyph("sidebar", option_icon_color(palette, values)))
             self.chrome_key = chrome_key
+        icon_ink = option_icon_color(palette, values)
+        for session in self.sessions:
+            if session.icon_key != (icon_ink, self.grouped):
+                session.quick_input.setIcon(terminal_glyph("quick_input", icon_ink, 13))
+                if session.files_button is not None:
+                    session.files_button.setIcon(terminal_glyph("files", icon_ink, 13))
+                session.options_button.setIcon(terminal_glyph("options", icon_ink))
+                session.detach_button.setIcon(terminal_glyph("detach" if self.grouped else "attach", icon_ink, 14))
+                session.icon_key = icon_ink, self.grouped
 
     def sync_move_effect(self):
         # DWM materials stay installed. Legacy Accent Acrylic can stall the
@@ -1829,6 +2039,8 @@ class TerminalWindow(QMainWindow):
             if top: return 12
             if bottom: return 15
         local = self.titlebar.mapFrom(self, point)
+        if self.sidebar_button is not None and self.sidebar_button.geometry().contains(local):
+            return None
         if self.titlebar.rect().contains(local) and not any(button.geometry().contains(local) for button in self.titlebar.controls.values()):
             return 2  # HTCAPTION; OS dragging/double-click/snap, no injected keys.
         return None
@@ -1871,6 +2083,10 @@ class TerminalWindow(QMainWindow):
         menu.addAction("快捷输入…\tCtrl+Shift+P", self.show_quick_input).setEnabled(not self.view.stopping.is_set())
         menu.addAction("终端外观…", self.show_appearance)
         menu.addAction("恢复终端默认设置", self.preferences.reset)
+        if self.grouped:
+            session = self.stack.currentWidget()
+            menu.addSeparator()
+            menu.addAction("关闭当前会话", lambda: self.workspace.close_session(session))
         menu.aboutToHide.connect(menu.deleteLater)
         menu.popup(button.mapToGlobal(button.rect().bottomLeft()))
 
@@ -1880,7 +2096,7 @@ class TerminalWindow(QMainWindow):
         if self.view.stopping.is_set():
             return
         self.view.clear_inline()
-        dialog = QuickInput(self, self.shortcut_store, self.view.tool)
+        dialog = QuickInput(self, self.preferences.store, self.view.tool)
         try:
             if dialog.exec() and dialog.text:
                 self.view.clear_selection()
@@ -1901,21 +2117,6 @@ class TerminalWindow(QMainWindow):
         self.appearance_dialog.raise_()
         self.appearance_dialog.activateWindow()
 
-    def show_sftp(self):
-        from .ui.sftp_dialog import SFTPDialog
-
-        if self.view.stopping.is_set():
-            return
-        if self.sftp_dialog is not None:
-            self.sftp_dialog.raise_()
-            self.sftp_dialog.activateWindow()
-            return
-        transfer = self.view.sender.transfer
-        self.sftp_dialog = SFTPDialog(self, transfer.connection, confirm_host=False,
-                                     session_environment=transfer.environment if transfer.prefilled else None)
-        self.sftp_dialog.destroyed.connect(lambda: setattr(self, "sftp_dialog", None))
-        self.sftp_dialog.open_browser()
-
     def resizeEvent(self, event):
         super().resizeEvent(event)
         w, h, b = self.width(), self.height(), 5
@@ -1926,24 +2127,24 @@ class TerminalWindow(QMainWindow):
             edge.raise_()
 
     def connection_ended(self):
-        if self.sftp_dialog is not None:
-            self.sftp_dialog.close()
-        if self.files_button is not None:
-            self.files_button.setEnabled(False)
-        self.view.stop()
-        self.quick_input.setEnabled(False)
-        self.connection.setText("○  连接已结束")
-        self._set_connection_state("ended")
-        self.message.setText("SSH 连接已结束，可以关闭此窗口。" if self.is_ssh
-                             else "终端连接已结束。工作区和持久资料按现有规则保留；可关闭此窗口。")
+        self.stack.currentWidget().connection_ended()
 
     def closeEvent(self, event):
-        if self.sftp_dialog is not None:
-            self.sftp_dialog.close()
+        if self.stack.count() > 1:
+            from .ui.widgets import confirm
+            if not confirm(self, "关闭终端窗口", f"关闭此窗口的 {self.stack.count()} 个终端会话？"):
+                event.ignore()
+                return
         self.interaction_guard.stop()
         self.preferences.flush()
-        self.view.stop()
+        for session in self.sessions:
+            session.stop()
+        if self.taskbar_group_set:
+            from .platform_ui import set_terminal_window_app_id
+            set_terminal_window_app_id(int(self.winId()), enabled=False)
+            self.taskbar_group_set = False
         event.accept()
+        self.closed.emit()
 
 
 def terminal_application(store=None):
@@ -1957,14 +2158,11 @@ def terminal_application(store=None):
 
 
 def run(engine, project, tool, session, container):
-    from pathlib import Path
-    from .terminal_pty import DockerPTY
+    from .terminal_pty import prepare_workspace_terminal
     app = terminal_application(engine.store)
-    command = engine.attach_command(project, tool, session, container, interactive=True, terminal_capabilities=True, terminal_relay=True)
-    transfer = Transfer(engine, project, tool, session, container) if tool in ("claude", "codex") else None
-    pty = DockerPTY(command, engine.docker.environment(), project)
+    launch = prepare_workspace_terminal(engine, project, tool, session, container)
     clipboard = WindowsClipboard() if os.name == "nt" else None
-    window = TerminalWindow(pty, tool, Path(project), transfer, clipboard, engine.store)
+    window = TerminalWindow(launch.start(), tool, launch.project, launch.transfer, clipboard, engine.store)
     def close_stopped_workspace():
         # The GUI's verified stop already ended this exec. Reclaim owned native
         # terminal windows on stop/exit without contacting or starting Docker.

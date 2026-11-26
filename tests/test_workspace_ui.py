@@ -99,7 +99,7 @@ class WorkspaceUITests(unittest.TestCase):
             page.quick_connect.click()
         run.assert_not_called()
         self.assertEqual(start.call_args.args[0][-6:], ["-l", "operator", "-p", "22", "--", "example.invalid"])
-        session, = self.window.ssh_windows
+        session, = self.window.terminal_workspace.sessions
         self.assertTrue(session.isVisible())
         self.assertEqual(session.findChild(QLabel, "ProjectName").text(), "operator@example.invalid:22")
         reader = session.view.reader
@@ -196,7 +196,8 @@ class WorkspaceUITests(unittest.TestCase):
             c.open_terminal("codex")
             engine = Mock()
             run.call_args.args[0](engine)
-        engine.terminal.assert_called_once_with(str(self.project.resolve()), "codex", expected_workspace=(self.identity, "ro"))
+        engine.terminal.assert_called_once_with(str(self.project.resolve()), "codex", expected_workspace=(self.identity, "ro"),
+                                                desktop_session=True)
 
     def test_expired_review_offers_a_fresh_connection_check(self):
         c = self.controller

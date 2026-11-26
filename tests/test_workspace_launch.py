@@ -107,6 +107,20 @@ class WorkspaceLaunchTests(unittest.TestCase):
         launch.assert_not_called()
         viewer.assert_not_called()
 
+    def test_desktop_smart_terminal_returns_a_verified_relay_launch(self):
+        engine = self.engine()
+        engine.attach_command = Mock(return_value=["docker.exe", "exec", "-i", "project-container", "relay"])
+        engine.docker.environment.return_value = {"PATH": "fixture"}
+        with patch("enge_spx.engine.os", SimpleNamespace(name="nt")), \
+                patch("enge_spx.terminal.launch") as external, patch("enge_spx.engine.webbrowser.open") as browser:
+            launch = engine.terminal(str(self.project), "antigravity", desktop_session=True)
+        engine.attach_command.assert_called_once_with(str(self.project), "antigravity", "session", "project-container",
+                                                       interactive=True, terminal_capabilities=True, terminal_relay=True)
+        self.assertEqual(launch.project, self.project)
+        self.assertEqual(launch.browser_url, engine._browser.return_value)
+        external.assert_not_called()
+        browser.assert_not_called()
+
     def test_lock_wait_is_bounded_and_notified_once(self):
         waiting = Mock()
         started = time.monotonic()

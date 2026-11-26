@@ -63,6 +63,7 @@ class Controller(QObject):
     activation_requested = Signal()
     exit_failed = Signal(str)
     workspace_changed = Signal()
+    terminal_prepared = Signal(object)
     update_checked = Signal(object, bool, object, str)
 
     def __init__(self, store, report=None, on_relocated=None):
@@ -1146,7 +1147,8 @@ class Controller(QObject):
         if path:
             title = {"claude": "Claude Code", "codex": "Codex", "antigravity": "Antigravity CLI", "shell": "Linux 终端", "login-claude": "Claude Code 登录", "login-codex": "Codex 登录"}.get(tool, tool)
             expected = (self.workspace_profile.get(), self.workspace_access.get())
-            self.run(lambda engine: engine.terminal(path, tool, expected_workspace=expected), description=f"正在启动 {title}，后台检查进行中时会自动等待…")
+            self.run(lambda engine: engine.terminal(path, tool, expected_workspace=expected, desktop_session=True),
+                     self.terminal_prepared.emit, description=f"正在启动 {title}，后台检查进行中时会自动等待…")
         else:
             self.notify("先选择项目", "请选择要交给工具读写的具体项目文件夹。")
 

@@ -48,7 +48,16 @@ def _launch(store, report, smoke):
             return True
         controller = Controller(store, report, relocated)
         window = App(controller)
-        window.closed.connect(app.quit)
+
+        def close_workbench():
+            instance.close()
+            terminals = window.terminal_workspace
+            if controller.exit_mode == "keep" and terminals is not None and terminals.sessions:
+                terminals.emptied.connect(app.quit)
+            else:
+                app.quit()
+
+        window.closed.connect(close_workbench)
         if os.name == "nt" and window.install_tray():
             app.setQuitOnLastWindowClosed(False)
             log.info("gui-tray-enabled close-action=hide")

@@ -19,6 +19,9 @@ _GLYPHS = {
     "options": '<circle cx="5" cy="12" r="1.7" fill="{color}" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="{color}" stroke="none"/><circle cx="19" cy="12" r="1.7" fill="{color}" stroke="none"/>',
     "quick_input": '<polyline points="5 16 10 11 5 6"/><line x1="12" y1="17" x2="19" y2="17"/>',
     "files": '<path d="M3 7V5h7l2 2h9v11H3z"/>',
+    "sidebar": '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M9 5v14"/>',
+    "detach": '<path d="M13 5h6v6M19 5l-7 7M17 13v6H5V7h6"/>',
+    "attach": '<path d="M17 11h-6V5m0 6 8-8M15 15v4H5V9h2"/>',
 }
 
 
@@ -60,11 +63,16 @@ QLabel#ProjectName { color: $session_foreground; font-size: 12px; font-weight: 5
 QLabel#ConnectionState { color: $connection_foreground; background: $connection_bg; border: 1px solid $connection_border; border-radius: 10px; padding: 4px 10px; font-size: 11px; font-weight: 600; }
 QLabel#ConnectionState[state="waiting"] { color: $option_text; background: $waiting_bg; border: 1px solid $divider; font-weight: 500; }
 QLabel#ConnectionState[state="ended"] { color: $footer_foreground; background: transparent; border: 1px solid $divider; font-weight: 500; }
-QToolButton#TerminalOptions { color: $option_text; background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 0; }
-QToolButton#TerminalOptions:hover { color: $option_hover_text; background: $session_hover; border-color: $divider; }
-QToolButton#QuickInputButton, QToolButton#FileBrowserButton { color: $option_text; background: $control_bg; border: 1px solid $divider; border-radius: 6px; padding: 4px 10px; font-size: 12px; font-weight: 500; }
-QToolButton#QuickInputButton:hover, QToolButton#FileBrowserButton:hover { color: $option_hover_text; background: $control_hover_bg; border-color: $control_hover_border; }
+QToolButton#TerminalOptions, QToolButton#TerminalSidebarButton { color: $option_text; background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 0; }
+QToolButton#TerminalOptions:hover, QToolButton#TerminalSidebarButton:hover, QToolButton#TerminalSidebarButton:focus { color: $option_hover_text; background: $session_hover; border-color: $divider; }
+QToolButton#TerminalSidebarButton:checked { background: $control_hover_bg; border-color: $control_hover_border; }
+QToolButton#QuickInputButton, QToolButton#FileBrowserButton, QToolButton#TerminalDetachButton { color: $option_text; background: $control_bg; border: 1px solid $divider; border-radius: 6px; padding: 4px 10px; font-size: 12px; font-weight: 500; }
+QToolButton#QuickInputButton:hover, QToolButton#FileBrowserButton:hover, QToolButton#TerminalDetachButton:hover { color: $option_hover_text; background: $control_hover_bg; border-color: $control_hover_border; }
 QToolButton#QuickInputButton:disabled, QToolButton#FileBrowserButton:disabled { color: $footer_foreground; background: transparent; border-color: transparent; }
+QListWidget#TerminalSessionList { color: $session_foreground; background: $session_background; border: 0; border-right: 1px solid $divider; padding: 8px 7px; font-size: 12px; }
+QListWidget#TerminalSessionList::item { min-height: 26px; padding: 4px 8px; border-radius: 6px; }
+QListWidget#TerminalSessionList::item:hover { background: $session_hover; }
+QListWidget#TerminalSessionList::item:selected { color: $menu_selection_foreground; background: $menu_selection_background; }
 QFrame#TerminalFooter { background: $footer_background; border-top: 1px solid $divider; }
 QLabel#TerminalMessage { color: $footer_foreground; font-size: 11px; }
 QLabel#FontSize { color: $font_size_text; font-family: "Consolas", "DejaVu Sans Mono", monospace; font-size: 11px; }

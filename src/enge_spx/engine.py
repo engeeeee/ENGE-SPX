@@ -1217,7 +1217,7 @@ class Engine:
             from .tool_session import command as tool_command
             return self.docker.command("exec", *flags, "--workdir", "/workspace/" + key, *self.proxy_env(state), *self.control_env(state), obj["Id"], *tool_command(command)), url
 
-    def terminal(self, path, tool, expected_workspace=None):
+    def terminal(self, path, tool, expected_workspace=None, *, desktop_session=False):
         from .terminal import launch, resolve
         from .invocation import console_entry, console_environment
         if tool not in TOOLS:
@@ -1233,6 +1233,10 @@ class Engine:
         browser = True if tool.startswith('login-') or tool == 'antigravity' else None
         _, url = self._tool_session(path, TOOLS[tool], browser=browser, expected_workspace=expected_workspace)
         directory, _ = self.store.project(path)
+        if desktop_session and config.get("kind") == "smart":
+            from .terminal_pty import prepare_workspace_terminal
+            return prepare_workspace_terminal(self, str(directory), tool, self.prepared_session,
+                                              self.prepared_container, browser_url=url)
         command = [*console_entry(), "--data", str(self.store.home), "--project", str(directory), "attach", tool, "--session", self.prepared_session, "--container", self.prepared_container]
         # The terminal gets a public CLI invocation, never the token environment.
         launch(config, command, str(directory), "ENGE SPX · " + tool, console_environment(self.docker.executable))
