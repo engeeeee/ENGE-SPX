@@ -7,6 +7,7 @@ from pathlib import Path
 import secrets
 import tempfile
 import time
+from unittest.mock import patch
 
 from enge_spx.engine import Engine, GATEWAY_IMAGE, OWNER
 from enge_spx.nodes import parse_nodes
@@ -28,7 +29,7 @@ def sockets():
     return result
 
 
-def run(context, runtime_report, output):
+def run(context, runtime_report, output, fail_closed_only=False):
     records, measurements = [], {}
     def passed(message):
         records.append(message)
@@ -95,6 +96,48 @@ def run(context, runtime_report, output):
                 measurements[label] = {"verified_stop_and_config_ms": (time.perf_counter() - started) * 1000}
                 assert all(not engine.docker.inspect("container", identifier)["State"]["Running"] for identifier in engine.managed())
                 assert foreign.docker.inspect("container", outsider["Id"])["State"]["Running"]
+
+            if fail_closed_only:
+                def disconnect():
+                    engine.docker.run("network", "disconnect", engine.external, engine.inspect("gateway")["Id"])
+
+                def verify_owned_stop():
+                    assert store.read("runtime.json")["phase"] == "stopped"
+                    assert all(not engine.docker.inspect("container", item)["State"]["Running"] for item in engine.managed())
+                    assert foreign.docker.inspect("container", outsider["Id"])["State"]["Running"]
+                    stopped = engine.shutdown()
+                    assert stopped["workspace_stopped"] and stopped["background_stopped"]
+
+                connect()
+                actual_ready = engine.ready
+
+                def disconnect_inside_diagnostics(*, timings=None):
+                    # collect() owns the operation lock at this point. The live
+                    # guard keeps running while the diagnostic gets this fault.
+                    disconnect()
+                    return actual_ready(timings=timings)
+
+                with patch.object(engine, "ready", disconnect_inside_diagnostics):
+                    failed = engine.network_diagnostics(browser=False)
+                assert failed["status"] == "failed" and failed["stop"]["verified"], (failed["status"], failed.get("stop"))
+                verify_owned_stop()
+                passed("real gateway disconnection, diagnostics-first: verified shutdown of owned services and containers")
+
+                connect()
+                with store.lock(timeout=45):
+                    disconnect()
+                    try:
+                        engine.ready()
+                    except SPXError:
+                        pass  # The same check used by the background guard.
+                    else:
+                        raise AssertionError("A changed gateway topology was accepted")
+                status = engine.network_diagnostics(browser=False)["status"]
+                assert status == "not_ready", status
+                verify_owned_stop()
+                passed("real gateway disconnection, topology-check-first: stopped state and independent instance verified")
+                output.write_text(json.dumps({"schema": 1, "passed": records}, indent=2) + "\n")
+                return
 
             state, shared, shared_browser = connect()
             assert is_empty(shared)
@@ -242,5 +285,6 @@ if __name__ == "__main__":
     parser.add_argument("--context", default="default")
     parser.add_argument("--runtime-report", type=Path, required=True)
     parser.add_argument("--output", type=Path, default=Path("workspace-profiles-results.json"))
+    parser.add_argument("--fail-closed-only", action="store_true")
     args = parser.parse_args()
-    run(args.context, args.runtime_report, args.output)
+    run(args.context, args.runtime_report, args.output, args.fail_closed_only)

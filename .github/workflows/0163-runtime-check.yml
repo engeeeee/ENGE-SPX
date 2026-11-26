@@ -1,0 +1,38 @@
+name: 0.16.3 focused runtime verification
+on:
+  push:
+    branches: [checks/0.16.3-runtime]
+permissions:
+  contents: read
+jobs:
+  gateway-stop:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: src
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements.txt
+      - name: Verify and load the official 0.16.2 runtime archive
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python tools/check_0163_runtime.py "$RUNNER_TEMP/verified-runtime" "$RUNNER_TEMP/evidence/runtime.json"
+      - name: Verify fail-closed shutdown in both processing orders
+        run: python -u tests/integration_profiles.py --runtime-report "$RUNNER_TEMP/evidence/runtime.json" --output "$RUNNER_TEMP/evidence/shutdown.json" --fail-closed-only
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ENGE-SPX-Verified-Reused-Runtime-0.16.3
+          path: ${{ runner.temp }}/verified-runtime/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ENGE-SPX-Shutdown-Verification-0.16.3
+          path: ${{ runner.temp }}/evidence/*
+          if-no-files-found: error
