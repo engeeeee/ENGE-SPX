@@ -69,6 +69,12 @@ try {
                 `Missing anchor ${anchor}`,
             );
 
+        const preview = page.getByRole("group", { name: "软件界面预览" });
+        await preview.getByRole("button", { name: "项目工作区" }).click();
+        assert.equal(await page.locator(".hero-stage img").count(), 1);
+        assert.match(await page.locator(".hero-stage img").getAttribute("src"), /\/dark\/workspace\.png$/);
+        await preview.getByRole("button", { name: "工作台", exact: true }).click();
+
         await page.getByRole("tab", { name: "本机 v2ray 兼容" }).click();
         assert.equal(
             await page.locator("#local-tab").getAttribute("aria-selected"),
@@ -217,11 +223,13 @@ try {
                               "static page and title",
                               "real release download URLs",
                               "navigation anchors",
+                              "single screenshot when selecting a hero preview",
                               "network mode click and keyboard switch",
                               "single landing with three protocol alternatives",
                               "image zoom/next/Escape",
                               "FAQ",
                               "mobile menu",
+                              "light and dark modes, persisted after reload",
                               "1440/1920/768/390 layouts",
                               "reduced-motion previews",
                               "no page runtime errors",

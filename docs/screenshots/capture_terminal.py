@@ -25,6 +25,7 @@ def main():
     parser.add_argument("--codex", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--scale", default="2")
+    parser.add_argument("--theme", choices=("dark", "light"), default="dark")
     args = parser.parse_args()
     if sys.platform != "linux":
         parser.error("This capture fixture is Linux-only; do not label it Windows.")
@@ -73,6 +74,9 @@ def main():
             tui = fixture.QtTUI(command, environment, project, "codex", tuple(map(int, version.split()[-1].split("."))))
             tui.window.resize(1100, 680)
             tui.window.preferences.set("font_size", 13)
+            if args.theme == "light":
+                from enge_spx.terminal_preferences import COLOR_FIELDS, COLOR_PRESETS
+                tui.window.preferences.update({COLOR_FIELDS[role]: value for role, value in COLOR_PRESETS["浅色"].items()})
             tui.wait(lambda value: "To get started" in value)
             tui.wait(lambda value: tui.window.view.ready.is_set())
             tui.paste(fixture.Snapshot("text", "请查看这两张图片，帮我检查界面中的问题。\n"))
@@ -87,7 +91,8 @@ def main():
                 tui.app.processEvents()
                 time.sleep(.025)
             assert not api.requests, "Presentation capture must leave the draft unsent"
-            filename = "terminal-codex@2x.png"
+            suffix = "-light" if args.theme == "light" else ""
+            filename = f"terminal-codex{suffix}@2x.png"
             tui.capture(args.output / filename)
             from enge_spx import __version__
             import PySide6
@@ -98,10 +103,11 @@ def main():
                         "cli": version, "cli_sha256": hashlib.sha256(args.codex.read_bytes()).hexdigest(),
                         "logical_size": [tui.window.width(), tui.window.height()], "device_pixel_ratio": tui.window.devicePixelRatioF(),
                         "pixel_size": [image.width(), image.height()], "qt_scale_factor": args.scale,
+                        "theme": args.theme,
                         "file": filename, "sha256": hashlib.sha256((args.output / filename).read_bytes()).hexdigest(),
                         "real_product_window": True, "real_cli": True, "native_image_markers": 2, "draft_submitted": False,
                         "docker_transport": "not_used", "windows_clipboard": "not_tested", "model_response": "none"}
-            (args.output / "terminal-capture.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            (args.output / f"terminal{suffix}-capture.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             print(json.dumps(manifest, ensure_ascii=False))
     finally:
         if tui:

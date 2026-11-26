@@ -1,8 +1,8 @@
 <p align="center"><img src="assets/logo.svg" width="76" alt="ENGE SPX"></p>
 <h1 align="center">ENGE SPX</h1>
 <p align="center"><strong>An isolated AI coding workspace for Windows</strong></p>
-<p align="center">Run Claude Code, Codex and a workspace browser in Linux containers with a chosen, verified proxy exit.</p>
-<p align="center"><a href="README.md">简体中文</a> · <strong>English</strong> · <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.16-windows">Download</a></p>
+<p align="center">Run Claude Code, Codex, Antigravity and Chromium in Linux containers with a chosen, verified proxy exit.</p>
+<p align="center"><a href="README.md">简体中文</a> · <strong>English</strong> · <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.16.2-windows">Download</a></p>
 
 [Official website](https://enge1337.cn/) · [Website source](website/README.md)
 
@@ -39,24 +39,28 @@ This diagram shows managed chaining. The browser does not mount the project or t
 
 ## Interface preview
 
-**Start from one workspace dashboard.** Prepare the runtime, review the selected route and exits, then open your project and tools. Opening the app checks status; you choose when Docker starts.
+**The sidebar brings workspaces, SSH, proxies and settings together.** Use the title-bar toggle to switch between Day and Night. Select any screenshot to open the full image.
 
-![ENGE SPX 0.15.9 running on Windows: preparation steps, exit information and workspace route](website/public/screenshots/0.15.9/dark/overview.png)
+[![ENGE SPX 0.16.2 workbench in Night mode with sidebar navigation and runtime preparation](website/public/screenshots/0.16.2/dark/overview.png)](website/public/screenshots/0.16.2/dark/overview.png)
 
-| Projects, identities and tools | Lines and landing proxies |
+| Day mode · Projects, identities and tools | Night mode · Lines and landing proxies |
 | --- | --- |
-| [![Windows workspace page with project grants and Claude Code, Codex and Chromium launch controls](website/public/screenshots/0.15.9/dark/workspace.png)](website/public/screenshots/0.15.9/dark/workspace.png) | [![Windows proxy page with landing selection and managed line settings](website/public/screenshots/0.15.9/dark/connection.png)](website/public/screenshots/0.15.9/dark/connection.png) |
+| [![Windows workspace page in Day mode with project grants and tool launch controls](website/public/screenshots/0.16.2/light/workspace.png)](website/public/screenshots/0.16.2/light/workspace.png) | [![Windows proxy page in Night mode with landing and managed line settings](website/public/screenshots/0.16.2/dark/connection.png)](website/public/screenshots/0.16.2/dark/connection.png) |
 | Select a local project, apply an identity and read-only/read-write grant, then use the tool and browser controls after connection confirmation. | Import nodes, choose a managed fixed chain or local-v2ray compatibility, and configure the line, landing and download proxy separately. |
 
-These are actual **0.15.9 native Windows UI captures** using temporary data without accounts, proxy nodes or a running Docker workspace. Click an image for full size. [Capture provenance and reproduction](docs/screenshots/README.md) includes the source commit, Windows run and image hashes. The UI is currently Chinese.
+These **0.16.2 native Windows captures** use 3× Qt scaling and a temporary data directory with no accounts or proxies configured. The UI is in Chinese. [Day workbench screenshot](website/public/screenshots/0.16.2/light/overview.png) · [Capture source and reproduction](docs/screenshots/README.md#工作台-0162)
 
 **Smart terminal: edit the current Codex draft and paste images or files in place.**
 
-[![ENGE SPX 0.15.9 running Codex 0.169.0 with a Chinese draft, two native image markers and a file reference, not submitted](website/public/screenshots/0.15.9/terminal-codex@2x.png)](website/public/screenshots/0.15.9/terminal-codex@2x.png)
+[![ENGE SPX 0.16.2 running Codex 0.169.0 with a Chinese draft, two native image markers and a file reference, not submitted](website/public/screenshots/0.16.2/terminal-codex@2x.png)](website/public/screenshots/0.16.2/terminal-codex@2x.png)
 
 Ctrl+V pastes text, screenshots and file references without an upload dialog or automatic submission. Drag to copy, right-click to paste, scroll conversation history, and save font, tint and background preferences. Native click-to-position depends on CLI support; Windows Acrylic depends on OS support. Smart attachments require the owned terminal; external terminals retain their original behavior.
 
-This 2× capture shows an unsent draft in **ENGE SPX 0.15.9 and Codex 0.169.0 running on Linux**. [Terminal settings](docs/terminal-appearance-performance.zh-CN.md) · [Capture provenance](docs/screenshots/README.md#智能终端0159)
+This 2× capture shows an unsent draft in **ENGE SPX 0.16.2 and Codex 0.169.0 running on Linux**. [Light terminal screenshot](website/public/screenshots/0.16.2/terminal-codex-light@2x.png) · [Terminal settings](docs/terminal-appearance-performance.zh-CN.md) · [Capture source](docs/screenshots/README.md#智能终端-0162)
+
+### SSH and SFTP
+
+Open saved machines directly from the SSH page or start a temporary connection. The connection form accepts a password or private key. Open the SFTP file manager from the SSH page or terminal to browse, upload, download and create folders. Press Tab when the shell shows an inline completion to fill the suggestion into the current input.
 
 ## Typical uses
 
@@ -66,12 +70,12 @@ This 2× capture shows an unsent draft in **ENGE SPX 0.15.9 and Codex 0.169.0 ru
 
 ## Download and start
 
-Current release: **[0.15.16 stable](https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.16-windows)**. Windows x64 requires Docker Desktop with Linux containers / WSL 2 and Docker Engine 28+. Packaged builds do not require a separate Python installation. Executables are currently unsigned.
+Current release: **[0.16.2 stable](https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.16.2-windows)**. Windows x64 requires Docker Desktop with Linux containers / WSL 2 and Docker Engine 28+. Packaged builds do not require a separate Python installation. Executables are currently unsigned.
 
-**0.15.16 stable** shows inline Shell suggestions that Tab can fill into the draft. Open the SFTP file manager from the SSH page or terminal to browse, upload, download and create folders. [Release notes](docs/releases/0.15.16.zh-CN.md)
+Version 0.16.2 updates sidebar navigation, the Day and Night themes, application branding and smart terminal appearance. [Release notes](docs/releases/0.16.2.zh-CN.md)
 
-- **[Windows installer](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.16-windows/ENGE-SPX-Windows-x64-0.15.16-Setup.exe)**: per-user setup with shortcuts.
-- **[Portable ZIP](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.16-windows/ENGE-SPX-Windows-x64-0.15.16-Portable.zip)**: extract everything, run `ENGE-SPX.exe` and keep `_internal` beside it.
+- **[Windows installer](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.16.2-windows/ENGE-SPX-Windows-x64-0.16.2-Setup.exe)** · 35.5 MB. Per-user setup with shortcuts.
+- **[Portable ZIP](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.16.2-windows/ENGE-SPX-Windows-x64-0.16.2-Portable.zip)** · 54.7 MB. Extract everything, run `ENGE-SPX.exe` and keep `_internal` beside it.
 - Both packages contain `spx.exe`. Checksums and the matching runtime are on the release page.
 
 1. Install [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/) once and complete its license, WSL and Linux-engine initialization.
@@ -132,7 +136,7 @@ Downloads support pause, resume, speed/progress display, SHA-256 and exact image
 
 Set CPU and memory limits separately for the gateway, session, CLI projects and Chromium, including a budget for the current project. Choose normal or low-resource mode; limits are not reservations, and small budgets may slow compilation.
 
-![Windows resource budget page with per-container CPU, memory and browser startup controls](docs/images/0.13.2/2x/resources.png)
+![Windows resource budget page with per-container CPU, memory and browser startup controls](website/public/screenshots/0.16.2/dark/resources.png)
 
 - **Understand usage**: distinguish application processes, owned containers, Docker Desktop and WSL2. These readings are not additive.
 - **Reduce idle work**: open Chromium on demand or stop it separately while keeping the CLI running. Low-resource mode delays browser startup by default.

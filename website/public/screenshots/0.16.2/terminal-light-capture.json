@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "captured_at": "2026-11-26T09:21:16.924328+00:00",
+  "app_version": "0.16.2",
+  "source_commit": "3ee0dde6c06f3ddd1e981ec99272379cca204a91",
+  "platform": "linux",
+  "qt_platform": "offscreen",
+  "pyside6": "6.12.0",
+  "cli": "codex-cli 0.169.0",
+  "cli_sha256": "3bb41c9a80187773e2a59278d4fc355b1a163c31bb5a79581e37d4fe428af047",
+  "logical_size": [
+    1100,
+    680
+  ],
+  "device_pixel_ratio": 2.0,
+  "pixel_size": [
+    2200,
+    1360
+  ],
+  "qt_scale_factor": "2",
+  "theme": "light",
+  "file": "terminal-codex-light@2x.png",
+  "sha256": "ead28c1aaf93707f853e8bdc88f9f1530703f53436a5d7efb26a8d56280b827e",
+  "real_product_window": true,
+  "real_cli": true,
+  "native_image_markers": 2,
+  "draft_submitted": false,
+  "docker_transport": "not_used",
+  "windows_clipboard": "not_tested",
+  "model_response": "none"
+}

@@ -1,5 +1,11 @@
 # Changes
 
+## 0.16.2 Workbench and smart terminal redesign — 2026-11-26
+
+- Organize the workbench around sidebar navigation, with white Day and pure-black Night themes and a title-bar theme toggle.
+- Update the brand icon, smart terminal session bar, connection states and appearance controls.
+- Add an Obsidian terminal default and a matching light preset with adjusted ANSI colors.
+
 ## 0.15.16 Inline shell completion and SFTP file manager — 2026-11-26
 
 - Show an inline suffix for built-in or saved Shell shortcuts after the active prompt echoes the typed prefix. Tab fills the suffix into the input.

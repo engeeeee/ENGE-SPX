@@ -1,9 +1,9 @@
 <p align="center"><img src="assets/logo.svg" width="76" alt="ENGE SPX"></p>
 <h1 align="center">ENGE SPX</h1>
 <p align="center"><strong>Windows 上的 AI 编程隔离工作台</strong></p>
-<p align="center">为 Claude Code、Codex 和浏览器提供容器工作区，以及可指定、可核对的代理出口。</p>
+<p align="center">在 Docker 容器中运行 Claude Code、Codex、Antigravity 与 Chromium，并核对实际代理出口。</p>
 <p align="center">
-  <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.16-windows">下载 Windows 版</a> ·
+  <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.16.2-windows">下载 Windows 版</a> ·
   <a href="https://enge1337.cn/">官方网站</a> ·
   <a href="#界面预览">界面预览</a> ·
   <a href="docs/quickstart.zh-CN.md">快速入门</a> ·
@@ -12,8 +12,8 @@
 </p>
 <p align="center">
   <a href="https://github.com/engeeeee/ENGE-SPX/actions/workflows/ci.yml"><img src="https://github.com/engeeeee/ENGE-SPX/actions/workflows/ci.yml/badge.svg" alt="Windows / Linux CI"></a>
-  <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.16-windows"><img src="https://img.shields.io/badge/Windows-x64-0078D4" alt="Windows x64"></a>
-  <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.16-windows"><img src="https://img.shields.io/badge/0.15.16-Stable-3F8F61" alt="0.15.16 正式版"></a>
+  <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.16.2-windows"><img src="https://img.shields.io/badge/Windows-x64-0078D4" alt="Windows x64"></a>
+  <a href="https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.16.2-windows"><img src="https://img.shields.io/badge/0.16.2-Stable-3F8F61" alt="0.16.2 正式版"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-PolyForm_Noncommercial-6D5BD0" alt="PolyForm Noncommercial"></a>
 </p>
 
@@ -35,26 +35,30 @@
 
 ## 界面预览
 
-**工作台：顶部导航、环境启用和项目工具。** 打开软件先查看状态，何时启动 Docker、准备环境和启用连接，由你决定。
+**新版工作台采用左侧导航。** 工作区、SSH、代理与设置都可从侧栏进入。点标题栏右上角图标切换白天或夜间，点击截图可查看原图。
 
-![ENGE SPX 0.15.9 在 Windows 上运行的工作台，包含一键准备、出口信息和工作区网络路径](website/public/screenshots/0.15.9/dark/overview.png)
+[![ENGE SPX 0.16.2 夜间工作台，包含左侧导航和一键准备入口](website/public/screenshots/0.16.2/dark/overview.png)](website/public/screenshots/0.16.2/dark/overview.png)
 
-| 项目工作区：选择项目、身份和工具 | 连接与代理：分别管理线路和落地 |
+| 白天模式 · 项目工作区 | 夜间模式 · 连接与代理 |
 | --- | --- |
-| [![Windows 项目工作区，展示目录选择、身份授权及 Claude Code、Codex 和 Chromium 入口](website/public/screenshots/0.15.9/dark/workspace.png)](website/public/screenshots/0.15.9/dark/workspace.png) | [![Windows 连接与代理页，展示 SOCKS5、HTTP、HTTPS 落地和前置线路设置](website/public/screenshots/0.15.9/dark/connection.png)](website/public/screenshots/0.15.9/dark/connection.png) |
+| [![白天模式的 Windows 项目工作区，展示目录选择、身份授权及工具入口](website/public/screenshots/0.16.2/light/workspace.png)](website/public/screenshots/0.16.2/light/workspace.png) | [![夜间模式的 Windows 连接与代理页，展示前置线路与落地设置](website/public/screenshots/0.16.2/dark/connection.png)](website/public/screenshots/0.16.2/dark/connection.png) |
 | 选择本地目录，应用身份和只读/读写权限；连接确认后，从同一页面打开 Claude Code、Codex、Linux 终端与工作区浏览器。 | 导入或添加节点，选择软件内双跳或本机 v2ray 兼容模式，配置线路服务器、落地和下载代理。 |
 
-截图为 **0.15.9 真实程序在 Windows 原生环境中的运行画面**，使用未配置账号与节点的临时数据，展示配置入口。点击图片可查看原图；[截图来源与复现](docs/screenshots/README.md)记录了源码版本、Windows CI 和文件校验信息。
+工作台使用 **0.16.2 原生 Windows 3× 截图**，在未配置账号和节点的临时数据目录中采集。[白天工作台原图](website/public/screenshots/0.16.2/light/overview.png) · [截图来源与复现](docs/screenshots/README.md#工作台-0162)
 
 **智能终端：在 Codex 原来的输入区编辑文字、粘贴图片和文件。**
 
-[![ENGE SPX 0.15.9 实际运行的 Codex 智能终端，中文草稿包含两张原生图片标记和文件引用，尚未发送](website/public/screenshots/0.15.9/terminal-codex@2x.png)](website/public/screenshots/0.15.9/terminal-codex@2x.png)
+[![ENGE SPX 0.16.2 实际运行的 Codex 智能终端，中文草稿包含两张原生图片标记和文件引用，尚未发送](website/public/screenshots/0.16.2/terminal-codex@2x.png)](website/public/screenshots/0.16.2/terminal-codex@2x.png)
 
 - **Ctrl+V 粘贴**：文字直接进入当前草稿；截图和 PNG/JPEG/WebP 等图片等待原生附件标记；普通文件保留原件并插入容器内路径。不打开上传对话框，也不自动发送。
 - **复制与编辑**：拖选后自动复制，右键粘贴；支持中文输入法、ANSI 颜色和滚动历史。支持原生鼠标的 CLI 可单击定位；Codex 草稿可 Ctrl+A 后 Delete 删除。
 - **保存外观设置**：字体、字号、配色、背景不透明度和操作偏好可长期保存。Windows 可选 Acrylic 毛玻璃，效果取决于系统支持。
 
-终端图来自 **ENGE SPX 0.15.9 与 Codex 0.169.0 在 Linux 上的实际运行**，按 2× DPI 截取，展示一条未发送的测试草稿。[终端设置](docs/terminal-appearance-performance.zh-CN.md) · [截图来源](docs/screenshots/README.md#智能终端0159)
+终端图来自 **ENGE SPX 0.16.2 与 Codex 0.169.0 在 Linux 上的实际运行**，按 2× DPI 截取，展示一条未发送的测试草稿。[浅色终端原图](website/public/screenshots/0.16.2/terminal-codex-light@2x.png) · [终端设置](docs/terminal-appearance-performance.zh-CN.md) · [截图来源](docs/screenshots/README.md#智能终端-0162)
+
+### 远程 SSH 与 SFTP
+
+在「远程 SSH」保存服务器或发起临时连接。点击已有服务器可直接打开终端，连接表单支持密码或私钥。通过 SSH 页面或终端工具栏打开 SFTP，浏览远端目录、上传下载和新建文件夹。Shell 显示行内补全时，按 Tab 将建议填入当前输入。
 
 ## 适合哪些场景
 
@@ -85,17 +89,15 @@ flowchart LR
 
 ## 下载并开始使用
 
-新增 **[Smart Clipboard 智能粘贴](docs/smart-clipboard.zh-CN.md)**：在自有终端的 Claude Code / Codex 当前输入区 Ctrl+V 粘贴文字、截图和文件，无额外上传对话框、不自动发送。完整功能需要智能粘贴终端；显式 Windows Terminal / PowerShell / 自定义终端保留原有行为。图片按当前会话的原生附件标记确认，兼容记录与限制见[验证记录](docs/validation-smart-clipboard.zh-CN.md)。
+当前版本为 **[0.16.2 正式版](https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.16.2-windows)**。支持 Windows x64，需要 Docker Desktop 的 **Linux containers / WSL 2** 后端，Docker Engine **28+**。安装版和便携版均不需要另装 Python。
 
-当前版本为 **[0.15.16 正式版](https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.16-windows)**。支持 Windows x64，需要 Docker Desktop 的 **Linux containers / WSL 2** 后端，Docker Engine **28+**。安装版和便携版均不需要另装 Python。
-
-0.15.16 支持常用 Shell 指令的灰色行内补全，并在 SSH 页面和终端内提供 SFTP 文件管理。可浏览远端目录、上传下载、新建文件夹。[0.15.16 发布说明](docs/releases/0.15.16.zh-CN.md)
+本版更新左侧导航、白天与夜间主题、应用标识和智能终端外观。[0.16.2 发布说明](docs/releases/0.16.2.zh-CN.md)
 
 | 下载方式 | 适合谁 |
 | --- | --- |
-| **[Windows 安装版](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.16-windows/ENGE-SPX-Windows-x64-0.15.16-Setup.exe)** | 常规使用；当前用户安装，提供开始菜单和桌面快捷方式 |
-| **[Windows 便携版](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.16-windows/ENGE-SPX-Windows-x64-0.15.16-Portable.zip)** | 自行管理程序目录；完整解压后运行 `ENGE-SPX.exe`，保留 `_internal` |
-| **[发布记录与 SHA-256](https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.16-windows)** | 查看改动、校验文件与同版本资产；两个 Windows 包均包含 `spx.exe` 命令行入口 |
+| **[Windows 安装版](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.16.2-windows/ENGE-SPX-Windows-x64-0.16.2-Setup.exe)** · 35.5 MB | 当前用户安装，提供开始菜单和桌面快捷方式 |
+| **[Windows 便携版](https://github.com/engeeeee/ENGE-SPX/releases/download/v0.16.2-windows/ENGE-SPX-Windows-x64-0.16.2-Portable.zip)** · 54.7 MB | 完整解压后运行 `ENGE-SPX.exe`，保留 `_internal` |
+| **[发布记录与 SHA-256](https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.16.2-windows)** | 查看改动、校验文件与同版本资产；两个 Windows 包均包含 `spx.exe` 命令行入口 |
 
 1. **安装一次 Docker Desktop**：按 [官方安装说明](https://docs.docker.com/desktop/setup/install/windows-install/)完成许可、WSL 和 Linux 引擎初始化。
 2. **点击“一键准备环境”**：软件自动启动已安装的 Docker，等待引擎就绪，再复用已有运行环境，或下载、校验并导入。
@@ -155,8 +157,8 @@ flowchart LR
 
 | 功能 | 日常使用中的作用 |
 | --- | --- |
-| **原生桌面界面与自定义标题栏** | 暖深灰与陶土橙；页面、控件和弹窗统一样式，按缩放与窗口宽度布局，保留最小化、最大化、还原和边缘缩放 |
-| **自己的终端** | 默认 Windows Terminal / PowerShell，第三方终端统一使用自定义 exe 和启动参数；窗口由你的终端承载，工具继续在容器内运行 |
+| **原生桌面界面与自定义标题栏** | 左侧导航，支持纯黑蓝色夜间主题和白底绿橙白天主题，窗口支持最小化、最大化、还原和边缘缩放 |
+| **自己的终端** | 自动模式为 Claude Code 和 Codex 使用智能终端，也可选择 Windows Terminal、PowerShell 或自定义程序 |
 | **下载与校验** | 显示速度和进度，支持暂停、断点续传，导入前检查 SHA-256、文件大小与镜像配方 |
 | **应用数据跨盘迁移** | 将配置、日志和下载缓存迁到 D 盘等自选目录，复制后校验，保留安装标识与部分下载 |
 | **Docker 数据盘迁移助手** | 记录资源，指导你在 Docker Desktop 迁移数据盘，恢复后核验原镜像、容器和数据卷 |
@@ -168,7 +170,7 @@ flowchart LR
 
 **按需要分配资源，不必让所有组件一直运行。** 网关、会话、CLI 项目和 Chromium 可分别设置 CPU、内存上限，当前项目也可使用独立预算。正常模式与低资源模式可选；上限不是内存预留，低预算可能影响编译速度。
 
-![ENGE SPX Windows 资源预算界面，展示各容器 CPU、内存限制和按需启动浏览器选项](docs/images/0.13.2/2x/resources.png)
+![ENGE SPX Windows 资源预算界面，展示各容器 CPU、内存限制和按需启动浏览器选项](website/public/screenshots/0.16.2/dark/resources.png)
 
 | 你想做什么 | 在哪里操作 |
 | --- | --- |

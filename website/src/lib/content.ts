@@ -3,21 +3,23 @@ export type Theme = "dark" | "light";
 
 export const product = {
     name: "ENGE SPX",
-    version: "0.15.16",
+    version: "0.16.2",
     published: "2026-11-26",
     site: "https://enge1337.cn",
     repository: "https://github.com/engeeeee/ENGE-SPX",
     release:
-        "https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.15.16-windows",
+        "https://github.com/engeeeee/ENGE-SPX/releases/tag/v0.16.2-windows",
     installer:
-        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.16-windows/ENGE-SPX-Windows-x64-0.15.16-Setup.exe",
+        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.16.2-windows/ENGE-SPX-Windows-x64-0.16.2-Setup.exe",
     portable:
-        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.15.16-windows/ENGE-SPX-Windows-x64-0.15.16-Portable.zip",
+        "https://github.com/engeeeee/ENGE-SPX/releases/download/v0.16.2-windows/ENGE-SPX-Windows-x64-0.16.2-Portable.zip",
+    installerSize: "35.5 MB",
+    portableSize: "54.7 MB",
     installerSha256:
-        "df47e4deec67808cf2b143e4d294f9a51012ad4633634c3f009f75ff8a4d024b",
+        "2eebbd26b9b8635d56c13a77a5afa94cad03bffae591b0f3705cb456336ba1d6",
     portableSha256:
-        "6ab5e25461509ddf5b3c06eca36ef3db2575cf634f4e8c853d3b2d36e75ca965",
-    screenshotVersion: "0.15.9",
+        "41248e636e628439aec2727d177cb44fd9ed85e4578ba7f12a1eb99e3868b27e",
+    screenshotVersion: "0.16.2",
 } as const;
 
 export const docs = {
@@ -43,13 +45,14 @@ export const navigation = [
     { id: "workspace", label: "工作区" },
     { id: "architecture", label: "网络路径" },
     { id: "terminal", label: "终端" },
+    { id: "resources", label: "资源" },
 ] as const;
 
 export const screenshots = [
     {
         id: "overview",
         title: "工作台",
-        alt: "ENGE SPX Windows 工作台：顶部导航、环境准备、项目工具与代理路径",
+        alt: "ENGE SPX Windows 工作台，显示左侧导航、环境准备和代理路径",
         source: `/screenshots/${product.screenshotVersion}/dark/overview.png`,
         lightSource: `/screenshots/${product.screenshotVersion}/light/overview.png`,
         width: 960,
@@ -101,13 +104,14 @@ export const screenshots = [
     {
         id: "terminal",
         title: "Codex 智能终端",
-        alt: "ENGE SPX 0.15.9 实际运行的 Codex 0.169.0：中文草稿中包含两张原生图片标记与文件路径，尚未发送",
+        alt: "ENGE SPX 0.16.2 实际运行 Codex，中文草稿中有两张图片附件和一个文件引用",
         source: `/screenshots/${product.screenshotVersion}/terminal-codex@2x.png`,
+        lightSource: `/screenshots/${product.screenshotVersion}/terminal-codex-light@2x.png`,
         width: 1100,
         height: 680,
         pixelRatio: 2,
         platform: "Linux 实际运行画面",
-        version: "0.15.9",
+        version: product.screenshotVersion,
         context: "Codex 0.169.0 · 未发送的测试草稿",
     },
 ] as const;
@@ -130,6 +134,6 @@ export const faqs = [
     },
     {
         question: "如何更新 ENGE SPX？",
-        answer: "软件打开时自动检查正式版。点顶部的「偏好设置」，在「常规」里查看结果、手动检查或关闭自动检查。",
+        answer: "软件打开时自动检查正式版。在左侧「偏好设置」的「常规」里查看结果、手动检查或关闭自动检查。",
     },
 ] as const;

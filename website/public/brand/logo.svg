@@ -1,18 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
   <title id="title">ENGE SPX</title>
-  <desc id="desc">A clay S-shaped connection between two endpoints on a warm charcoal square.</desc>
+  <desc id="desc">An isolated workspace bracket emblem enclosing a precision white S-shaped routing conduit.</desc>
   <defs>
-    <linearGradient id="surface" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#3a3029"/>
-      <stop offset="1" stop-color="#23211e"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#17171A"/>
+      <stop offset="1" stop-color="#050506"/>
     </linearGradient>
-    <linearGradient id="signal" x1="0" y1="1" x2="1" y2="0">
-      <stop offset="0" stop-color="#b8795b"/>
-      <stop offset="1" stop-color="#e8b99c"/>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#36363A"/>
+      <stop offset="1" stop-color="#1D1D20"/>
+    </linearGradient>
+    <linearGradient id="conduit" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E4E4E7"/>
     </linearGradient>
   </defs>
-  <rect x="4" y="4" width="120" height="120" rx="30" fill="url(#surface)"/>
-  <path d="M88 36H53C29 36 29 63 53 63H75C99 63 99 92 75 92H40" fill="none" stroke="url(#signal)" stroke-width="13" stroke-linecap="round"/>
-  <circle cx="88" cy="36" r="8" fill="#f2e8dc"/>
-  <circle cx="40" cy="92" r="8" fill="#f2e8dc"/>
+  <rect x="5" y="5" width="118" height="118" rx="28" fill="url(#bg)" stroke="url(#rim)" stroke-width="2"/>
+  <path d="M 33 30 H 27 A 5 5 0 0 0 22 35 V 93 A 5 5 0 0 0 27 98 H 33" fill="none" stroke="#52525A" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="M 95 30 H 101 A 5 5 0 0 1 106 35 V 93 A 5 5 0 0 1 101 98 H 95" fill="none" stroke="#52525A" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="M 82 40 H 52 C 37 40 37 64 52 64 H 76 C 91 64 91 88 76 88 H 46" fill="none" stroke="url(#conduit)" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="82" cy="40" r="8" fill="#FFFFFF"/>
+  <circle cx="82" cy="40" r="3.4" fill="#0B0B0D"/>
+  <circle cx="46" cy="88" r="8" fill="#FFFFFF"/>
+  <circle cx="46" cy="88" r="4" fill="#2563EB"/>
 </svg>

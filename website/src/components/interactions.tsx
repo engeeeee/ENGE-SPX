@@ -54,7 +54,7 @@ export function SiteInteractions({ children }: { children: ReactNode }) {
     useEffect(() => {
         document.querySelector('meta[name="theme-color"]')?.setAttribute(
             "content",
-            theme === "dark" ? "#1b1a17" : "#faf9f5",
+            theme === "dark" ? "#000000" : "#ffffff",
         );
     }, [theme]);
 
@@ -164,6 +164,7 @@ export function SiteInteractions({ children }: { children: ReactNode }) {
                             height={picture.height * picture.pixelRatio}
                             alt={picture.alt}
                             className="gallery-image"
+                            decoding="async"
                         />
                     </div>
                     <div className="gallery-bottom">

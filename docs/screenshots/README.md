@@ -1,5 +1,26 @@
 # 软件界面截图与复现
 
+## 工作台 0.16.2
+
+工作台、项目、连接和资源页来自 Windows 上实际运行的 0.16.2，源码为 `3ee0dde6c06f3ddd1e981ec99272379cca204a91`。白天和夜间模式分别以 3× Qt 缩放采集，使用临时数据目录，账号、节点和 Docker 工作区均未配置。
+
+- [Windows 截图运行记录](https://github.com/engeeeee/ENGE-SPX/actions/runs/45789789216)
+- [夜间 PNG 清单](../../website/public/screenshots/0.16.2/dark/capture.json) · [白天 PNG 清单](../../website/public/screenshots/0.16.2/light/capture.json)
+- 截图归档 SHA-256 `1367a6c9dd9d47a676bc7dbb38ea59dbb178fc7c65d5540715cb8d0f9ba50030`
+
+## 智能终端 0.16.2
+
+[夜间终端](../../website/public/screenshots/0.16.2/terminal-codex@2x.png)和[白天终端](../../website/public/screenshots/0.16.2/terminal-codex-light@2x.png)来自 Linux 上实际运行的 0.16.2 智能终端与 Codex 0.169.0。两张图均为 2200×1360 原生 2× PNG，展示含两张图片和一个文件引用的未发送草稿。采集使用临时项目、本地测试服务与同一正式版应用源码。
+
+[夜间采集清单](../../website/public/screenshots/0.16.2/terminal-capture.json) · [白天采集清单](../../website/public/screenshots/0.16.2/terminal-light-capture.json)
+
+在 Linux 上使用官方 Codex 二进制可复现。`--theme light` 应用终端浅色预设，保存对应的图片和采集清单。
+
+```bash
+PYTHONPATH=src python docs/screenshots/capture_terminal.py \
+  --codex /path/to/codex --output ./build/terminal-captures --theme light
+```
+
 ## 工作台 0.15.9
 
 工作台、项目、连接和资源页在 Windows 上以 3× Qt 缩放采集，使用 0.15.9 正式版对应的源码 `d645eee1d681c08eb097f44e020f3335dfb29fdd`。截图使用临时数据目录，账号、节点和工作区均未配置。
